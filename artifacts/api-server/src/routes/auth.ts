@@ -135,7 +135,7 @@ router.post("/auth/admin/login", async (req, res): Promise<void> => {
   }
 
   const adminUsername = process.env.ADMIN_USERNAME ?? "admin";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123";
 
   if (username !== adminUsername || password !== adminPassword) {
     req.log.warn({ username }, "Failed admin login attempt");
