@@ -1,6 +1,6 @@
 # StrikerX — Agent Handoff
 
-> Last updated: Session 4 (2026-06-05)
+> Last updated: Session 5 (2026-06-05)
 > Read this FIRST, every session, before touching any file.
 
 ---
@@ -251,11 +251,27 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 - [x] Admin tournaments: create/end/live cards
 - [x] GitHub push fixed (GraphQL createCommitOnBranch — atomic, reliable)
 
-## What's Next (Phase 4)
+### Phase 4 (Live Notifications + Provably Fair)
+- [x] `broadcastToAll(event, data)` exported from wsServer — any module can push to all WS clients
+- [x] All 4 game types (The Shot, Penalty, Minefield, Free Kick) broadcast `big_win` WS event on wins ≥ threshold or ≥ 5x
+- [x] Jackpot trigger also broadcasts `jackpot_won` WS event
+- [x] `NotificationsProvider` context (`lib/ws-notifications.tsx`) — connects to WS, stores last 30 notifications, auto-reconnects
+- [x] `NotificationBell` component — live win count badge, dropdown panel, mark-all-read, clear-all
+- [x] Notification bell wired into layout header
+- [x] Verify page (`/verify`) — provably-fair crash round verification using HMAC-SHA256 with Web Crypto API
+- [x] Verify page shows: server seed, hash (first 8 chars highlighted), r-value, computed vs recorded crash point, pass/fail badge
+- [x] Manual seed verification (enter any seed, compute crash point independently)
+- [x] `GET /api/games/rounds/:id` endpoint — reveals serverSeed only after round crashes
+- [x] Verify tab added to bottom nav (5-tab layout)
+- [x] Telegram GameBot fully implemented (/start, /balance, /deposit, /withdraw, /stats, /streak, /vip, /referral, /leaderboard, /help)
+- [x] Telegram GroupBot fully implemented (big win alerts, jackpot alerts, withdrawal alerts, daily morning message, 30min jackpot updates)
 
-- [ ] Telegram bot handlers (GameBot: /start, /balance, /deposit; GroupBot: jackpot alerts)
-- [ ] Real-time big-win WebSocket notifications broadcast to all connected clients
-- [ ] Player-facing notifications panel (in-app notification bell)
-- [ ] Provably-fair verification page (players can verify game outcomes)
-- [ ] Add env secrets and go live
+## What's Next (Phase 5)
+
+- [ ] Cashback system: weekly VIP cashback payout (cron-style, triggered on login or scheduled)
+- [ ] Push notifications via Telegram when player wins jackpot or gets a milestone
+- [ ] Tournament leaderboard real-time updates via WebSocket
+- [ ] Player achievements / milestone badges
+- [ ] Referral dashboard panel (how much each referee has wagered, earnings breakdown)
+- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN, WEBHOOK_URL) and go live
 - [ ] Deploy via Replit deployment
