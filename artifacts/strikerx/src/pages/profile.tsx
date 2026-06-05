@@ -9,8 +9,9 @@ import {
   useGetMyAchievements,
   useClaimStreakReward,
   useClaimCashback,
+  useRedeemBoot,
 } from "@workspace/api-client-react";
-import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp, Star, ChevronRight, Users, Percent } from "lucide-react";
+import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp, Star, ChevronRight, Users, Percent, ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -28,7 +29,9 @@ const RARITY_COLORS: Record<string, string> = {
 export function Profile() {
   const { player, setToken } = useAuth();
   const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied]       = useState(false);
+  const [bootAmount, setBootAmount] = useState("");
+  const [showBootShop, setShowBootShop] = useState(false);
 
   const { data: stats }    = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey() } });
   const { data: streak }   = useGetMyStreak({ query: { queryKey: getGetMyStreakQueryKey() } });
@@ -38,6 +41,7 @@ export function Profile() {
   const { data: achievements } = useGetMyAchievements();
   const claimStreak   = useClaimStreakReward();
   const claimCashback = useClaimCashback();
+  const redeemBootMut = useRedeemBoot();
 
   const p = player as Record<string, unknown> | null;
   const vipTier  = p?.vipTier as string ?? "sunday_league";
@@ -71,6 +75,22 @@ export function Profile() {
       refetchCashback();
     } catch (e: unknown) {
       toast({ title: "Cannot claim", description: (e as { message?: string })?.message, variant: "destructive" });
+    }
+  };
+
+  const handleBootRedeem = async () => {
+    const amount = Number(bootAmount);
+    if (!amount || amount <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await redeemBootMut.mutateAsync({ data: { amount } });
+      toast({ title: "BOOT redeemed!", description: `+${result.redeemedBoot} STRIKER added to your balance` });
+      setBootAmount("");
+      setShowBootShop(false);
+    } catch (e: unknown) {
+      toast({ title: "Redeem failed", description: (e as { message?: string })?.message, variant: "destructive" });
     }
   };
 
@@ -153,6 +173,51 @@ export function Profile() {
             </div>
           ))}
         </div>
+
+        {/* Boot Shop */}
+        {Number(p?.bootBalance ?? 0) > 0 && (
+          <div className="bg-white/3 border border-amber-500/20 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingBag size={16} className="text-amber-400" />
+                <span className="text-sm font-semibold text-foreground">Boot Shop</span>
+              </div>
+              <button
+                onClick={() => setShowBootShop(v => !v)}
+                className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                {showBootShop ? "Close" : "Convert BOOT"}
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Convert <span className="text-amber-400 font-bold">{Number(p?.bootBalance ?? 0).toLocaleString()} BOOT</span> to STRIKER at 1:1 rate
+            </p>
+            {showBootShop && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                className="mt-3 flex gap-2"
+              >
+                <input
+                  type="number"
+                  value={bootAmount}
+                  onChange={e => setBootAmount(e.target.value)}
+                  placeholder={`Max ${Number(p?.bootBalance ?? 0)}`}
+                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-amber-500/50"
+                  min="1"
+                  max={Number(p?.bootBalance ?? 0)}
+                />
+                <Button
+                  onClick={handleBootRedeem}
+                  disabled={redeemBootMut.isPending}
+                  className="bg-amber-600 hover:bg-amber-500 text-white shrink-0"
+                  size="sm"
+                >
+                  {redeemBootMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                </Button>
+              </motion.div>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2">
