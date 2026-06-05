@@ -1,6 +1,6 @@
 # StrikerX
 
-Football-themed Telegram Mini App casino. Stack: Node.js/Express 5, PostgreSQL/Drizzle ORM, React/Vite/TailwindCSS, Telegraf bots, CryptoBot payments, WebSocket crash game.
+Football-themed Telegram Mini App casino. Stack: Node.js/Express, PostgreSQL/Drizzle ORM, React/Vite/TailwindCSS, Telegraf bots, CryptoBot payments, WebSocket crash game.
 
 ## Setup
 ```bash
