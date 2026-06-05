@@ -6,6 +6,7 @@ import { logger } from "./lib/logger";
 import { initGameBot } from "./lib/gameBot";
 import { initGroupBotScheduler } from "./lib/groupBot";
 import { db, jackpotTable } from "@workspace/db";
+import { initConfig } from "./lib/configService";
 
 const app: Express = express();
 
@@ -34,8 +35,11 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Initialize bots and jackpot in background
+// Initialize config, bots and jackpot in background
 (async () => {
+  // Init config service first (other services may depend on it)
+  await initConfig().catch((err) => logger.error({ err }, "Config service init failed"));
+
   try {
     // Ensure jackpot row exists
     const existing = await db.select().from(jackpotTable).limit(1);

@@ -7,56 +7,139 @@ const router: IRouter = Router();
 
 // GET /leaderboard
 router.get("/leaderboard", async (req, res): Promise<void> => {
-  const type = String(req.query.type ?? "daily");
+  const type = String(req.query.type ?? "wagered");
+  const limit = Math.min(parseInt(String(req.query.limit ?? 50)), 100);
 
-  let sinceDate = new Date();
-  if (type === "daily") {
-    sinceDate.setHours(0, 0, 0, 0);
-  } else if (type === "weekly") {
-    const day = sinceDate.getDay();
-    sinceDate.setDate(sinceDate.getDate() - day);
-    sinceDate.setHours(0, 0, 0, 0);
-  } else {
-    // alltime — all records
-    sinceDate = new Date(0);
-  }
+  let entries: Array<{ rank: number; playerId: number; username: string; vipTier: string; score: number; gamesPlayed?: number }> = [];
 
-  // Aggregate best multipliers per player in the period
-  const results = await db
-    .select({
-      playerId: gamesTable.playerId,
-      bestMultiplier: sql<number>`MAX(${gamesTable.resultMultiplier})`,
-    })
-    .from(gamesTable)
-    .where(gte(gamesTable.createdAt, sinceDate))
-    .groupBy(gamesTable.playerId)
-    .orderBy(desc(sql<number>`MAX(${gamesTable.resultMultiplier})`))
-    .limit(100);
+  if (type === "wagered") {
+    // Top players by lifetime TON wagered
+    const players = await db.select({
+      id: playersTable.id,
+      username: playersTable.username,
+      vipTier: playersTable.vipTier,
+      tonWageredLifetime: playersTable.tonWageredLifetime,
+    }).from(playersTable)
+      .orderBy(desc(playersTable.tonWageredLifetime))
+      .limit(limit);
 
-  // Fetch player details
-  const entries = await Promise.all(
-    results.slice(0, 50).map(async (r, idx) => {
-      const [player] = await db
-        .select()
-        .from(playersTable)
-        .where(eq(playersTable.id, r.playerId));
+    entries = await Promise.all(players.map(async (p, i) => {
+      const [gc] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamesTable).where(eq(gamesTable.playerId, p.id));
       return {
-        rank: idx + 1,
+        rank: i + 1,
+        playerId: p.id,
+        username: p.username,
+        vipTier: p.vipTier,
+        score: p.tonWageredLifetime,
+        gamesPlayed: Number(gc?.count ?? 0),
+      };
+    }));
+  } else if (type === "wins") {
+    // Top players by total STRIKER won
+    const since = new Date(0);
+    const results = await db.select({
+      playerId: gamesTable.playerId,
+      totalWins: sql<number>`SUM(${gamesTable.winAmount})`,
+      gamesPlayed: sql<number>`COUNT(*)`,
+    }).from(gamesTable)
+      .groupBy(gamesTable.playerId)
+      .orderBy(desc(sql<number>`SUM(${gamesTable.winAmount})`))
+      .limit(limit);
+
+    entries = await Promise.all(results.map(async (r, i) => {
+      const [player] = await db.select({ username: playersTable.username, vipTier: playersTable.vipTier }).from(playersTable).where(eq(playersTable.id, r.playerId));
+      return {
+        rank: i + 1,
         playerId: r.playerId,
         username: player?.username ?? "Unknown",
-        value: r.bestMultiplier,
         vipTier: player?.vipTier ?? "sunday_league",
-        captainBalance: player?.captainBalance ?? 0,
+        score: Math.round(r.totalWins ?? 0),
+        gamesPlayed: Number(r.gamesPlayed ?? 0),
       };
-    })
-  );
+    }));
+  } else if (type === "streak") {
+    // Top players by streak days
+    const players = await db.select({
+      id: playersTable.id,
+      username: playersTable.username,
+      vipTier: playersTable.vipTier,
+      streakDays: playersTable.streakDays,
+    }).from(playersTable)
+      .orderBy(desc(playersTable.streakDays))
+      .limit(limit);
 
-  res.json(entries);
+    entries = players.map((p, i) => ({
+      rank: i + 1,
+      playerId: p.id,
+      username: p.username,
+      vipTier: p.vipTier,
+      score: p.streakDays,
+    }));
+  } else if (type === "referrals") {
+    // Top players by referral count (count players who have referredBy matching this player's referralCode)
+    const allPlayers = await db.select({
+      id: playersTable.id,
+      username: playersTable.username,
+      vipTier: playersTable.vipTier,
+      referralCode: playersTable.referralCode,
+    }).from(playersTable);
+
+    const referralCounts: Array<{ playerId: number; username: string; vipTier: string; count: number }> = [];
+
+    for (const p of allPlayers) {
+      const [rc] = await db.select({ count: sql<number>`COUNT(*)` }).from(playersTable).where(eq(playersTable.referredBy, p.referralCode));
+      if (Number(rc?.count ?? 0) > 0) {
+        referralCounts.push({ playerId: p.id, username: p.username, vipTier: p.vipTier, count: Number(rc?.count ?? 0) });
+      }
+    }
+
+    referralCounts.sort((a, b) => b.count - a.count);
+    entries = referralCounts.slice(0, limit).map((r, i) => ({
+      rank: i + 1,
+      playerId: r.playerId,
+      username: r.username,
+      vipTier: r.vipTier,
+      score: r.count,
+    }));
+  } else {
+    // Legacy: daily/weekly/alltime by best multiplier
+    let sinceDate = new Date();
+    if (type === "daily") {
+      sinceDate.setHours(0, 0, 0, 0);
+    } else if (type === "weekly") {
+      const day = sinceDate.getDay();
+      sinceDate.setDate(sinceDate.getDate() - day);
+      sinceDate.setHours(0, 0, 0, 0);
+    } else {
+      sinceDate = new Date(0);
+    }
+
+    const results = await db.select({
+      playerId: gamesTable.playerId,
+      bestMultiplier: sql<number>`MAX(${gamesTable.resultMultiplier})`,
+    }).from(gamesTable)
+      .where(gte(gamesTable.createdAt, sinceDate))
+      .groupBy(gamesTable.playerId)
+      .orderBy(desc(sql<number>`MAX(${gamesTable.resultMultiplier})`))
+      .limit(limit);
+
+    entries = await Promise.all(results.map(async (r, i) => {
+      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, r.playerId));
+      return {
+        rank: i + 1,
+        playerId: r.playerId,
+        username: player?.username ?? "Unknown",
+        vipTier: player?.vipTier ?? "sunday_league",
+        score: r.bestMultiplier,
+      };
+    }));
+  }
+
+  res.json({ entries, type, count: entries.length });
 });
 
 // GET /tournaments/active
 router.get("/tournaments/active", async (_req, res): Promise<void> => {
-  const now = new Date();
   const [tournament] = await db
     .select()
     .from(tournamentsTable)
@@ -68,7 +151,6 @@ router.get("/tournaments/active", async (_req, res): Promise<void> => {
     return;
   }
 
-  // Get top entries
   const entries = await db
     .select()
     .from(tournamentEntriesTable)
@@ -118,31 +200,20 @@ router.post("/tournaments/:id/enter", requireAuth, async (req, res): Promise<voi
     return;
   }
 
-  // Check if already entered
   const [existing] = await db
     .select()
     .from(tournamentEntriesTable)
-    .where(
-      and(
-        eq(tournamentEntriesTable.tournamentId, tournamentId),
-        eq(tournamentEntriesTable.playerId, playerId)
-      )
-    );
+    .where(and(eq(tournamentEntriesTable.tournamentId, tournamentId), eq(tournamentEntriesTable.playerId, playerId)));
 
   if (!existing) {
-    // Deduct boot fee if required
     if (tournament.entryFeeBoots && tournament.entryFeeBoots > 0) {
       const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
       if (!player || player.bootBalance < tournament.entryFeeBoots) {
         res.status(400).json({ error: "Insufficient BOOT balance for entry fee" });
         return;
       }
-      await db
-        .update(playersTable)
-        .set({ bootBalance: player.bootBalance - tournament.entryFeeBoots })
-        .where(eq(playersTable.id, playerId));
+      await db.update(playersTable).set({ bootBalance: player.bootBalance - tournament.entryFeeBoots }).where(eq(playersTable.id, playerId));
     }
-
     await db.insert(tournamentEntriesTable).values({ tournamentId, playerId });
   }
 
