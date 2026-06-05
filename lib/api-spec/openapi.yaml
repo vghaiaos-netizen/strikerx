@@ -3,13 +3,28 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: StrikerX — Football-themed Telegram Mini App casino platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: players
+    description: Player management
+  - name: games
+    description: Game operations
+  - name: payments
+    description: Deposits and withdrawals
+  - name: jackpot
+    description: Golden Boot jackpot
+  - name: leaderboard
+    description: Leaderboards and tournaments
+  - name: admin
+    description: Admin dashboard
+
 paths:
   /healthz:
     get:
@@ -24,7 +39,762 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── AUTH ────────────────────────────────────────────────────────────────────
+
+  /auth/telegram:
+    post:
+      operationId: telegramAuth
+      tags: [auth]
+      summary: Authenticate via Telegram init data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramAuthInput"
+      responses:
+        "200":
+          description: JWT token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          description: Invalid init data
+
+  /auth/admin/login:
+    post:
+      operationId: adminLogin
+      tags: [auth]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Admin JWT token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          description: Invalid credentials
+
+  # ── PLAYERS ─────────────────────────────────────────────────────────────────
+
+  /players/me:
+    get:
+      operationId: getMe
+      tags: [players]
+      summary: Get current player profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Player profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+
+  /players/me/stats:
+    get:
+      operationId: getMyStats
+      tags: [players]
+      summary: Get player statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Player stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerStats"
+
+  /players/me/streak:
+    get:
+      operationId: getMyStreak
+      tags: [players]
+      summary: Get streak info and claim daily reward
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Streak data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreakInfo"
+
+  /players/me/streak/claim:
+    post:
+      operationId: claimStreakReward
+      tags: [players]
+      summary: Claim daily streak reward
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reward claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreakInfo"
+
+  /players/me/referral:
+    get:
+      operationId: getMyReferral
+      tags: [players]
+      summary: Get referral code and earnings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Referral info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralInfo"
+
+  /players/me/transactions:
+    get:
+      operationId: getMyTransactions
+      tags: [players]
+      summary: Get player transaction history
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+  # ── GAMES ───────────────────────────────────────────────────────────────────
+
+  /games/shot/round:
+    get:
+      operationId: getCurrentRound
+      tags: [games]
+      summary: Get current crash round state
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current round
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrashRound"
+
+  /games/shot/bet:
+    post:
+      operationId: placeShotBet
+      tags: [games]
+      summary: Place bet in The Shot (crash game)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShotBetInput"
+      responses:
+        "200":
+          description: Bet placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResult"
+
+  /games/shot/{id}/cashout:
+    post:
+      operationId: cashoutShot
+      tags: [games]
+      summary: Cash out from The Shot
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cashed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResult"
+
+  /games/penalty:
+    post:
+      operationId: playPenalty
+      tags: [games]
+      summary: Play Penalty (binary bet)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PenaltyInput"
+      responses:
+        "200":
+          description: Game result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResult"
+
+  /games/minefield/start:
+    post:
+      operationId: startMinefield
+      tags: [games]
+      summary: Start Minefield game
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MinefieldInput"
+      responses:
+        "200":
+          description: Game started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinefieldState"
+
+  /games/minefield/{id}/pick:
+    post:
+      operationId: pickMinefield
+      tags: [games]
+      summary: Pick a square in Minefield
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MinefieldPickInput"
+      responses:
+        "200":
+          description: Pick result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinefieldState"
+
+  /games/minefield/{id}/cashout:
+    post:
+      operationId: cashoutMinefield
+      tags: [games]
+      summary: Cash out from Minefield
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cashed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResult"
+
+  /games/freekick:
+    post:
+      operationId: playFreekick
+      tags: [games]
+      summary: Play Free Kick (plinko)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreekickInput"
+      responses:
+        "200":
+          description: Game result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResult"
+
+  /games/history:
+    get:
+      operationId: getGameHistory
+      tags: [games]
+      summary: Get recent game history
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameRecord"
+
+  # ── PAYMENTS ────────────────────────────────────────────────────────────────
+
+  /payments/deposit:
+    post:
+      operationId: createDeposit
+      tags: [payments]
+      summary: Create a deposit invoice via CryptoBot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositInput"
+      responses:
+        "200":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepositInvoice"
+
+  /payments/withdraw:
+    post:
+      operationId: requestWithdrawal
+      tags: [payments]
+      summary: Request a withdrawal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalInput"
+      responses:
+        "200":
+          description: Withdrawal queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WithdrawalStatus"
+        "400":
+          description: Insufficient balance or wager requirement not met
+
+  /payments/webhook/cryptobot:
+    post:
+      operationId: cryptobotWebhook
+      tags: [payments]
+      summary: CryptoBot payment webhook
+      responses:
+        "200":
+          description: Webhook processed
+
+  # ── JACKPOT ─────────────────────────────────────────────────────────────────
+
+  /jackpot:
+    get:
+      operationId: getJackpot
+      tags: [jackpot]
+      summary: Get current Golden Boot jackpot state
+      responses:
+        "200":
+          description: Jackpot info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Jackpot"
+
+  # ── LEADERBOARD ─────────────────────────────────────────────────────────────
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: Get leaderboard
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [daily, weekly, alltime]
+            default: daily
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /tournaments/active:
+    get:
+      operationId: getActiveTournament
+      tags: [leaderboard]
+      summary: Get active tournament
+      responses:
+        "200":
+          description: Active tournament or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+
+  /tournaments/{id}/enter:
+    post:
+      operationId: enterTournament
+      tags: [leaderboard]
+      summary: Enter a tournament
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+
+  # ── ADMIN ───────────────────────────────────────────────────────────────────
+
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      summary: Admin live overview stats
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Overview stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+
+  /admin/players:
+    get:
+      operationId: getAdminPlayers
+      tags: [admin]
+      summary: List all players
+      security:
+        - adminAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: flagged
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Player list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminPlayer"
+
+  /admin/players/{id}:
+    get:
+      operationId: getAdminPlayer
+      tags: [admin]
+      summary: Get player details
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Player detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPlayer"
+
+    patch:
+      operationId: updateAdminPlayer
+      tags: [admin]
+      summary: Update player (ban, flag, balance, vip)
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPlayerUpdate"
+      responses:
+        "200":
+          description: Updated player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPlayer"
+
+  /admin/withdrawals:
+    get:
+      operationId: getAdminWithdrawals
+      tags: [admin]
+      summary: Get pending withdrawals
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Withdrawal list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WithdrawalRecord"
+
+  /admin/withdrawals/{id}/approve:
+    post:
+      operationId: approveWithdrawal
+      tags: [admin]
+      summary: Approve a withdrawal
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WithdrawalRecord"
+
+  /admin/withdrawals/{id}/reject:
+    post:
+      operationId: rejectWithdrawal
+      tags: [admin]
+      summary: Reject a withdrawal
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WithdrawalRecord"
+
+  /admin/broadcast:
+    post:
+      operationId: adminBroadcast
+      tags: [admin]
+      summary: Broadcast message to all players
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastInput"
+      responses:
+        "200":
+          description: Broadcast sent
+
+  /admin/jackpot/seed:
+    post:
+      operationId: seedJackpot
+      tags: [admin]
+      summary: Manually seed jackpot pool
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JackpotSeedInput"
+      responses:
+        "200":
+          description: Jackpot seeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Jackpot"
+
+  /admin/tournament:
+    post:
+      operationId: createAdminTournament
+      tags: [admin]
+      summary: Launch a flash tournament
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TournamentInput"
+      responses:
+        "201":
+          description: Tournament created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tournament"
+
+  /admin/config:
+    get:
+      operationId: getAdminConfig
+      tags: [admin]
+      summary: Get current house edge/rate config
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminConfig"
+
+    patch:
+      operationId: updateAdminConfig
+      tags: [admin]
+      summary: Update house edge/rate config
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminConfigUpdate"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminConfig"
+
+  /admin/analytics:
+    get:
+      operationId: getAdminAnalytics
+      tags: [admin]
+      summary: Get revenue analytics
+      security:
+        - adminAuth: []
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAnalytics"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +804,637 @@ components:
       required:
         - status
 
+    # ── AUTH ──────────────────────────────────────────────────────────────────
+
+    TelegramAuthInput:
+      type: object
+      required: [initData]
+      properties:
+        initData:
+          type: string
+        referralCode:
+          type: ["string", "null"]
+        deviceFingerprint:
+          type: ["string", "null"]
+
+    AdminLoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AuthToken:
+      type: object
+      required: [token, player]
+      properties:
+        token:
+          type: string
+        player:
+          $ref: "#/components/schemas/Player"
+
+    # ── PLAYERS ───────────────────────────────────────────────────────────────
+
+    Player:
+      type: object
+      required: [id, telegramId, username, strikerBalance, bootBalance, captainBalance, vipTier, streakDays, referralCode, createdAt]
+      properties:
+        id:
+          type: integer
+        telegramId:
+          type: string
+        username:
+          type: string
+        strikerBalance:
+          type: number
+        bootBalance:
+          type: number
+        captainBalance:
+          type: number
+        vipTier:
+          type: string
+          enum: [sunday_league, championship, premier_league, champions_league, world_cup]
+        streakDays:
+          type: integer
+        tonWageredLifetime:
+          type: number
+        referralCode:
+          type: string
+        isBanned:
+          type: boolean
+        isFlagged:
+          type: boolean
+        wagerProgress:
+          type: number
+        createdAt:
+          type: string
+
+    PlayerStats:
+      type: object
+      required: [totalGames, totalWagered, totalWon, biggestWin, favoriteGame, winRate]
+      properties:
+        totalGames:
+          type: integer
+        totalWagered:
+          type: number
+        totalWon:
+          type: number
+        biggestWin:
+          type: number
+        biggestMultiplier:
+          type: number
+        favoriteGame:
+          type: string
+        winRate:
+          type: number
+        vipProgress:
+          type: number
+
+    StreakInfo:
+      type: object
+      required: [streakDays, lastClaimDate, nextReward, canClaim]
+      properties:
+        streakDays:
+          type: integer
+        lastClaimDate:
+          type: ["string", "null"]
+        nextReward:
+          type: number
+        nextMilestone:
+          type: integer
+        canClaim:
+          type: boolean
+
+    ReferralInfo:
+      type: object
+      required: [code, referralLink, totalReferred, totalEarned, tier1Earnings, tier2Earnings]
+      properties:
+        code:
+          type: string
+        referralLink:
+          type: string
+        totalReferred:
+          type: integer
+        totalEarned:
+          type: number
+        tier1Earnings:
+          type: number
+        tier2Earnings:
+          type: number
+
+    Transaction:
+      type: object
+      required: [id, type, amountStriker, currency, status, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [deposit, withdrawal, bet, win, bonus, cashback, referral]
+        amountStriker:
+          type: number
+        amountTon:
+          type: ["number", "null"]
+        currency:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, completed, failed, cancelled]
+        createdAt:
+          type: string
+
+    # ── GAMES ─────────────────────────────────────────────────────────────────
+
+    CrashRound:
+      type: object
+      required: [id, status, multiplier, startedAt]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [waiting, running, crashed]
+        multiplier:
+          type: number
+        crashPoint:
+          type: ["number", "null"]
+        startedAt:
+          type: ["string", "null"]
+        activePlayers:
+          type: integer
+
+    ShotBetInput:
+      type: object
+      required: [betStriker]
+      properties:
+        betStriker:
+          type: number
+        autoCashout:
+          type: ["number", "null"]
+
+    PenaltyInput:
+      type: object
+      required: [betStriker, direction]
+      properties:
+        betStriker:
+          type: number
+        direction:
+          type: string
+          enum: [left, center, right]
+
+    MinefieldInput:
+      type: object
+      required: [betStriker, gridSize, mineCount]
+      properties:
+        betStriker:
+          type: number
+        gridSize:
+          type: integer
+          minimum: 3
+          maximum: 7
+        mineCount:
+          type: integer
+
+    MinefieldPickInput:
+      type: object
+      required: [position]
+      properties:
+        position:
+          type: integer
+
+    FreekickInput:
+      type: object
+      required: [betStriker, riskLevel]
+      properties:
+        betStriker:
+          type: number
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+
+    MinefieldState:
+      type: object
+      required: [id, gridSize, mineCount, revealedPositions, status, currentMultiplier, betStriker]
+      properties:
+        id:
+          type: integer
+        gridSize:
+          type: integer
+        mineCount:
+          type: integer
+        revealedPositions:
+          type: array
+          items:
+            type: integer
+        minePositions:
+          type: array
+          items:
+            type: integer
+        status:
+          type: string
+          enum: [active, won, lost]
+        currentMultiplier:
+          type: number
+        betStriker:
+          type: number
+        winAmount:
+          type: ["number", "null"]
+
+    GameResult:
+      type: object
+      required: [gameId, gameType, betStriker, outcome, multiplier, winAmount, newBalance]
+      properties:
+        gameId:
+          type: integer
+        gameType:
+          type: string
+          enum: [shot, penalty, minefield, freekick]
+        betStriker:
+          type: number
+        outcome:
+          type: string
+          enum: [win, loss, cashout]
+        multiplier:
+          type: number
+        winAmount:
+          type: number
+        newBalance:
+          type: number
+        jackpotTriggered:
+          type: boolean
+        jackpotAmount:
+          type: ["number", "null"]
+
+    GameRecord:
+      type: object
+      required: [id, gameType, betStriker, outcome, multiplier, winAmount, createdAt]
+      properties:
+        id:
+          type: integer
+        gameType:
+          type: string
+        betStriker:
+          type: number
+        outcome:
+          type: string
+        multiplier:
+          type: number
+        winAmount:
+          type: number
+        createdAt:
+          type: string
+
+    # ── PAYMENTS ──────────────────────────────────────────────────────────────
+
+    DepositInput:
+      type: object
+      required: [currency]
+      properties:
+        currency:
+          type: string
+          enum: [TON, USDT_TON, USDT_TRC20, BNB, SOL]
+
+    DepositInvoice:
+      type: object
+      required: [invoiceId, payLink, currency, expiresAt]
+      properties:
+        invoiceId:
+          type: string
+        payLink:
+          type: string
+        currency:
+          type: string
+        expiresAt:
+          type: string
+
+    WithdrawalInput:
+      type: object
+      required: [amountStriker, destinationAddress, currency]
+      properties:
+        amountStriker:
+          type: number
+        destinationAddress:
+          type: string
+        currency:
+          type: string
+          enum: [TON]
+
+    WithdrawalStatus:
+      type: object
+      required: [id, status, amountStriker, amountTon, requiresReview]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, under_review, approved, processing, completed, rejected]
+        amountStriker:
+          type: number
+        amountTon:
+          type: number
+        requiresReview:
+          type: boolean
+
+    WithdrawalRecord:
+      type: object
+      required: [id, playerId, username, amountStriker, amountTon, status, createdAt]
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: integer
+        username:
+          type: string
+        amountStriker:
+          type: number
+        amountTon:
+          type: number
+        destinationAddress:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+        reviewedBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    # ── JACKPOT ───────────────────────────────────────────────────────────────
+
+    Jackpot:
+      type: object
+      required: [currentAmountTon, minimumTrigger, status]
+      properties:
+        currentAmountTon:
+          type: number
+        minimumTrigger:
+          type: number
+        status:
+          type: string
+          enum: [building, ready, triggered]
+        lastWinner:
+          type: ["string", "null"]
+        lastTriggeredAt:
+          type: ["string", "null"]
+        percentFull:
+          type: number
+
+    # ── TOURNAMENTS ───────────────────────────────────────────────────────────
+
+    Tournament:
+      type: object
+      required: [id, type, prizePoolTon, status, startTime, endTime]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [daily, weekly, flash, world_cup]
+        prizePoolTon:
+          type: number
+        status:
+          type: string
+          enum: [upcoming, active, ended]
+        startTime:
+          type: string
+        endTime:
+          type: string
+        entryFeeBoots:
+          type: ["number", "null"]
+        topEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+
+    LeaderboardEntry:
+      type: object
+      required: [rank, playerId, username, value, vipTier]
+      properties:
+        rank:
+          type: integer
+        playerId:
+          type: integer
+        username:
+          type: string
+        value:
+          type: number
+        vipTier:
+          type: string
+        captainBalance:
+          type: number
+
+    # ── ADMIN ─────────────────────────────────────────────────────────────────
+
+    AdminOverview:
+      type: object
+      required: [playersOnline, todayVolumeTon, todayProfitTon, pendingWithdrawals, jackpotAmount, newSignupsToday, totalPlayers]
+      properties:
+        playersOnline:
+          type: integer
+        todayVolumeTon:
+          type: number
+        todayProfitTon:
+          type: number
+        todayEdgeProfit:
+          type: number
+        todaySpreadProfit:
+          type: number
+        todayRakeProfit:
+          type: number
+        pendingWithdrawals:
+          type: integer
+        jackpotAmount:
+          type: number
+        newSignupsToday:
+          type: integer
+        totalPlayers:
+          type: integer
+        flaggedPlayers:
+          type: integer
+
+    AdminPlayer:
+      type: object
+      required: [id, telegramId, username, strikerBalance, bootBalance, captainBalance, vipTier, tonWageredLifetime, streakDays, isBanned, isFlagged, createdAt]
+      properties:
+        id:
+          type: integer
+        telegramId:
+          type: string
+        username:
+          type: string
+        strikerBalance:
+          type: number
+        bootBalance:
+          type: number
+        captainBalance:
+          type: number
+        vipTier:
+          type: string
+        tonWageredLifetime:
+          type: number
+        streakDays:
+          type: integer
+        isBanned:
+          type: boolean
+        isFlagged:
+          type: boolean
+        totalGames:
+          type: integer
+        totalDeposited:
+          type: number
+        totalWithdrawn:
+          type: number
+        referralCode:
+          type: string
+        deviceFingerprint:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    AdminPlayerUpdate:
+      type: object
+      properties:
+        isBanned:
+          type: boolean
+        isFlagged:
+          type: boolean
+        strikerBalance:
+          type: number
+        vipTier:
+          type: string
+          enum: [sunday_league, championship, premier_league, champions_league, world_cup]
+        banReason:
+          type: ["string", "null"]
+
+    BroadcastInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        buttonText:
+          type: ["string", "null"]
+        buttonUrl:
+          type: ["string", "null"]
+
+    JackpotSeedInput:
+      type: object
+      required: [amountTon]
+      properties:
+        amountTon:
+          type: number
+
+    TournamentInput:
+      type: object
+      required: [type, prizePoolTon, durationHours]
+      properties:
+        type:
+          type: string
+          enum: [flash, daily, weekly, world_cup]
+        prizePoolTon:
+          type: number
+        durationHours:
+          type: number
+        entryFeeBoots:
+          type: ["number", "null"]
+
+    AdminConfig:
+      type: object
+      required: [houseEdgeShot, houseEdgePenalty, houseEdgeMinefield, houseEdgeFreekick, strikerDepositRate, strikerWithdrawRate, minDepositTon, minWithdrawStriker, wagerRequirementMultiplier, jackpotPercentage, jackpotMinPool]
+      properties:
+        houseEdgeShot:
+          type: number
+        houseEdgePenalty:
+          type: number
+        houseEdgeMinefield:
+          type: number
+        houseEdgeFreekick:
+          type: number
+        strikerDepositRate:
+          type: number
+        strikerWithdrawRate:
+          type: number
+        minDepositTon:
+          type: number
+        minWithdrawStriker:
+          type: number
+        wagerRequirementMultiplier:
+          type: number
+        jackpotPercentage:
+          type: number
+        jackpotMinPool:
+          type: number
+
+    AdminConfigUpdate:
+      type: object
+      properties:
+        houseEdgeShot:
+          type: number
+        houseEdgePenalty:
+          type: number
+        houseEdgeMinefield:
+          type: number
+        houseEdgeFreekick:
+          type: number
+        strikerDepositRate:
+          type: number
+        strikerWithdrawRate:
+          type: number
+        minDepositTon:
+          type: number
+        minWithdrawStriker:
+          type: number
+        wagerRequirementMultiplier:
+          type: number
+
+    AdminAnalytics:
+      type: object
+      required: [days, dailyRevenue, totalRevenue, playerGrowth, gameBreakdown, vipDistribution]
+      properties:
+        days:
+          type: integer
+        dailyRevenue:
+          type: array
+          items:
+            type: object
+            required: [date, revenue, volume, newPlayers]
+            properties:
+              date:
+                type: string
+              revenue:
+                type: number
+              volume:
+                type: number
+              newPlayers:
+                type: integer
+        totalRevenue:
+          type: number
+        playerGrowth:
+          type: integer
+        gameBreakdown:
+          type: object
+          properties:
+            shot:
+              type: number
+            penalty:
+              type: number
+            minefield:
+              type: number
+            freekick:
+              type: number
+        vipDistribution:
+          type: object
+          properties:
+            sunday_league:
+              type: integer
+            championship:
+              type: integer
+            premier_league:
+              type: integer
+            champions_league:
+              type: integer
+            world_cup:
+              type: integer

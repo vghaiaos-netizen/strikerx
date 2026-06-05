@@ -1,0 +1,428 @@
+Here's the full adapted prompt:
+
+---
+
+**STRIKERX — REPLIT AGENT BUILD PROMPT**
+
+You are building StrikerX, a football-themed Telegram Mini App gaming platform with a three-tier virtual token economy, two-bot architecture, multi-currency crypto payment processing, and a self-sustaining community engine. The north star is Stake.com meets Hamster Kombat living entirely inside Telegram. Every decision serves player retention and automated revenue.
+
+---
+
+**STEP 1 — GITHUB SETUP (DO THIS BEFORE ANYTHING ELSE)**
+
+Using the token stored in Replit Secrets as GITHUB_TOKEN, create a private GitHub repository named `strikerx` via the GitHub REST API with a POST request to `https://api.github.com/user/repos`. Do not use any UI method, git CLI, or OAuth flow. API only.
+
+After the repository is created:
+1. Run `git init` in the project root
+2. Run `git remote add origin https://github.com/YOUR_USERNAME/strikerx.git` — replace YOUR_USERNAME with the actual authenticated GitHub username fetched from the API using the same token
+3. Configure git user email and name from environment or use defaults
+4. Create a `.gitignore` covering `node_modules`, `.env`, `dist`, `build`, `__pycache__`
+5. Create all documentation files listed below
+6. Stage everything, commit with message `init: project scaffold and full documentation`
+7. Push to main branch with `git push -u origin main`
+8. Confirm push succeeded before writing any application code
+
+Also generate `SHELL_SYNC.sh` — a standalone script executable directly in Replit shell that uses GITHUB_TOKEN to force-sync the entire current project state to GitHub instantly with no agent involvement. This is the manual fallback for when credits run out mid-session. Test that it works.
+
+Configure automatic git commits and pushes after every significant code change throughout the session.
+
+---
+
+**STEP 2 — DOCUMENTATION SUITE (COMMITTED BEFORE ANY APP CODE)**
+
+**README.md** — Full project overview, complete tech stack, local setup instructions, environment variable reference, how to run each service, how to deploy to Replit, Railway, and Render, and how to switch between them with zero code changes.
+
+**ROADMAP.md** — Complete phased build plan. Phase 1: core infrastructure, bots, database, payments. Phase 2: all four games plus jackpot. Phase 3: full retention mechanics. Phase 4: admin dashboard. Phase 5: anti-fraud layer. Phase 6: World Cup features. Phase 7: smart contracts and provably fair. Phase 8: NFT integration. Phase 9: airdrop campaign. Phase 10: multi-app umbrella brand.
+
+**AGENT_HANDOFF.md** — The most critical document. Written so any future Replit agent reads this one file and knows exactly what is built and working, what decisions were made and why, what is pending, all environment variables and where they are used, current database schema, API integration status, known issues, and explicit next steps. Update this file automatically at the end of every logical build phase. Zero context lost between sessions ever.
+
+**ARCHITECTURE.md** — Complete system design, service separation, database schema with every table and relationship, API flow diagrams, token economy mechanics, revenue stream calculations, hosting configuration for all three platforms, and service communication map.
+
+**AGENT_RULES.md** — Rules every future agent must follow: always read AGENT_HANDOFF.md first, always update it before ending a session, never hardcode environment variables, always maintain hosting compatibility across Replit, Railway, and Render, always push to GitHub after significant changes.
+
+**.env.example** — Every environment variable documented with description and example value. No hardcoded values anywhere in the codebase ever.
+
+---
+
+**STEP 3 — PROJECT STRUCTURE**
+
+```
+/strikerx
+├── /frontend
+│   ├── /app          Mini App HTML/CSS/JS
+│   ├── /assets       Stadium backgrounds, ball animations,
+│                     crowd audio, footballer icons,
+│                     pitch-themed game graphics
+│   └── /admin        Private admin dashboard
+├── /groupbot         GroupBot service
+├── /gamebot          GameBot service
+├── /shared
+│   ├── /database     Schema, migrations, queries
+│   ├── /payments     CryptoBot API, currency conversion
+│   ├── /tokens       STRIKER/BOOT/CAPTAIN logic
+│   └── /utils        Shared utilities
+├── /scripts
+│   ├── SHELL_SYNC.sh
+│   ├── seed.js
+│   └── migrate.js
+├── .env.example
+├── railway.toml
+├── render.yaml
+├── .replit
+├── Dockerfile
+└── /docs
+```
+
+Zero code changes required to move between Replit, Railway, and Render. All configuration is environment-variable-driven. Include `railway.toml`, `render.yaml`, `.replit`, and `Dockerfile` configured correctly for all services from day one.
+
+---
+
+**STEP 4 — ENVIRONMENT VARIABLES**
+
+All stored in Replit Secrets. Referenced via process.env everywhere. Never hardcoded.
+
+```
+GITHUB_TOKEN
+GAMEBOT_TOKEN
+GROUPBOT_TOKEN
+CRYPTOBOT_TOKEN
+TON_WALLET_ADDRESS
+MINI_APP_LINK=t.me/StrykkerXBot/StrikerX
+ADMIN_PASSWORD
+ADMIN_USERNAME
+DATABASE_URL
+JWT_SECRET
+ENCRYPTION_KEY
+EXCHANGE_RATE_API_KEY
+NODE_ENV
+PORT
+WEBHOOK_URL
+HOUSE_EDGE_SHOT
+HOUSE_EDGE_PENALTY
+HOUSE_EDGE_MINEFIELD
+HOUSE_EDGE_FREEKICK
+JACKPOT_SEED_AMOUNT
+JACKPOT_PERCENTAGE
+STRIKER_DEPOSIT_RATE
+STRIKER_WITHDRAW_RATE
+MIN_DEPOSIT_TON
+MIN_WITHDRAW_STRIKER
+WAGER_REQUIREMENT_MULTIPLIER
+NEW_ACCOUNT_REVIEW_THRESHOLD
+BIG_WIN_ANNOUNCE_THRESHOLD
+INACTIVE_DAYS_TAG_THRESHOLD
+REFERRAL_TIER1_PERCENTAGE
+REFERRAL_TIER2_PERCENTAGE
+```
+
+---
+
+**STEP 5 — SHARED DATABASE**
+
+SQLite for development, Postgres-compatible for production. Both bots share one database. Schema covers:
+
+- `players` — telegram_id, username, striker_balance, boot_balance, captain_balance, ton_wagered_lifetime, vip_tier, streak_days, last_active, device_fingerprint, referral_code, referred_by, account_age, is_banned, is_flagged, group_member_status
+- `transactions` — id, player_id, type (deposit/withdrawal/bet/win/bonus), amount_striker, amount_ton, currency, exchange_rate_at_time, timestamp, status
+- `games` — id, player_id, game_type, bet_striker, result_multiplier, outcome, timestamp, session_id
+- `tournaments` — id, type (daily/weekly/flash), start_time, end_time, prize_pool_ton, status, rake_captured
+- `tournament_entries` — tournament_id, player_id, best_multiplier, timestamp
+- `jackpot` — id, current_amount_ton, seed_amount, last_triggered, last_winner_id, status
+- `referrals` — referrer_id, referred_id, tier, earnings_paid_striker, created_at
+- `withdrawals` — id, player_id, amount_striker, amount_ton, destination_address, currency, status, reviewed_by, timestamp
+- `audit_log` — id, admin_action, target_player, old_value, new_value, reason, timestamp
+- `scheduled_posts` — id, content, scheduled_time, status
+- `vip_cashback` — player_id, period, losses_ton, cashback_striker, paid_at
+
+---
+
+**STEP 6 — PAYMENT SYSTEM**
+
+Accept deposits in TON, USDT via TON network, USDT via TRC20, BNB, and SOL. CryptoBot API handles all currency reception programmatically. No manual wallet management.
+
+Deposit flow:
+```
+Player selects deposit currency
+        ↓
+CryptoBot generates invoice for that currency
+        ↓
+Player pays
+        ↓
+CryptoBot webhook confirms payment
+        ↓
+System fetches live exchange rate for that currency to TON
+        ↓
+Amount converted to TON equivalent
+        ↓
+TON equivalent × 100 = STRIKER credited to player
+        ↓
+Balance updated, GroupBot announces if above threshold
+```
+
+Withdrawal flow:
+```
+Player requests withdrawal specifying amount and destination
+        ↓
+Wagering requirement check
+        ↓
+STRIKER ÷ 110 = TON amount
+        ↓
+10% spread captured automatically
+        ↓
+CryptoBot sends TON to player wallet
+        ↓
+Transaction logged, GroupBot announces
+```
+
+Minimum deposit: 0.5 TON equivalent. Minimum withdrawal: 1000 STRIKER. New account first withdrawal held for manual review.
+
+---
+
+**STEP 7 — TOKEN ECONOMY**
+
+**STRIKER** — main gameplay currency
+- Deposit rate: 1 TON = 100 STRIKER (adjustable from admin)
+- Withdrawal rate: 110 STRIKER = 1 TON (adjustable from admin)
+- 10% spread is automatic profit on every full cycle
+- All bets, winnings, and bonuses in STRIKER
+- Bonus wagering requirement: 10x before withdrawal unlocks
+- Wagering progress shown as progress bar in Mini App
+
+**BOOT** — loyalty currency
+- Earned: 1 BOOT per 10 STRIKER wagered
+- Never convertible to TON or STRIKER
+- Spent on: VIP tier upgrades, tournament entry fees, exclusive game access, withdrawal fee waivers
+- Displayed on withdrawal screen to create loss aversion
+
+**CAPTAIN** — prestige currency
+- Earned: tournament 1st place = 10, 2nd = 5, 3rd = 2, jackpot trigger = 5
+- Never sellable or transferable
+- Displayed as trophies on public player profile
+- Unlocks exclusive game variants
+- Leaderboard of CAPTAIN holders published weekly in group
+
+---
+
+**STEP 8 — THE FOUR GAMES**
+
+**The Shot — Crash Game**
+Multiplier starts at 1.00x and rises continuously. Player bets STRIKER and watches it climb. Cash out at any point to lock in multiplier × bet. If they hold past the crash point they lose their bet. Crash point calculated server-side with provably seeded RNG with 4% house edge baked into distribution. Multiple players in same round visible to each other for social proof. Auto-cashout setting available. Visual: animated football flying toward goal, crowd noise rising with multiplier, ball hitting post on crash.
+
+**Penalty — Binary Bet**
+Player picks left, center, or right. Goalkeeper dives to random position. Correct prediction pays 1.92x (4% house edge). Wrong prediction loses stake. Instant result, high frequency. Visual: penalty spot, goalkeeper dive animation, crowd reaction.
+
+**Minefield — Mines Game**
+Football pitch grid, configurable 3×3 to 7×7. Player selects difficulty (sets number of hidden defenders). Pick squares one at a time — safe squares increase multiplier, hitting a defender loses entire bet. Cash out after any safe square. Multiplier math accounts for 4% house edge across probability. Visual: pitch grid, defender reveal animation, always-visible cash out button.
+
+**Free Kick — Plinko Game**
+Ball drops from top through rows of defender pegs bouncing randomly left or right. Lands in multiplier slot. Slots range 0.2x to 100x, distribution weighted for 4% house edge. Player selects bet amount and risk level (low/medium/high changes slot distribution). Visual: football pitch view, ball physics animation, crowd reaction on big multipliers.
+
+**Golden Boot — Jackpot Pool**
+1% of every bet across all four games feeds the pool continuously. Pool displayed live in Mini App and announced in group every 30 minutes. Trigger is random, weighted toward higher bettors. Minimum pool to trigger: 50 TON. On trigger: 90% to winner, 10% retained as revenue. New pool seeds immediately at 10 TON. Winner announced explosively in group. Pool always appears imminent visually regardless of actual amount.
+
+**The League — Tournament System**
+Daily tournaments reset midnight. Weekly tournaments reset Monday. Leaderboard ranks by highest single-session multiplier. Prize pool funded by 10% rake on tournament bets plus optional BOOT token entry fee. Auto-announces start, hourly updates, results, and payouts. Flash tournaments launchable anytime from admin dashboard. World Cup edition tournaments during June 11 to July 19 with themed prizes.
+
+---
+
+**STEP 9 — VIP SYSTEM**
+
+**Sunday League** — Default
+Basic access, standard withdrawal speed.
+
+**Championship** — 50 TON lifetime wagered
+2% weekly cashback on losses in STRIKER, priority withdrawal queue.
+
+**Premier League** — 200 TON lifetime wagered
+5% cashback, priority withdrawals, higher bet limits.
+
+**Champions League** — 500 TON lifetime wagered
+8% cashback, instant withdrawals, personal manager contact, custom bet limits.
+
+**World Cup** — 1000 TON lifetime wagered
+8% cashback, instant withdrawals, 15% referral earnings instead of 10%, monthly STRIKER bonus, permanent hall of fame listing in group.
+
+VIP progress bar always visible in Mini App. Tier displayed on profile. Tier upgrade announced in group publicly.
+
+---
+
+**STEP 10 — GROUPBOT COMPLETE SPEC**
+
+GroupBot gates all casino access behind group membership. Membership verified before every single game interaction. Leaving group suspends account within seconds. Rejoining restores access automatically.
+
+**New member welcome:**
+```
+⚽ Welcome to StrikerX @[username]!
+The stadium is LIVE. Golden Boot: [AMOUNT] TON
+Your 500 STRIKER welcome bonus is waiting.
+[Claim & Play]
+```
+
+**Every 30 minutes:**
+```
+💰 Golden Boot Jackpot: [AMOUNT] TON
+Growing with every kick. Last won [X] hours ago.
+[Take Your Shot]
+```
+
+**Every morning:**
+```
+☀️ Match Day at StrikerX!
+🥇 Yesterday's top scorer: [PLAYER] ([MULTIPLIER]x)
+💰 Golden Boot: [AMOUNT] TON
+🔥 Longest streak: [PLAYER] ([DAYS] days)
+Your move. ⚽
+[Open Casino]
+```
+
+**Every evening:**
+```
+🌙 End of Day Standings
+Today's volume: [AMOUNT] TON
+Biggest win: [PLAYER] — [AMOUNT] STRIKER
+Tomorrow's Golden Boot starts at: [AMOUNT] TON
+[Check Leaderboard]
+```
+
+**Every big win above threshold:**
+```
+🏆 GOOOAL!
+[PLAYER] just turned [AMOUNT] TON into [AMOUNT] TON
+on [GAME] in [TIME]!
+Current record: [MULTIPLIER]x — can you beat it?
+[Play Now]
+```
+
+**Every jackpot trigger:**
+```
+💥 GOLDEN BOOT CLAIMED!
+[PLAYER] just won [AMOUNT] TON!
+New Golden Boot starting now.
+[Play Now]
+```
+
+**Every withdrawal:**
+```
+💸 [PLAYER] just cashed out [AMOUNT] TON.
+Real money. Real fast. ⚡
+[Open Casino]
+```
+
+**Every referral:**
+```
+⚽ [PLAYER] just scouted a new player!
+Scout bonus activated — 10% of every goal they score. Forever. 🎯
+```
+
+**Streak milestones at 7, 14, 21, 30 days:**
+```
+🔥 [PLAYER] is on a [X]-day streak!
+[BOOT_REWARD] BOOT tokens awarded.
+Who's chasing them? 👀
+```
+
+**Flash tournament:**
+```
+⚡ FLASH TOURNAMENT — [X] HOURS ONLY
+Prize pool: [AMOUNT] TON
+Top 3 multipliers WIN
+Clock is ticking ⏱
+[Join Tournament]
+```
+
+**Reactivation at 3 days inactive:**
+```
+👀 @[username] the stadium misses you...
+Your Golden Boot stake just increased.
+Come back and claim it 🏆
+```
+
+Daily football poll with 50 STRIKER reward for participation. Weekly trivia with TON prize for first correct answer. Football memes posted daily. World Cup match reactions during tournament.
+
+**Moderation:** Auto-delete external links from non-admins. Three-warning system before ban. Verification button on join within 60 seconds or auto-remove. Slow mode configurable by hour.
+
+**Admin commands (owner Telegram ID only):**
+`/stats` `/jackpot [amount]` `/tournament [prize] [duration]` `/ban [user] [reason]` `/unban [user]` `/broadcast [message]` `/edge [game] [%]` `/rate [deposit/withdraw] [amount]` `/review` `/approve [id]` `/balance [player]` `/vip [player] [tier]` `/flag [player]`
+
+---
+
+**STEP 11 — GAMEBOT COMPLETE SPEC**
+
+Account created automatically on first `/start`. Telegram identity is the account. No forms, no email, no password.
+
+Commands: `/start` `/balance` `/deposit` `/withdraw [amount]` `/stats` `/streak` `/vip` `/referral` `/leaderboard` `/help`
+
+---
+
+**STEP 12 — RETENTION MECHANICS**
+
+Daily streak with escalating rewards. Day 3: 100 STRIKER. Day 7: 500 STRIKER. Day 14: 1000 STRIKER + BOOT. Day 21: 2000 STRIKER + exclusive access. Day 30: 5000 STRIKER + CAPTAIN. Break resets to zero.
+
+On withdrawal initiation show: streak count, VIP tier progress percentage, BOOT balance, days to next milestone. Not a block — just visible.
+
+Reinvestment nudge on withdrawal: "Players who reinvest at this stage average [X] TON after 7 days. [Withdraw Anyway] [Keep Playing]"
+
+STRIKER rate events: admin-triggered windows improving rates in either direction creating urgency to deposit or hold.
+
+Reactivation at 7 days: personal DM with bonus offer. At 14 days: larger bonus plus one-time streak restoration offer.
+
+---
+
+**STEP 13 — ONBOARDING FLOW**
+
+New member joins group → GroupBot immediate personal welcome with live jackpot stat and single button → Mini App opens to animated stadium → 500 STRIKER pre-loaded → single button "Take Your First Shot" → first Crash game seeded to reach minimum 1.5x guaranteed win → win screen shows STRIKER won and TON equivalent → GroupBot fires win announcement in group simultaneously → deposit prompt appears → FOMO from GroupBot announcements fires throughout.
+
+---
+
+**STEP 14 — ANTI-FRAUD**
+
+Device fingerprint captured on first Mini App open. Welcome bonus tied to device and account. Multiple accounts same device flagged immediately. Tournament eligibility requires 7 days account age and prior wagering history. All bonus STRIKER wagering requirement 10x before withdrawal. New account first withdrawal manual review. Referral earnings locked until recruit deposits 2 TON and wagers 3x. Betting speed monitored — inhuman patterns trigger soft flag then CAPTCHA. Flagged accounts surface in admin dashboard review queue.
+
+---
+
+**STEP 15 — ADMIN DASHBOARD**
+
+Private web interface, password plus secret key protected, mobile responsive.
+
+**Live overview:** Players online, today's volume, today's profit broken down by stream (edge / spread / rake / jackpot / VIP / rate events), pending withdrawals, Golden Boot trajectory, new signups, referral network size.
+
+**Financial controls:** House edge per game slider, deposit rate, withdrawal rate, minimum deposit, minimum withdrawal, wagering multipliers per bonus type, VIP cashback percentages.
+
+**Operations:** Jackpot seed, flash tournament launcher, STRIKER rate event launcher, broadcast composer, scheduled post manager, ambassador management.
+
+**Player management:** Full searchable list, individual player view with complete history, manual balance adjustment with mandatory reason and audit trail, ban/unban with logging, first withdrawal approval queue, flagged account review queue.
+
+**Analytics:** Revenue by stream over time, retention curves, game popularity, peak activity heatmap, referral network tree, VIP distribution, currency breakdown, withdrawal patterns.
+
+---
+
+**STEP 16 — GROWTH ENGINE**
+
+Every player gets unique referral code on signup. 10% of referred player losses forever. 5% second generation. World Cup tier earns 15%. Paid weekly in STRIKER automatically.
+
+Top referrers become ambassadors with outsized terms and monthly CAPTAIN rewards.
+
+Organic infiltration: join football and crypto groups, participate genuinely, mention StrikerX conversationally, post win screenshots with handle only never a link.
+
+World Cup theme active from day one. Special tournament series June 11 to July 19. Post-tournament reskins ready: Champions League, AFCON, Premier League. Theme engine modular from the start.
+
+---
+
+**STEP 17 — HOSTING COMPATIBILITY**
+
+`railway.toml` configures GroupBot, GameBot, frontend, and admin as separate services each deploying from their respective folder. `render.yaml` configures the same. `.replit` runs everything together for development. `Dockerfile` covers containerized deployment. Switching platforms requires only environment variable changes. No code changes ever.
+
+---
+
+**IMPORTANT RULES FOR THIS SESSION AND ALL FUTURE SESSIONS**
+
+1. GitHub repo creation and git init happen before any application code
+2. AGENT_HANDOFF.md is updated before ending any session
+3. No hardcoded values anywhere — environment variables only
+4. Push to GitHub after every significant change
+5. SHELL_SYNC.sh must be generated and tested
+6. All services must be independently deployable
+7. Every session begins by reading AGENT_HANDOFF.md
+
+---
+
+Begin now. Create the GitHub repository via API first. Then git init and configure the remote. Then create all documentation. Then push. Then confirm everything is on GitHub. Then begin application code. Report status after each major step.

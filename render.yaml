@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: strikerx-api
+    runtime: node
+    buildCommand: pnpm install && pnpm --filter @workspace/db run push && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GAMEBOT_TOKEN
+        sync: false
+      - key: GROUPBOT_TOKEN
+        sync: false
+      - key: CRYPTOBOT_TOKEN
+        sync: false
+
+  - type: web
+    name: strikerx-frontend
+    runtime: static
+    buildCommand: pnpm install && pnpm --filter @workspace/api-spec run codegen && pnpm --filter @workspace/strikerx run build
+    staticPublishPath: artifacts/strikerx/dist/public

@@ -349,8 +349,16 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
+  if (!headers.has("authorization")) {
+    const isAdminRoute = requestInfo.url.includes('/api/admin') || requestInfo.url.includes('/api/auth/admin');
+    const tokenKey = isAdminRoute ? 'strikerx_admin_token' : 'strikerx_token';
+    const token = localStorage.getItem(tokenKey);
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
+  // Fallback for explicitly set auth token getter
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {

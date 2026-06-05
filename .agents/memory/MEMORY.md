@@ -1,0 +1,2 @@
+- [StrikerX Architecture](strikerx-architecture.md) — Both bots run in the same Express process; crash game simulated (not live shared round); bots disabled without bot tokens.
+- [StrikerX Dev Auth Bypass](strikerx-dev-auth.md) — Use `initData: "dev:123456:username"` to bypass Telegram validation in development mode.
