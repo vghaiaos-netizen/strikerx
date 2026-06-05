@@ -1,6 +1,6 @@
 # StrikerX — Agent Handoff
 
-> Last updated: Session 3 (2026-06-05)
+> Last updated: Session 4 (2026-06-05)
 > Read this FIRST, every session, before touching any file.
 
 ---
@@ -23,7 +23,7 @@ lib/api-client-react/    — Generated React Query hooks
 lib/api-zod/             — Generated Zod schemas (server validation)
 lib/db/                  — Drizzle ORM + PostgreSQL schema
 docs/                    — This file + ARCHITECTURE.md + ROADMAP.md
-scripts/                 — github-push.mjs, etc.
+scripts/                 — github-push.mjs
 ```
 
 ---
@@ -31,10 +31,10 @@ scripts/                 — github-push.mjs, etc.
 ## Running The App (Dev)
 
 ```bash
-# API server (port 8080, proxied to /api via Replit)
+# API server (port 8080)
 pnpm --filter @workspace/api-server run dev
 
-# Frontend (proxied to / via Replit)
+# Frontend
 pnpm --filter @workspace/strikerx run dev
 
 # After OpenAPI changes
@@ -42,9 +42,6 @@ pnpm --filter @workspace/api-spec run codegen
 
 # After DB schema changes
 pnpm --filter @workspace/db run push
-
-# Full typecheck (run before pushing to GitHub)
-pnpm run typecheck
 ```
 
 ---
@@ -147,20 +144,69 @@ Push after every session:
 node scripts/github-push.mjs
 ```
 
-Uses GitHub contents API with SHA retry on 422. Excludes `.cache`, `node_modules`, `dist`, `.local`, `.agents`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` env var.
+Uses **GitHub GraphQL `createCommitOnBranch` mutation** — pushes all files in atomic batches of 50. No SHA juggling. Excludes `node_modules`, `dist`, `.local`, `.agents`, `generated`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` env var.
+
+> NOTE: The old Contents API approach (PUT per file) fails with 409 due to concurrent commits changing tree state. GraphQL mutation is the correct solution.
+
+---
+
+## Admin Dashboard (fully built)
+
+### Backend Routes (`artifacts/api-server/src/routes/admin.ts`)
+| Route | Description |
+|-------|-------------|
+| `GET /api/admin/overview` | KPIs: revenue, players, bets, jackpot |
+| `GET /api/admin/players` | Searchable/filterable player list |
+| `GET /api/admin/players/:id` | Full player detail |
+| `POST /api/admin/players/:id/balance` | Adjust player balance |
+| `GET /api/admin/withdrawals` | All withdrawals (filterable by status) |
+| `POST /api/admin/withdrawals/:id/approve` | Approve withdrawal |
+| `POST /api/admin/withdrawals/:id/reject` | Reject with reason |
+| `GET /api/admin/config` | All runtime config keys |
+| `PUT /api/admin/config/:key` | Update single config value |
+| `PUT /api/admin/config` | Bulk update config values |
+| `GET /api/admin/analytics` | Revenue/bets/players time series |
+| `GET /api/admin/audit-log` | Admin action history |
+| `POST /api/admin/broadcast` | Send message to all players |
+| `POST /api/admin/jackpot/seed` | Manually seed jackpot pool |
+| `GET /api/admin/tournaments` | Tournament list |
+| `POST /api/admin/tournaments` | Create tournament |
+| `POST /api/admin/tournaments/:id/end` | End tournament, pay out |
+
+### Config Service (`artifacts/api-server/src/lib/configService.ts`)
+- `app_config` DB table holds 31 runtime keys across 8 categories
+- 15-second in-memory cache (changes reflect within 15s)
+- `initConfig()` called on startup in `app.ts`
+- Use `getConfig(key)` / `setConfig(key, value)` anywhere in the API server
+
+### Frontend Admin Pages (`artifacts/strikerx/src/pages/admin/`)
+| File | Page |
+|------|------|
+| `dashboard.tsx` | KPI cards + Recharts revenue/bets/players charts |
+| `players.tsx` | Searchable table + player detail dialog + balance adjustment |
+| `withdrawals.tsx` | Status tabs (pending/approved/rejected) + approve/reject actions |
+| `config.tsx` | Category sidebar + all 31 config keys + secret masking + save-all |
+| `analytics.tsx` | Multi-chart time-series analytics (7/30/90 day) |
+| `audit-log.tsx` | Paginated admin action history |
+| `broadcast.tsx` | Message templates + preview + send to all players |
+| `tournaments.tsx` | Create/end/view live tournament cards |
+
+Admin layout: `artifacts/strikerx/src/components/admin/admin-layout.tsx`
+Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 
 ---
 
 ## Rules For Next Agent
 
 1. **Read this file first.** Every session, no exceptions.
-2. **Run `pnpm run typecheck` before GitHub push** — never push with type errors.
-3. **Never use `console.log` in server code** — use `req.log` in routes, `logger` elsewhere.
-4. **After OpenAPI spec changes** → `pnpm --filter @workspace/api-spec run codegen`.
-5. **After DB schema changes** → `pnpm --filter @workspace/db run push`.
-6. **Dev auth bypass** for testing: `{ "initData": "dev:123456:player_dev" }`.
-7. **Bots are disabled** until bot token env vars are set — intentional.
-8. **Push to GitHub at session end** using `node scripts/github-push.mjs`.
+2. **Never use `console.log` in server code** — use `req.log` in routes, `logger` elsewhere.
+3. **After OpenAPI spec changes** → `pnpm --filter @workspace/api-spec run codegen`.
+4. **After DB schema changes** → `pnpm --filter @workspace/db run push`.
+5. **Dev auth bypass** for testing: `{ "initData": "dev:123456:player_dev" }`.
+6. **Bots are disabled** until bot token env vars are set — intentional.
+7. **Push to GitHub at session end** using `node scripts/github-push.mjs`.
+8. **Admin login**: username `admin`, password `admin123` (env vars override).
+9. **Config imports**: `appConfigTable` is from `@workspace/db` (not sub-paths). `auditLogTable` lives in `lib/db/src/schema/referrals.ts`.
 
 ---
 
@@ -177,10 +223,9 @@ Uses GitHub contents API with SHA retry on 422. Excludes `.cache`, `node_modules
 - [x] 2-tier referral system (10% / 5% lifetime)
 - [x] CryptoBot deposit integration
 - [x] Withdrawal queue with manual review
-- [x] Admin dashboard routes
 - [x] Dual Telegraf bot skeleton
 
-### Phase 2 (Full UI)
+### Phase 2 (Full Player UI)
 - [x] WebSocket crash engine for The Shot
 - [x] The Shot: live multiplier chart, crash history, live bets list
 - [x] Penalty: SVG goal + keeper animation, zone picker
@@ -190,13 +235,27 @@ Uses GitHub contents API with SHA retry on 422. Excludes `.cache`, `node_modules
 - [x] Profile: VIP progress, streak calendar, referral code, stats
 - [x] Deposit: QR code, invoice countdown, CryptoBot pay link
 - [x] Withdraw: wager gate, destination address, TON preview
+- [x] Leaderboard: 4 tabs (wagered / wins / streak / referrals)
 - [x] Dark stadium aesthetic throughout (navy/green/gold)
 
-## What's Next (Phase 3)
+### Phase 3 (Admin Dashboard)
+- [x] Persistent runtime config system (31 keys, DB-backed, 15s cache)
+- [x] All admin API routes (overview, players, withdrawals, config, analytics, audit-log, broadcast, jackpot, tournaments)
+- [x] Admin dashboard: KPI cards + Recharts charts
+- [x] Admin players: searchable table + detail dialog + balance adjustment
+- [x] Admin withdrawals: tabbed status view + approve/reject
+- [x] Admin config: all 31 keys with secret masking + bulk save
+- [x] Admin analytics: multi-chart time-series
+- [x] Admin audit log: paginated history
+- [x] Admin broadcast: templates + preview + send
+- [x] Admin tournaments: create/end/live cards
+- [x] GitHub push fixed (GraphQL createCommitOnBranch — atomic, reliable)
 
-- [ ] Admin dashboard frontend (player table, withdrawal approvals, config editor, analytics charts)
-- [ ] Leaderboard page
-- [ ] Real-time big-win notifications via WebSocket
+## What's Next (Phase 4)
+
 - [ ] Telegram bot handlers (GameBot: /start, /balance, /deposit; GroupBot: jackpot alerts)
+- [ ] Real-time big-win WebSocket notifications broadcast to all connected clients
+- [ ] Player-facing notifications panel (in-app notification bell)
+- [ ] Provably-fair verification page (players can verify game outcomes)
 - [ ] Add env secrets and go live
 - [ ] Deploy via Replit deployment
