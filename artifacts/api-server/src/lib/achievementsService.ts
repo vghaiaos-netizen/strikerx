@@ -1,6 +1,7 @@
 import { db, playerAchievementsTable, playersTable, gamesTable } from "@workspace/db";
 import { eq, and, count } from "drizzle-orm";
 import { logger } from "./logger";
+import { sendAchievementUnlocked } from "../services/telegramNotify";
 
 export type AchievementRarity = "common" | "rare" | "epic" | "legendary";
 
@@ -108,6 +109,22 @@ export async function checkAndAward(playerId: number, ctx: AchievementContext): 
     if (ctx.referralCount !== undefined && ctx.referralCount >= 5) await award("referral_squad");
   }
 
+  // Send Telegram notifications for newly unlocked achievements (fire-and-forget)
+  if (awarded.length > 0) {
+    (async () => {
+      const [player] = await db
+        .select({ telegramId: playersTable.telegramId })
+        .from(playersTable)
+        .where(eq(playersTable.id, playerId));
+      if (player?.telegramId) {
+        for (const key of awarded) {
+          const def = ACHIEVEMENT_MAP[key];
+          if (def) sendAchievementUnlocked(player.telegramId, def.title, 0);
+        }
+      }
+    })().catch((err) => logger.warn({ err }, "Achievement notification failed"));
+  }
+
   return awarded;
 }
 
@@ -116,8 +133,6 @@ export async function getPlayerAchievements(playerId: number) {
     .select()
     .from(playerAchievementsTable)
     .where(eq(playerAchievementsTable.playerId, playerId));
-
-  const unlockedKeys = new Set(unlocked.map(u => u.achievementKey));
 
   return ACHIEVEMENT_DEFS.map(def => {
     const row = unlocked.find(u => u.achievementKey === def.key);

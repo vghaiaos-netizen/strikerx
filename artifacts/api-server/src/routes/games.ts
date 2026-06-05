@@ -18,12 +18,13 @@ import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
 import { checkAndAward } from "../lib/achievementsService";
+import { sendJackpotWin } from "../services/telegramNotify";
 
 const router: IRouter = Router();
 
 // ─── Helper: check & trigger jackpot ─────────────────────────────────────────
 
-async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string) {
+async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string, gameName: string) {
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (!jackpot || jackpot.status !== "ready") return null;
   if (!shouldTriggerJackpot(jackpot.currentAmountTon, betStriker)) return null;
@@ -42,12 +43,17 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
 
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
 
-  // FIX: fetch current balance and add winnings as a real number (not a SelectBuilder cast)
   await db.update(playersTable)
     .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}` })
     .where(eq(playersTable.id, playerId));
 
   broadcastJackpot(username, winnerAmount).catch((err) => logger.error({ err }, "Failed to broadcast jackpot"));
+
+  // Push Telegram notification to winner (fire-and-forget)
+  db.select({ telegramId: playersTable.telegramId }).from(playersTable).where(eq(playersTable.id, playerId))
+    .then(([p]) => { if (p?.telegramId) sendJackpotWin(p.telegramId, Math.round(strikerWin), gameName); })
+    .catch(() => {});
+
   return { triggered: true, amountTon: winnerAmount, strikerWin };
 }
 
@@ -201,7 +207,7 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     gameData: { keeperDirection, direction },
   }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, "Penalty");
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (win && (winAmount >= bigWinThreshold || multiplier >= 5)) {
     broadcastBigWin(player.username, betStriker, winAmount, "Penalty").catch(() => {});
@@ -321,7 +327,7 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player");
+  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player", "Minefield");
 
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || session.currentMultiplier >= 5) {
@@ -394,7 +400,7 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
 
   const [game] = await db.insert(gamesTable).values({ playerId, gameType: "freekick", betStriker, resultMultiplier: multiplier, winAmount, outcome, gameData: { slot, riskLevel } }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, "Free Kick");
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || multiplier >= 5) {
     broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
