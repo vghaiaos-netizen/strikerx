@@ -465,4 +465,64 @@ router.post("/admin/tournaments/:id/end", requireAdmin, async (req, res): Promis
   res.json({ ok: true, id });
 });
 
+// ── RATE EVENTS ──────────────────────────────────────────────────────────────
+
+router.get("/admin/rate-events/status", requireAdmin, async (_req, res): Promise<void> => {
+  const { setConfig, getConfig } = await import("../lib/configService");
+  void setConfig;
+  const active        = await getConfig("rate_event_active").catch(() => "false");
+  const depositRate   = await getConfig("rate_event_deposit_rate").catch(() => "100");
+  const endsAt        = await getConfig("rate_event_ends_at").catch(() => "");
+  const now           = Date.now();
+  const isExpired     = endsAt ? new Date(endsAt).getTime() < now : false;
+  res.json({
+    active: active === "true" && !isExpired,
+    depositRate: parseFloat(depositRate),
+    endsAt: endsAt || null,
+    expired: isExpired,
+  });
+});
+
+router.post("/admin/rate-events/start", requireAdmin, async (req, res): Promise<void> => {
+  const { depositRate = 120, durationMinutes = 60 } = req.body as { depositRate?: number; durationMinutes?: number };
+  const { setConfig } = await import("../lib/configService");
+  const endsAt = new Date(Date.now() + durationMinutes * 60_000).toISOString();
+  await setConfig("rate_event_active", "true");
+  await setConfig("rate_event_deposit_rate", String(depositRate));
+  await setConfig("rate_event_ends_at", endsAt);
+  await db.insert(auditLogTable).values({ adminAction: "rate_event_start", targetPlayerId: null, newValue: JSON.stringify({ depositRate, durationMinutes }), performedBy: "admin" });
+  res.json({ ok: true, depositRate, endsAt });
+});
+
+router.post("/admin/rate-events/end", requireAdmin, async (_req, res): Promise<void> => {
+  const { setConfig } = await import("../lib/configService");
+  await setConfig("rate_event_active", "false");
+  await db.insert(auditLogTable).values({ adminAction: "rate_event_end", targetPlayerId: null, newValue: "manual_end", performedBy: "admin" });
+  res.json({ ok: true });
+});
+
+// ── FLAGGED PLAYERS ───────────────────────────────────────────────────────────
+
+router.get("/admin/flagged", requireAdmin, async (_req, res): Promise<void> => {
+  const flagged = await db.select({
+    id: playersTable.id, username: playersTable.username,
+    strikerBalance: playersTable.strikerBalance, vipTier: playersTable.vipTier,
+    isFlagged: playersTable.isFlagged, isBanned: playersTable.isBanned,
+    lastActive: playersTable.lastActive, tonWageredLifetime: playersTable.tonWageredLifetime,
+  }).from(playersTable).where(eq(playersTable.isFlagged, true)).orderBy(desc(playersTable.lastActive)).limit(50);
+
+  res.json(flagged.map(p => ({
+    ...p,
+    lastActive: p.lastActive?.toISOString() ?? null,
+  })));
+});
+
+router.post("/admin/players/:id/flag", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { flag = true, reason } = req.body as { flag?: boolean; reason?: string };
+  await db.update(playersTable).set({ isFlagged: flag }).where(eq(playersTable.id, id));
+  await db.insert(auditLogTable).values({ adminAction: flag ? "flag_player" : "unflag_player", targetPlayerId: id, newValue: reason ?? "", performedBy: "admin" });
+  res.json({ ok: true, id, isFlagged: flag });
+});
+
 export default router;

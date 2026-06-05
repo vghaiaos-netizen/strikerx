@@ -157,9 +157,11 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
   // fire-and-forget achievement checks
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
-    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered });
-    await checkAndAward(playerId, { event: "game_result", gameType: "penalty", outcome, winAmount, multiplier: win ? multiplier : 0 });
-    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+    const awarded: string[] = [];
+    awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
+    awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "penalty", outcome, winAmount, multiplier: win ? multiplier : 0 }));
+    if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
+    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player.username, keys: awarded, at: Date.now() });
   })().catch(() => {});
 
   res.json({
@@ -273,9 +275,11 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   // fire-and-forget achievement checks
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
-    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) });
-    await checkAndAward(playerId, { event: "game_result", gameType: "minefield", outcome: "cashout", winAmount, multiplier: session.currentMultiplier, safePickCount: session.revealedPositions.length });
-    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+    const awarded: string[] = [];
+    awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) }));
+    awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "minefield", outcome: "cashout", winAmount, multiplier: session.currentMultiplier, safePickCount: session.revealedPositions.length }));
+    if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
+    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player?.username ?? "Player", keys: awarded, at: Date.now() });
   })().catch(() => {});
 
   res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: (player?.strikerBalance ?? 0) + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
@@ -340,9 +344,11 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
   // fire-and-forget achievement checks
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
-    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered });
-    await checkAndAward(playerId, { event: "game_result", gameType: "freekick", outcome, winAmount, multiplier });
-    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+    const awarded: string[] = [];
+    awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
+    awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "freekick", outcome, winAmount, multiplier }));
+    if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
+    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player.username, keys: awarded, at: Date.now() });
   })().catch(() => {});
 
   res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: newBalance + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });

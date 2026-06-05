@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { initWebSocketServer } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
+import { startScheduler } from "./lib/scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -26,6 +27,9 @@ server.listen(port, async () => {
 
   // Start crash engine after server is ready
   startCrashEngine().catch((err) => logger.error({ err }, "Crash engine failed to start"));
+
+  // Start scheduler (tournament auto-end, cron jobs)
+  startScheduler();
 });
 
 server.on("error", (err) => {

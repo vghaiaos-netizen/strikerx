@@ -28,6 +28,16 @@ export function broadcastToAll(event: string, data: unknown) {
   broadcast(event, data);
 }
 
+/** Send event only to a specific authenticated player */
+export function broadcastToPlayer(playerId: number, event: string, data: unknown) {
+  const msg = JSON.stringify({ event, data });
+  for (const [ws, client] of clients) {
+    if (client.playerId === playerId && ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
+}
+
 function sendToClient(ws: WebSocket, event: string, data: unknown) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ event, data }));

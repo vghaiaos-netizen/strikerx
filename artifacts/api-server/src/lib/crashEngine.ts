@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { db, crashRoundsTable, gamesTable, playersTable, transactionsTable, jackpotTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
+import { checkAndAward } from "./achievementsService";
 import { logger } from "./logger";
 import { broadcastBigWin, broadcastJackpot } from "./groupBot";
 import {
@@ -249,6 +250,17 @@ class CrashEngine {
 
     this.broadcast("bet_placed", { playerId, username, betStriker, roundId: this.currentRound.id });
 
+    // fire-and-forget achievement checks for bet placed
+    (async () => {
+      const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
+      const awarded: string[] = [];
+      awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
+      if (newVip !== player.vipTier) {
+        awarded.push(...await checkAndAward(playerId, { event: "vip_updated", vipTier: newVip }));
+      }
+      if (awarded.length > 0) this.broadcast("achievement_unlocked", { playerId, username, keys: awarded, at: Date.now() });
+    })().catch(() => {});
+
     return { success: true, roundId: this.currentRound.id };
   }
 
@@ -300,6 +312,15 @@ class CrashEngine {
         at: Date.now(),
       });
     }
+
+    // fire-and-forget achievement checks for Shot cashout
+    (async () => {
+      const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
+      const awarded: string[] = [];
+      awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) }));
+      awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "shot", outcome: "cashout", winAmount, multiplier: cashoutMult }));
+      if (awarded.length > 0) this.broadcast("achievement_unlocked", { playerId, username: bet.username, keys: awarded, at: Date.now() });
+    })().catch(() => {});
 
     return { success: true, winAmount, multiplier: cashoutMult };
   }

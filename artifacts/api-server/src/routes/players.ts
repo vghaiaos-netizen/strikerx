@@ -5,6 +5,7 @@ import { requireAuth } from "../lib/auth";
 import { getStreakReward, getNextStreakMilestone } from "../lib/gameEngine";
 import { getCashbackStatus, claimCashback } from "../lib/cashbackService";
 import { getPlayerAchievements, checkAndAward } from "../lib/achievementsService";
+import { broadcastToAll } from "../lib/wsServer";
 
 const router: IRouter = Router();
 
@@ -164,6 +165,13 @@ router.post("/players/me/streak/claim", requireAuth, async (req, res): Promise<v
     status: "completed",
   });
 
+  // fire-and-forget streak achievement check
+  checkAndAward(playerId, { event: "streak_claimed", streakDays: newStreakDays })
+    .then(awarded => {
+      if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player.username, keys: awarded, at: Date.now() });
+    })
+    .catch(() => {});
+
   res.json({
     streakDays: newStreakDays,
     lastClaimDate: new Date().toISOString(),
@@ -303,6 +311,30 @@ router.get("/players/me/transactions", requireAuth, async (req, res): Promise<vo
       createdAt: t.createdAt.toISOString(),
     }))
   );
+});
+
+// POST /players/me/boot/redeem
+router.post("/players/me/boot/redeem", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { amount } = req.body as { amount: number };
+
+  if (!amount || amount <= 0 || !Number.isFinite(amount)) {
+    res.status(400).json({ error: "Invalid amount" }); return;
+  }
+
+  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
+  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
+
+  const redeemAmount = Math.floor(Math.min(amount, player.bootBalance));
+  if (redeemAmount < 1) { res.status(400).json({ error: "Insufficient BOOT balance" }); return; }
+
+  const newBootBalance    = player.bootBalance - redeemAmount;
+  const newStrikerBalance = player.strikerBalance + redeemAmount;
+
+  await db.update(playersTable).set({ bootBalance: newBootBalance, strikerBalance: newStrikerBalance }).where(eq(playersTable.id, playerId));
+  await db.insert(transactionsTable).values({ playerId, type: "bonus", amountStriker: redeemAmount, status: "completed" });
+
+  res.json({ redeemedBoot: redeemAmount, newStrikerBalance, newBootBalance });
 });
 
 export default router;
