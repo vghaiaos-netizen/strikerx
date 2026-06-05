@@ -1,34 +1,51 @@
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
-import { useGetMyStats, getGetMyStatsQueryKey, useGetMyStreak, getGetMyStreakQueryKey, useGetMyReferral, getGetMyReferralQueryKey, useClaimStreakReward } from "@workspace/api-client-react";
-import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp } from "lucide-react";
+import {
+  useGetMyStats, getGetMyStatsQueryKey,
+  useGetMyStreak, getGetMyStreakQueryKey,
+  useGetMyReferral, getGetMyReferralQueryKey,
+  useGetMyReferralDetail,
+  useGetMyCashback,
+  useGetMyAchievements,
+  useClaimStreakReward,
+  useClaimCashback,
+} from "@workspace/api-client-react";
+import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp, Star, ChevronRight, Users, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 const VIP_TIERS = ["Sunday League","Championship","Premier League","Champions League","World Cup"];
 const VIP_COLORS = ["#6b7280","#3b82f6","#22c55e","#f59e0b","#a855f7"];
 const VIP_THRESHOLDS = [0, 10, 50, 200, 1000];
+
+const RARITY_COLORS: Record<string, string> = {
+  common: "#6b7280", rare: "#3b82f6", epic: "#a855f7", legendary: "#f59e0b",
+};
 
 export function Profile() {
   const { player, setToken } = useAuth();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const { data: stats } = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey() } });
-  const { data: streak } = useGetMyStreak({ query: { queryKey: getGetMyStreakQueryKey() } });
+  const { data: stats }    = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey() } });
+  const { data: streak }   = useGetMyStreak({ query: { queryKey: getGetMyStreakQueryKey() } });
   const { data: referral } = useGetMyReferral({ query: { queryKey: getGetMyReferralQueryKey() } });
-  const claimStreak = useClaimStreakReward();
+  const { data: refDetail } = useGetMyReferralDetail();
+  const { data: cashback, refetch: refetchCashback } = useGetMyCashback();
+  const { data: achievements } = useGetMyAchievements();
+  const claimStreak   = useClaimStreakReward();
+  const claimCashback = useClaimCashback();
 
   const p = player as Record<string, unknown> | null;
-  const vipTier = p?.vipTier as string ?? "sunday_league";
-  const vipIdx = ["sunday_league","championship","premier_league","champions_league","world_cup"].indexOf(vipTier);
-  const vipName = VIP_TIERS[vipIdx] ?? "Sunday League";
+  const vipTier  = p?.vipTier as string ?? "sunday_league";
+  const vipIdx   = ["sunday_league","championship","premier_league","champions_league","world_cup"].indexOf(vipTier);
+  const vipName  = VIP_TIERS[vipIdx] ?? "Sunday League";
   const vipColor = VIP_COLORS[vipIdx] ?? "#6b7280";
-  const tonWagered = Number(p?.tonWageredLifetime ?? 0);
+  const tonWagered    = Number(p?.tonWageredLifetime ?? 0);
   const nextThreshold = VIP_THRESHOLDS[Math.min(vipIdx + 1, 4)];
-  const vipPct = vipIdx >= 4 ? 100 : (tonWagered / nextThreshold) * 100;
 
   const copyCode = () => {
     const code = referral?.code ?? "";
@@ -47,12 +64,27 @@ export function Profile() {
     }
   };
 
+  const handleCashbackClaim = async () => {
+    try {
+      const result = await claimCashback.mutateAsync();
+      toast({ title: "Cashback claimed!", description: `+${result.claimedStriker} STRIKER` });
+      refetchCashback();
+    } catch (e: unknown) {
+      toast({ title: "Cannot claim", description: (e as { message?: string })?.message, variant: "destructive" });
+    }
+  };
+
   const initials = (p?.username as string ?? "?").slice(0, 2).toUpperCase();
   const statCards = [
     { label: "Total Games", value: stats?.totalGames ?? 0, icon: TrendingUp },
     { label: "Win Rate",    value: `${((stats?.winRate ?? 0) * 100).toFixed(0)}%`, icon: Target },
     { label: "Best Multi",  value: `${stats?.biggestMultiplier ?? 0}x`, icon: Zap },
   ];
+
+  const unlockedAchievements = achievements?.filter(a => a.unlockedAt) ?? [];
+
+  const cashbackRatePct = ((cashback?.cashbackRate ?? 0) * 100).toFixed(0);
+  const hasCashback = (cashback?.cashbackRate ?? 0) > 0;
 
   return (
     <Layout>
@@ -91,7 +123,7 @@ export function Profile() {
             <span className="text-[10px] font-mono text-white/30">{tonWagered.toFixed(1)} / {nextThreshold} TON</span>
           </div>
           <div className="flex gap-1 mb-2">
-            {VIP_TIERS.map((t, i) => (
+            {VIP_TIERS.map((_, i) => (
               <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${i <= vipIdx ? "opacity-100" : "opacity-20"}`}
                 style={{ background: VIP_COLORS[i] }} />
             ))}
@@ -160,26 +192,146 @@ export function Profile() {
           </div>
         )}
 
+        {/* Cashback */}
+        {cashback && hasCashback && (
+          <div className="bg-white/3 border border-white/6 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Percent className="w-3.5 h-3.5 text-[#00ff88]" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40">VIP Cashback</span>
+              </div>
+              <span className="text-[10px] font-mono text-white/30">{cashback.period}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="bg-black/20 rounded-lg p-2 text-center">
+                <div className="text-[9px] font-mono text-white/30">Rate</div>
+                <div className="font-mono font-bold text-sm text-[#00ff88]">{cashbackRatePct}%</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-2 text-center">
+                <div className="text-[9px] font-mono text-white/30">Losses</div>
+                <div className="font-mono font-bold text-sm text-white">{Number(cashback.estimatedLossesStriker).toFixed(0)}</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-2 text-center">
+                <div className="text-[9px] font-mono text-white/30">Available</div>
+                <div className="font-mono font-bold text-sm text-[#00ff88]">{Number(cashback.pendingStriker).toFixed(0)}</div>
+              </div>
+            </div>
+            {cashback.canClaim ? (
+              <Button onClick={handleCashbackClaim} disabled={claimCashback.isPending}
+                className="w-full h-9 font-display font-bold text-xs tracking-widest bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#0a0e1a]">
+                CLAIM {Number(cashback.pendingStriker).toFixed(0)} STRIKER
+              </Button>
+            ) : (
+              <div className="text-center text-[10px] font-mono text-white/30">
+                {cashback.claimedThisPeriod ? "Claimed this week" : "No cashback available yet"}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Achievements preview */}
+        {achievements && achievements.length > 0 && (
+          <div className="bg-white/3 border border-white/6 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Star className="w-3.5 h-3.5 text-[#f59e0b]" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40">Achievements</span>
+              </div>
+              <Link href="/achievements">
+                <span className="flex items-center gap-1 text-[10px] font-mono text-white/40 hover:text-white/70 transition-colors cursor-pointer">
+                  {unlockedAchievements.length}/{achievements.length} <ChevronRight className="w-3 h-3" />
+                </span>
+              </Link>
+            </div>
+
+            {unlockedAchievements.length > 0 ? (
+              <div className="flex gap-2 flex-wrap">
+                {unlockedAchievements.slice(0, 6).map(a => {
+                  const color = RARITY_COLORS[a.rarity] ?? "#6b7280";
+                  return (
+                    <div key={a.key}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-mono"
+                      style={{ borderColor: `${color}40`, background: `${color}10`, color }}>
+                      <Star className="w-2.5 h-2.5" />
+                      {a.title}
+                    </div>
+                  );
+                })}
+                {unlockedAchievements.length > 6 && (
+                  <div className="px-2 py-1 rounded-lg border border-white/8 text-[10px] font-mono text-white/30">
+                    +{unlockedAchievements.length - 6} more
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link href="/achievements">
+                <div className="text-center py-3 text-[11px] font-mono text-white/30 hover:text-white/50 cursor-pointer transition-colors">
+                  Play games to unlock achievements
+                </div>
+              </Link>
+            )}
+          </div>
+        )}
+
         {/* Referral */}
         {referral && (
           <div className="bg-white/3 border border-white/6 rounded-xl p-4">
-            <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40 mb-3">Referral</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-white/40" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40">Referral</span>
+              </div>
+              {refDetail && (
+                <span className="text-[10px] font-mono text-white/30">{refDetail.totalReferred} referred</span>
+              )}
+            </div>
+
             <div className="flex items-center gap-2 bg-black/30 border border-white/8 rounded-lg px-3 py-2.5 mb-3">
               <span className="flex-1 font-mono text-sm text-white/80 tracking-wider">{referral.code}</span>
               <button onClick={copyCode} className="text-white/40 hover:text-white transition-colors">
                 {copied ? <Check className="w-4 h-4 text-[#00ff88]" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-center">
+
+            <div className="grid grid-cols-2 gap-2 text-center mb-3">
               <div className="bg-black/20 rounded-lg p-2">
                 <div className="text-[9px] font-mono text-white/30">Tier 1 (10%)</div>
-                <div className="font-mono font-bold text-xs text-[#00ff88] mt-0.5">{Number(referral.tier1Earnings ?? 0).toFixed(0)} STRIKER</div>
+                <div className="font-mono font-bold text-xs text-[#00ff88] mt-0.5">
+                  {Number(referral.tier1Earnings ?? 0).toFixed(0)} STRIKER
+                </div>
               </div>
               <div className="bg-black/20 rounded-lg p-2">
                 <div className="text-[9px] font-mono text-white/30">Tier 2 (5%)</div>
-                <div className="font-mono font-bold text-xs text-[#00ff88] mt-0.5">{Number(referral.tier2Earnings ?? 0).toFixed(0)} STRIKER</div>
+                <div className="font-mono font-bold text-xs text-[#00ff88] mt-0.5">
+                  {Number(referral.tier2Earnings ?? 0).toFixed(0)} STRIKER
+                </div>
               </div>
             </div>
+
+            {/* Per-referee breakdown */}
+            {refDetail && refDetail.referees.length > 0 && (
+              <div className="border-t border-white/6 pt-3">
+                <div className="text-[9px] font-mono text-white/25 mb-2 uppercase tracking-wider">Squad</div>
+                <div className="flex flex-col gap-1.5">
+                  {refDetail.referees.slice(0, 5).map((ref, i) => (
+                    <div key={i} className="flex items-center justify-between text-[10px] font-mono">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-md bg-white/5 flex items-center justify-center text-[8px] font-bold text-white/50">
+                          T{ref.tier}
+                        </div>
+                        <span className="text-white/60">{ref.username}</span>
+                      </div>
+                      <span className="text-[#00ff88] font-bold">+{Number(ref.earnedStriker).toFixed(0)}</span>
+                    </div>
+                  ))}
+                  {refDetail.referees.length > 5 && (
+                    <div className="text-[9px] font-mono text-white/25 text-center pt-1">
+                      +{refDetail.referees.length - 5} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
