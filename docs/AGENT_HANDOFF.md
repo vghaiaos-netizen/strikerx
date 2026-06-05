@@ -1,7 +1,52 @@
 # StrikerX — Agent Handoff
 
-> Last updated: Session 5 (2026-06-05)
+> Last updated: Session 6 (2026-06-05)
 > Read this FIRST, every session, before touching any file.
+
+---
+
+## SESSION START — DO THIS EVERY TIME
+
+These three steps are mandatory at the start of every session. Do not skip any of them.
+
+```bash
+# 1. Push DB schema (safe to run even if nothing changed — idempotent)
+pnpm --filter @workspace/db run push
+
+# 2. Start API server (port 8081, console workflow)
+# Workflow name: "API Server"
+# Command: PORT=8081 pnpm --filter @workspace/api-server run dev
+
+# 3. Start frontend (port 8080, webview workflow)
+# Workflow name: "StrikerX Frontend"
+# Command: PORT=8080 BASE_PATH=/ pnpm --filter @workspace/strikerx run dev
+```
+
+> Both workflows are pre-configured with `autoStart: true` and will usually already be running.
+> If they are NOT running, create them with the exact commands above using `configureWorkflow()`.
+> Always run the DB push regardless — it's idempotent and costs nothing.
+
+### Verify everything is healthy
+```bash
+curl http://localhost:8081/api/healthz   # → {"status":"ok"}
+curl http://localhost:8080/              # → 200 HTML
+```
+
+### Admin dashboard
+- URL: `https://<repl-domain>/admin`
+- Login: `admin` / `admin123`
+- Admin auth endpoint: `POST /api/auth/admin/login` (NOT /api/auth/admin)
+
+---
+
+## SESSION END — DO THIS EVERY TIME
+
+```bash
+node scripts/github-push.mjs
+```
+
+Pushes all 232+ files to `github.com/vghaiaos-netizen/strikerx` atomically via GraphQL.
+Requires `GITHUB_PERSONAL_ACCESS_TOKEN` secret (already set in Replit secrets).
 
 ---
 
@@ -23,26 +68,23 @@ lib/api-client-react/    — Generated React Query hooks
 lib/api-zod/             — Generated Zod schemas (server validation)
 lib/db/                  — Drizzle ORM + PostgreSQL schema
 docs/                    — This file + ARCHITECTURE.md + ROADMAP.md
-scripts/                 — github-push.mjs
+scripts/                 — github-push.mjs, post-merge.sh
 ```
 
 ---
 
-## Running The App (Dev)
+## Port Architecture (Dev)
 
-```bash
-# API server (port 8080)
-pnpm --filter @workspace/api-server run dev
+| Service | Internal Port | Notes |
+|---------|--------------|-------|
+| StrikerX Frontend (Vite) | 8080 | External port 80 — what the user sees |
+| API Server (Express) | 8081 | Proxied through Vite at `/api` and `/ws` |
 
-# Frontend
-pnpm --filter @workspace/strikerx run dev
+Vite (`artifacts/strikerx/vite.config.ts`) proxies:
+- `/api/*` → `http://localhost:8081`
+- `/ws` → `ws://localhost:8081` (WebSocket)
 
-# After OpenAPI changes
-pnpm --filter @workspace/api-spec run codegen
-
-# After DB schema changes
-pnpm --filter @workspace/db run push
-```
+The frontend never talks directly to port 8081 — all traffic goes through the Vite dev server proxy.
 
 ---
 
@@ -91,7 +133,7 @@ The Shot (crash game) uses WebSocket. All other games are standard REST.
 
 - **Players**: JWT from `POST /api/auth/telegram`. Stored as `strikerx_token` in localStorage.
 - **Dev bypass**: `{ "initData": "dev:123456:player_dev" }` — creates/returns player (id 123456, username player_dev). Gives 500 STRIKER on first login.
-- **Admin**: `POST /api/auth/admin` with username/password. Stored as `strikerx_admin_token`.
+- **Admin**: `POST /api/auth/admin/login` with `{ username, password }`. Stored as `strikerx_admin_token`.
 - **JWT secret**: `SESSION_SECRET` env var.
 
 ---
@@ -125,13 +167,14 @@ The 10-STRIKER spread (deposit 100/TON, withdraw 110/TON) is intentional house r
 |-----|----------|-------|
 | `DATABASE_URL` | YES | Postgres connection string |
 | `SESSION_SECRET` | YES | JWT signing secret |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | YES | GitHub GraphQL push — already set |
 | `GAMEBOT_TOKEN` | Optional | Telegraf GameBot (disabled if absent) |
 | `GROUPBOT_TOKEN` | Optional | Telegraf GroupBot (disabled if absent) |
 | `CRYPTOBOT_TOKEN` | Optional | CryptoBot payment API |
 | `ADMIN_USERNAME` | Optional | Defaults to "admin" |
-| `ADMIN_PASSWORD` | Optional | Set before going live |
+| `ADMIN_PASSWORD` | Optional | Defaults to "admin123" in code |
 
-**SECRETS ARE ADDED AFTER FULL FUNCTIONALITY IS CONFIRMED. Never ask for secrets during development.**
+All required secrets are already set in Replit. Never ask the user for credentials.
 
 ---
 
@@ -139,14 +182,14 @@ The 10-STRIKER spread (deposit 100/TON, withdraw 110/TON) is intentional house r
 
 Repo: `github.com/vghaiaos-netizen/strikerx`
 
-Push after every session:
+Push at end of every session:
 ```bash
 node scripts/github-push.mjs
 ```
 
-Uses **GitHub GraphQL `createCommitOnBranch` mutation** — pushes all files in atomic batches of 50. No SHA juggling. Excludes `node_modules`, `dist`, `.local`, `.agents`, `generated`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` env var.
+Uses **GitHub GraphQL `createCommitOnBranch` mutation** — pushes all files in atomic batches of 50. No SHA juggling. Excludes `node_modules`, `dist`, `.local`, `.agents`, `generated`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` env var (already set).
 
-> NOTE: The old Contents API approach (PUT per file) fails with 409 due to concurrent commits changing tree state. GraphQL mutation is the correct solution.
+> NOTE: `git push` is blocked in Replit. The only working push mechanism is `node scripts/github-push.mjs`. Do not attempt any other approach.
 
 ---
 
@@ -198,15 +241,17 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 
 ## Rules For Next Agent
 
-1. **Read this file first.** Every session, no exceptions.
+1. **Run the SESSION START checklist** (top of this doc) before touching any file.
 2. **Never use `console.log` in server code** — use `req.log` in routes, `logger` elsewhere.
 3. **After OpenAPI spec changes** → `pnpm --filter @workspace/api-spec run codegen`.
 4. **After DB schema changes** → `pnpm --filter @workspace/db run push`.
 5. **Dev auth bypass** for testing: `{ "initData": "dev:123456:player_dev" }`.
 6. **Bots are disabled** until bot token env vars are set — intentional.
 7. **Push to GitHub at session end** using `node scripts/github-push.mjs`.
-8. **Admin login**: username `admin`, password `admin123` (env vars override).
+8. **Admin login**: `POST /api/auth/admin/login` — username `admin`, password `admin123`.
 9. **Config imports**: `appConfigTable` is from `@workspace/db` (not sub-paths). `auditLogTable` lives in `lib/db/src/schema/referrals.ts`.
+10. **Never edit `.replit` directly** — it's blocked. Set ports via workflow command env vars (`PORT=8081 ...`).
+11. **Workflow names**: "API Server" and "StrikerX Frontend" — these names are registered and autoStart.
 
 ---
 
@@ -253,25 +298,22 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 
 ### Phase 4 (Live Notifications + Provably Fair)
 - [x] `broadcastToAll(event, data)` exported from wsServer — any module can push to all WS clients
-- [x] All 4 game types (The Shot, Penalty, Minefield, Free Kick) broadcast `big_win` WS event on wins ≥ threshold or ≥ 5x
-- [x] Jackpot trigger also broadcasts `jackpot_won` WS event
+- [x] All 4 game types broadcast `big_win` WS event on wins ≥ threshold or ≥ 5x
+- [x] Jackpot trigger broadcasts `jackpot_won` WS event
 - [x] `NotificationsProvider` context (`lib/ws-notifications.tsx`) — connects to WS, stores last 30 notifications, auto-reconnects
 - [x] `NotificationBell` component — live win count badge, dropdown panel, mark-all-read, clear-all
 - [x] Notification bell wired into layout header
 - [x] Verify page (`/verify`) — provably-fair crash round verification using HMAC-SHA256 with Web Crypto API
-- [x] Verify page shows: server seed, hash (first 8 chars highlighted), r-value, computed vs recorded crash point, pass/fail badge
-- [x] Manual seed verification (enter any seed, compute crash point independently)
 - [x] `GET /api/games/rounds/:id` endpoint — reveals serverSeed only after round crashes
 - [x] Verify tab added to bottom nav (5-tab layout)
 - [x] Telegram GameBot fully implemented (/start, /balance, /deposit, /withdraw, /stats, /streak, /vip, /referral, /leaderboard, /help)
 - [x] Telegram GroupBot fully implemented (big win alerts, jackpot alerts, withdrawal alerts, daily morning message, 30min jackpot updates)
 
-## What's Next (Phase 5)
-
-- [ ] Cashback system: weekly VIP cashback payout (cron-style, triggered on login or scheduled)
-- [ ] Push notifications via Telegram when player wins jackpot or gets a milestone
+### Phase 5 (Engagement & Retention) — NEXT
+- [ ] Cashback system: weekly VIP cashback payout (triggered on login or via cron)
+- [ ] Push notifications via Telegram when player wins jackpot or hits milestone
 - [ ] Tournament leaderboard real-time updates via WebSocket
 - [ ] Player achievements / milestone badges
-- [ ] Referral dashboard panel (how much each referee has wagered, earnings breakdown)
-- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN, WEBHOOK_URL) and go live
+- [ ] Referral dashboard panel (earnings breakdown per referee)
+- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) and go live
 - [ ] Deploy via Replit deployment
