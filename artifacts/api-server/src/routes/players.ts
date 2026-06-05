@@ -3,6 +3,8 @@ import { db, playersTable, transactionsTable, gamesTable, referralsTable } from 
 import { eq, desc, and, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { getStreakReward, getNextStreakMilestone } from "../lib/gameEngine";
+import { getCashbackStatus, claimCashback } from "../lib/cashbackService";
+import { getPlayerAchievements, checkAndAward } from "../lib/achievementsService";
 
 const router: IRouter = Router();
 
@@ -195,6 +197,84 @@ router.get("/players/me/referral", requireAuth, async (req, res): Promise<void> 
     totalEarned: tier1Earnings + tier2Earnings,
     tier1Earnings,
     tier2Earnings,
+  });
+});
+
+// GET /players/me/cashback
+router.get("/players/me/cashback", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  try {
+    const status = await getCashbackStatus(playerId);
+    res.json(status);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get cashback status");
+    res.status(500).json({ error: "Failed to get cashback status" });
+  }
+});
+
+// POST /players/me/cashback/claim
+router.post("/players/me/cashback/claim", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  try {
+    const result = await claimCashback(playerId);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to claim cashback";
+    res.status(400).json({ error: msg });
+  }
+});
+
+// GET /players/me/achievements
+router.get("/players/me/achievements", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  try {
+    const achievements = await getPlayerAchievements(playerId);
+    res.json(achievements);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get achievements");
+    res.status(500).json({ error: "Failed to get achievements" });
+  }
+});
+
+// GET /players/me/referrals/detail
+router.get("/players/me/referrals/detail", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
+  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
+
+  const refs = await db.select().from(referralsTable).where(eq(referralsTable.referrerId, playerId));
+
+  const referees = await Promise.all(
+    refs.map(async (ref) => {
+      const [refPlayer] = await db.select().from(playersTable).where(eq(playersTable.id, ref.referredId));
+      return {
+        username: refPlayer?.username ?? "Unknown",
+        tier: ref.tier,
+        earnedStriker: ref.earningsPaidStriker,
+        joinedAt: ref.createdAt.toISOString(),
+        isActive: ref.isActive === "active",
+      };
+    })
+  );
+
+  const tier1 = refs.filter(r => r.tier === 1);
+  const tier2 = refs.filter(r => r.tier === 2);
+  const miniAppLink = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
+
+  // Fire achievement check for referral count
+  checkAndAward(playerId, {
+    event: "referral_joined",
+    referralCount: refs.length,
+  }).catch(() => {});
+
+  res.json({
+    code: player.referralCode,
+    referralLink: `https://${miniAppLink}?startapp=${player.referralCode}`,
+    totalReferred: refs.length,
+    totalEarned: refs.reduce((s, r) => s + r.earningsPaidStriker, 0),
+    tier1Earnings: tier1.reduce((s, r) => s + r.earningsPaidStriker, 0),
+    tier2Earnings: tier2.reduce((s, r) => s + r.earningsPaidStriker, 0),
+    referees,
   });
 });
 

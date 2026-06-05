@@ -229,4 +229,39 @@ router.post("/tournaments/:id/enter", requireAuth, async (req, res): Promise<voi
   });
 });
 
+// GET /tournaments/:id/leaderboard
+router.get("/tournaments/:id/leaderboard", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const tournamentId = parseInt(raw, 10);
+  if (isNaN(tournamentId)) { res.status(400).json({ error: "Invalid tournament id" }); return; }
+
+  const [tournament] = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId));
+  if (!tournament) { res.status(404).json({ error: "Tournament not found" }); return; }
+
+  const entries = await db
+    .select()
+    .from(tournamentEntriesTable)
+    .where(eq(tournamentEntriesTable.tournamentId, tournamentId))
+    .orderBy(desc(tournamentEntriesTable.bestMultiplier))
+    .limit(50);
+
+  const prizeDistribution = [0.5, 0.25, 0.15, 0.07, 0.03];
+
+  const leaderboard = await Promise.all(
+    entries.map(async (e, idx) => {
+      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, e.playerId));
+      const prizeFraction = prizeDistribution[idx] ?? 0;
+      return {
+        rank: idx + 1,
+        playerId: e.playerId,
+        username: player?.username ?? "Unknown",
+        score: e.bestMultiplier,
+        prize: parseFloat((tournament.prizePoolTon * prizeFraction).toFixed(4)),
+      };
+    })
+  );
+
+  res.json(leaderboard);
+});
+
 export default router;

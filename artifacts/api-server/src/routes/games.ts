@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import {
   playPenalty,
@@ -16,6 +16,7 @@ import { crashEngine } from "../lib/crashEngine";
 import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
+import { checkAndAward } from "../lib/achievementsService";
 
 const router: IRouter = Router();
 
@@ -153,6 +154,14 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     broadcastToAll("big_win", { username: player.username, game: "Penalty", betStriker, winAmount, multiplier, at: Date.now() });
   }
 
+  // fire-and-forget achievement checks
+  (async () => {
+    const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
+    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered });
+    await checkAndAward(playerId, { event: "game_result", gameType: "penalty", outcome, winAmount, multiplier: win ? multiplier : 0 });
+    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+  })().catch(() => {});
+
   res.json({
     gameId: game.id, gameType: "penalty", betStriker, outcome,
     multiplier: win ? multiplier : 0, winAmount,
@@ -261,6 +270,14 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
     broadcastToAll("big_win", { username: player?.username ?? "Player", game: "Minefield", betStriker: session.betStriker, winAmount, multiplier: session.currentMultiplier, at: Date.now() });
   }
 
+  // fire-and-forget achievement checks
+  (async () => {
+    const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
+    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) });
+    await checkAndAward(playerId, { event: "game_result", gameType: "minefield", outcome: "cashout", winAmount, multiplier: session.currentMultiplier, safePickCount: session.revealedPositions.length });
+    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+  })().catch(() => {});
+
   res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: (player?.strikerBalance ?? 0) + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
 
@@ -319,6 +336,14 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
     broadcastToAll("big_win", { username: player.username, game: "Free Kick", betStriker, winAmount, multiplier, at: Date.now() });
   }
+
+  // fire-and-forget achievement checks
+  (async () => {
+    const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
+    await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered });
+    await checkAndAward(playerId, { event: "game_result", gameType: "freekick", outcome, winAmount, multiplier });
+    if (jackpotResult) await checkAndAward(playerId, { event: "jackpot_won" });
+  })().catch(() => {});
 
   res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: newBalance + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
