@@ -37,7 +37,7 @@ const VIP_COLORS: Record<string, string> = {
 interface Player {
   id: number; telegramId: string; username: string; firstName?: string; lastName?: string;
   strikerBalance: number; bootBalance: number; captainBalance: number;
-  vipTier: string; tonWageredLifetime: number; streakDays: number;
+  vipTier: string; tonWageredLifetime: number; strikerWageredSinceBonus?: number; streakDays: number;
   isBanned: boolean; isFlagged: boolean; banReason?: string;
   totalGames: number; totalDepositedStriker: number; totalWithdrawnStriker: number;
   referralCode: string; referredBy?: string; lastActive?: string; createdAt: string;
@@ -229,7 +229,7 @@ export function AdminPlayers() {
                   ["TON Wagered", `${detail.tonWageredLifetime.toFixed(4)} TON`], ["Streak Days", String(detail.streakDays)],
                   ["Total Games", String(detail.totalGames)], ["Referral Code", detail.referralCode],
                   ["Referred By", detail.referredBy ?? "—"], ["Last Active", detail.lastActive ? new Date(detail.lastActive).toLocaleString() : "—"],
-                  ["Joined", new Date(detail.createdAt).toLocaleString()], ["First Withdrawal", detail.firstWithdrawalReviewed ? "Reviewed" : "Pending"],
+                  ["Joined", new Date(detail.createdAt).toLocaleString()], ["Wager Since Bonus", `${detail.strikerWageredSinceBonus?.toFixed(0) ?? 0} STRK`],
                 ].map(([label, value]) => (
                   <div key={label} className="bg-muted/20 rounded p-2">
                     <div className="text-muted-foreground">{label}</div>
