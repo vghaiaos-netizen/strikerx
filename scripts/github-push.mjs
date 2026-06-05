@@ -1,6 +1,6 @@
 /**
- * StrikerX GitHub Push Script — robust version with SHA retry
- * Uses PUT /repos/.../contents (creates or updates files).
+ * StrikerX GitHub Push Script — Trees API version
+ * Fetches all existing SHAs via git tree, then updates each file correctly.
  * Run: node scripts/github-push.mjs
  */
 import fs from "fs";
@@ -13,7 +13,7 @@ const TOKEN = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 const USERNAME = "vghaiaos-netizen";
 const REPO = "strikerx";
 
-if (!TOKEN) { console.error("❌ GITHUB_PERSONAL_ACCESS_TOKEN not set"); process.exit(1); }
+if (!TOKEN) { console.error("GITHUB_PERSONAL_ACCESS_TOKEN not set"); process.exit(1); }
 
 const H = {
   Authorization: `Bearer ${TOKEN}`,
@@ -23,36 +23,70 @@ const H = {
 };
 
 async function gh(method, url, body) {
-  const r = await fetch(`https://api.github.com${url}`, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`https://api.github.com${url}`, {
+    method, headers: H,
+    body: body ? JSON.stringify(body) : undefined,
+  });
   return { status: r.status, data: await r.json() };
 }
 
-// Fetch current SHA of a file (returns null if not found)
-async function getSha(filePath) {
-  const { status, data } = await gh("GET", `/repos/${USERNAME}/${REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, "/")}`);
-  return status === 200 ? data.sha : null;
+async function ensureRepo() {
+  const { status } = await gh("GET", `/repos/${USERNAME}/${REPO}`);
+  if (status === 200) { console.log("   Repo exists"); return; }
+  const { status: cs, data } = await gh("POST", "/user/repos", {
+    name: REPO, description: "StrikerX — Football Telegram Mini App Casino",
+    private: false, auto_init: true,
+  });
+  if (cs === 201) { console.log(`   Created ${data.full_name}`); await new Promise(r => setTimeout(r, 2000)); }
+  else { console.error("   Create failed:", JSON.stringify(data).slice(0, 200)); process.exit(1); }
 }
 
-// Push one file — fetches SHA on 422 and retries once
-async function pushFile(relPath, fullPath) {
+// Build map of path -> sha for all existing files in the repo
+async function fetchAllShas() {
+  // Get default branch HEAD
+  const { status: rs, data: repo } = await gh("GET", `/repos/${USERNAME}/${REPO}`);
+  if (rs !== 200) return new Map();
+  const branch = repo.default_branch;
+
+  const { status: bs, data: branchData } = await gh("GET", `/repos/${USERNAME}/${REPO}/branches/${branch}`);
+  if (bs !== 200) return new Map();
+
+  const treeSha = branchData.commit?.commit?.tree?.sha;
+  if (!treeSha) return new Map();
+
+  const { status: ts, data: treeData } = await gh("GET", `/repos/${USERNAME}/${REPO}/git/trees/${treeSha}?recursive=1`);
+  if (ts !== 200) return new Map();
+
+  const map = new Map();
+  for (const item of treeData.tree ?? []) {
+    if (item.type === "blob") map.set(item.path, item.sha);
+  }
+  console.log(`   Loaded ${map.size} existing file SHAs`);
+  return map;
+}
+
+async function pushFile(relPath, fullPath, existingSha) {
   let content;
   try { content = fs.readFileSync(fullPath).toString("base64"); }
   catch { return { ok: false, reason: "read-error" }; }
 
   const url = `/repos/${USERNAME}/${REPO}/contents/${relPath}`;
-  const { status, data } = await gh("PUT", url, { message: `sync: ${relPath}`, content });
+  const body = { message: `sync: ${relPath}`, content };
+  if (existingSha) body.sha = existingSha;
 
-  if (status === 201 || status === 200) return { ok: true };
+  const { status, data } = await gh("PUT", url, body);
+  if (status === 200 || status === 201) return { ok: true };
 
-  if (status === 422) {
-    // File exists — need SHA
-    const sha = await getSha(relPath);
-    if (!sha) return { ok: false, reason: `422-no-sha (${JSON.stringify(data).slice(0, 80)})` };
-    const { status: s2 } = await gh("PUT", url, { message: `sync: ${relPath}`, content, sha });
-    return s2 === 200 || s2 === 201 ? { ok: true } : { ok: false, reason: `retry-${s2}` };
+  // If we got a conflict and didn't have a SHA (new file race), try fetching SHA
+  if ((status === 409 || status === 422) && !existingSha) {
+    const { status: gs, data: gd } = await gh("GET", url);
+    const sha = gs === 200 ? gd.sha : null;
+    if (!sha) return { ok: false, reason: `${status}-no-sha` };
+    const { status: s2 } = await gh("PUT", url, { ...body, sha });
+    return (s2 === 200 || s2 === 201) ? { ok: true } : { ok: false, reason: `retry-${s2}` };
   }
 
-  return { ok: false, reason: `${status}: ${JSON.stringify(data).slice(0, 100)}` };
+  return { ok: false, reason: `${status}: ${String(data?.message ?? "").slice(0, 80)}` };
 }
 
 const SKIP_DIRS = new Set(["node_modules",".git","dist","build",".local",".agents",".cache","generated"]);
@@ -77,63 +111,55 @@ function walk(dir, base = "") {
   return out;
 }
 
-async function ensureRepo() {
-  const { status } = await gh("GET", `/repos/${USERNAME}/${REPO}`);
-  if (status === 200) { console.log(`   ✅ Repo exists`); return; }
-  const { status: cs, data } = await gh("POST", "/user/repos", {
-    name: REPO, description: "StrikerX — Football Telegram Mini App Casino", private: false, auto_init: true,
-  });
-  if (cs === 201) { console.log(`   ✅ Created ${data.full_name}`); await new Promise(r => setTimeout(r, 2000)); }
-  else { console.error("   ❌ Create failed:", JSON.stringify(data).slice(0, 200)); process.exit(1); }
-}
-
 async function run() {
-  console.log(`\n🚀 Syncing to github.com/${USERNAME}/${REPO}\n${"=".repeat(48)}`);
+  console.log(`\nSyncing to github.com/${USERNAME}/${REPO}\n${"=".repeat(48)}`);
 
   const { status, data: me } = await gh("GET", "/user");
-  if (status !== 200) { console.error("❌ Token invalid:", me.message); process.exit(1); }
-  console.log(`✅ Authenticated as ${me.login}`);
+  if (status !== 200) { console.error("Token invalid:", me.message); process.exit(1); }
+  console.log(`Authenticated as ${me.login}`);
 
   await ensureRepo();
 
+  // Prefetch all existing SHAs
+  const existingShas = await fetchAllShas();
+
   // Push README
-  const readmeSha = await getSha("README.md");
   await gh("PUT", `/repos/${USERNAME}/${REPO}/contents/README.md`, {
     message: "docs: README",
-    content: Buffer.from("# StrikerX\n\nFootball-themed Telegram Mini App casino. Stack: Node.js/Express 5, PostgreSQL/Drizzle ORM, React/Vite/TailwindCSS, Telegraf bots, CryptoBot payments, WebSocket crash game.\n\n## Setup\n```bash\npnpm install\npnpm --filter @workspace/db run push\npnpm --filter @workspace/api-server run dev\npnpm --filter @workspace/strikerx run dev\n```\n\nSee `docs/AGENT_HANDOFF.md` for full setup guide.\n").toString("base64"),
-    ...(readmeSha ? { sha: readmeSha } : {}),
+    content: Buffer.from("# StrikerX\n\nFootball-themed Telegram Mini App casino. Stack: Node.js/Express, PostgreSQL/Drizzle ORM, React/Vite/TailwindCSS, Telegraf bots, CryptoBot payments, WebSocket crash game.\n\n## Setup\n```bash\npnpm install\npnpm --filter @workspace/db run push\npnpm --filter @workspace/api-server run dev\npnpm --filter @workspace/strikerx run dev\n```\n\nSee `docs/AGENT_HANDOFF.md` for full setup guide.\n").toString("base64"),
+    ...(existingShas.get("README.md") ? { sha: existingShas.get("README.md") } : {}),
   });
 
   const files = walk(ROOT);
   console.log(`\nFound ${files.length} source files to push\n`);
 
   let ok = 0, fail = 0;
-  const CONCURRENCY = 4;
-  const errors: string[] = [];
+  const CONCURRENCY = 3;
+  const errors = [];
 
   for (let i = 0; i < files.length; i += CONCURRENCY) {
     const batch = files.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map(f => pushFile(f.rel, f.full)));
+    const results = await Promise.all(batch.map(f => pushFile(f.rel, f.full, existingShas.get(f.rel))));
 
     for (let j = 0; j < results.length; j++) {
       if (results[j].ok) { ok++; }
       else { fail++; errors.push(`${batch[j].rel}: ${results[j].reason}`); }
     }
 
-    if ((Math.floor(i / CONCURRENCY) + 1) % 8 === 0 || i + CONCURRENCY >= files.length) {
+    if ((Math.floor(i / CONCURRENCY) + 1) % 10 === 0 || i + CONCURRENCY >= files.length) {
       console.log(`  Progress: ${Math.min(i + CONCURRENCY, files.length)}/${files.length} — ${ok} ok, ${fail} failed`);
     }
-    // Throttle: 200ms every 20 files
-    if (i > 0 && i % 20 === 0) await new Promise(r => setTimeout(r, 200));
+    // Throttle
+    if (i > 0 && i % 30 === 0) await new Promise(r => setTimeout(r, 300));
   }
 
   console.log(`\n${"=".repeat(48)}`);
-  console.log(`✅ Pushed ${ok}/${files.length} files`);
+  console.log(`Pushed ${ok}/${files.length} files`);
   if (errors.length) {
-    console.log(`\n⚠️  Failed ${errors.length} files:`);
-    errors.slice(0, 20).forEach(e => console.log("  -", e));
+    console.log(`\nFailed ${errors.length} files:`);
+    errors.slice(0, 30).forEach(e => console.log("  -", e));
   }
-  console.log(`\n🔗 https://github.com/${USERNAME}/${REPO}\n`);
+  console.log(`\nhttps://github.com/${USERNAME}/${REPO}\n`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });
