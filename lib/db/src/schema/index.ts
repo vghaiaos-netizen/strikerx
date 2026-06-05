@@ -5,3 +5,4 @@ export * from "./jackpot";
 export * from "./tournaments";
 export * from "./referrals";
 export * from "./config";
+export * from "./achievements";

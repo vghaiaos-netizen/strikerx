@@ -784,6 +784,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminAnalytics"
 
+  /players/me/cashback:
+    get:
+      operationId: getMyCashback
+      tags: [players]
+      summary: Get VIP cashback status for current week
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cashback status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashbackStatus"
+
+  /players/me/cashback/claim:
+    post:
+      operationId: claimCashback
+      tags: [players]
+      summary: Claim weekly VIP cashback
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claim result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashbackClaimResult"
+
+  /players/me/achievements:
+    get:
+      operationId: getMyAchievements
+      tags: [players]
+      summary: Get all achievements (unlocked and locked)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Achievement list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlayerAchievement"
+
+  /players/me/referrals/detail:
+    get:
+      operationId: getMyReferralDetail
+      tags: [players]
+      summary: Get detailed referral breakdown with per-referee stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Referral detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralDetail"
+
+  /tournaments/{id}/leaderboard:
+    get:
+      operationId: getTournamentLeaderboard
+      tags: [tournaments]
+      summary: Get tournament leaderboard
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TournamentLeaderboardEntry"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1438,3 +1521,105 @@ components:
               type: integer
             world_cup:
               type: integer
+
+    CashbackStatus:
+      type: object
+      required: [period, vipTier, cashbackRate, estimatedLossesStriker, pendingStriker, claimedThisPeriod, canClaim]
+      properties:
+        period:
+          type: string
+        vipTier:
+          type: string
+        cashbackRate:
+          type: number
+        estimatedLossesStriker:
+          type: number
+        pendingStriker:
+          type: number
+        claimedThisPeriod:
+          type: boolean
+        canClaim:
+          type: boolean
+        nextClaimAt:
+          type: string
+          nullable: true
+
+    CashbackClaimResult:
+      type: object
+      required: [claimedStriker, newBalance, period]
+      properties:
+        claimedStriker:
+          type: number
+        newBalance:
+          type: number
+        period:
+          type: string
+
+    PlayerAchievement:
+      type: object
+      required: [key, title, description, rarity]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        rarity:
+          type: string
+          enum: [common, rare, epic, legendary]
+        unlockedAt:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+
+    RefereeEntry:
+      type: object
+      required: [username, tier, earnedStriker, joinedAt]
+      properties:
+        username:
+          type: string
+        tier:
+          type: integer
+        earnedStriker:
+          type: number
+        joinedAt:
+          type: string
+
+    ReferralDetail:
+      type: object
+      required: [code, referralLink, totalReferred, totalEarned, tier1Earnings, tier2Earnings, referees]
+      properties:
+        code:
+          type: string
+        referralLink:
+          type: string
+        totalReferred:
+          type: integer
+        totalEarned:
+          type: number
+        tier1Earnings:
+          type: number
+        tier2Earnings:
+          type: number
+        referees:
+          type: array
+          items:
+            $ref: "#/components/schemas/RefereeEntry"
+
+    TournamentLeaderboardEntry:
+      type: object
+      required: [rank, playerId, username, score, prize]
+      properties:
+        rank:
+          type: integer
+        playerId:
+          type: integer
+        username:
+          type: string
+        score:
+          type: number
+        prize:
+          type: number
