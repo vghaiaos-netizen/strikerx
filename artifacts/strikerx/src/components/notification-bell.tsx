@@ -1,4 +1,4 @@
-import { Bell, Trophy, Zap, X } from "lucide-react";
+import { Bell, Trophy, Zap, Star, X, Medal } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNotifications, type WsNotification } from "@/lib/ws-notifications";
 
@@ -10,9 +10,20 @@ function timeAgo(ts: number): string {
 }
 
 function NotifRow({ n }: { n: WsNotification }) {
-  const icon = n.type === "jackpot_won"
-    ? <Trophy size={14} className="text-yellow-400 shrink-0 mt-0.5" />
-    : <Zap size={14} className="text-[#00c853] shrink-0 mt-0.5" />;
+  let icon: React.ReactNode;
+  switch (n.type) {
+    case "jackpot_won":
+      icon = <Trophy size={14} className="text-yellow-400 shrink-0 mt-0.5" />;
+      break;
+    case "achievement_unlocked":
+      icon = <Star size={14} className="text-purple-400 shrink-0 mt-0.5" />;
+      break;
+    case "tournament_ended":
+      icon = <Medal size={14} className="text-yellow-400 shrink-0 mt-0.5" />;
+      break;
+    default:
+      icon = <Zap size={14} className="text-[#00c853] shrink-0 mt-0.5" />;
+  }
 
   return (
     <div className="flex gap-2 px-3 py-2.5 border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors">
@@ -31,7 +42,6 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -64,7 +74,7 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-9 w-72 bg-card border border-border rounded-lg shadow-2xl z-[200] overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Live Wins</span>
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Live Feed</span>
             <div className="flex gap-1">
               {notifications.length > 0 && (
                 <button
@@ -87,7 +97,7 @@ export function NotificationBell() {
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
                 <Bell size={24} className="opacity-30" />
-                <p className="text-xs">No wins yet — play to see action here</p>
+                <p className="text-xs">No activity yet — play to see action here</p>
               </div>
             ) : (
               notifications.map((n) => <NotifRow key={n.id} n={n} />)

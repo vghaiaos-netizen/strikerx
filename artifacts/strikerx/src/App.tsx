@@ -29,6 +29,8 @@ import { AdminAnalytics } from "./pages/admin/analytics";
 import { AdminAuditLog } from "./pages/admin/audit-log";
 import { AdminBroadcast } from "./pages/admin/broadcast";
 import { AdminTournaments } from "./pages/admin/tournaments";
+import { AdminRateEvents } from "./pages/admin/rate-events";
+import { AdminFlagged } from "./pages/admin/flagged";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,8 @@ function Router() {
       <Route path="/admin/audit-log" component={AdminAuditLog} />
       <Route path="/admin/broadcast" component={AdminBroadcast} />
       <Route path="/admin/tournaments" component={AdminTournaments} />
+      <Route path="/admin/rate-events" component={AdminRateEvents} />
+      <Route path="/admin/flagged" component={AdminFlagged} />
 
       <Route component={NotFound} />
     </Switch>
