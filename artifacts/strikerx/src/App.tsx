@@ -22,6 +22,9 @@ import { AdminPlayers } from "./pages/admin/players";
 import { AdminWithdrawals } from "./pages/admin/withdrawals";
 import { AdminConfig } from "./pages/admin/config";
 import { AdminAnalytics } from "./pages/admin/analytics";
+import { AdminAuditLog } from "./pages/admin/audit-log";
+import { AdminBroadcast } from "./pages/admin/broadcast";
+import { AdminTournaments } from "./pages/admin/tournaments";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +50,9 @@ function Router() {
       <Route path="/admin/withdrawals" component={AdminWithdrawals} />
       <Route path="/admin/config" component={AdminConfig} />
       <Route path="/admin/analytics" component={AdminAnalytics} />
+      <Route path="/admin/audit-log" component={AdminAuditLog} />
+      <Route path="/admin/broadcast" component={AdminBroadcast} />
+      <Route path="/admin/tournaments" component={AdminTournaments} />
 
       <Route component={NotFound} />
     </Switch>
