@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Trophy, User, Wallet, ShieldCheck } from "lucide-react";
+import { Home, Trophy, User, Wallet, Star } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -33,7 +33,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <NavLink href="/leaderboard" icon={<Trophy size={20} />} label="Rank" active={location === "/leaderboard"} />
         <NavLink href="/deposit" icon={<Wallet size={20} />} label="Wallet" active={location === "/deposit" || location === "/withdraw"} />
         <NavLink href="/profile" icon={<User size={20} />} label="Profile" active={location === "/profile"} />
-        <NavLink href="/verify" icon={<ShieldCheck size={20} />} label="Verify" active={location === "/verify"} />
+        <NavLink href="/achievements" icon={<Star size={20} />} label="Badges" active={location === "/achievements"} />
       </nav>
     </div>
   );

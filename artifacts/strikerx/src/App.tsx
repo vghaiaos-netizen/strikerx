@@ -18,6 +18,7 @@ import { Minefield } from "./pages/games/minefield";
 import { FreeKick } from "./pages/games/freekick";
 
 import { Verify } from "./pages/verify";
+import { Achievements } from "./pages/achievements";
 
 import { AdminLogin } from "./pages/admin/login";
 import { AdminDashboard } from "./pages/admin/dashboard";
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/withdraw" component={Withdraw} />
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/verify" component={Verify} />
+      <Route path="/achievements" component={Achievements} />
 
       {/* Admin Pages */}
       <Route path="/admin" component={AdminLogin} />
