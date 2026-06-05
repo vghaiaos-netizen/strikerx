@@ -846,6 +846,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReferralDetail"
 
+  /players/me/boot/redeem:
+    post:
+      operationId: redeemBoot
+      tags: [players]
+      summary: Convert BOOT tokens to STRIKER at 1:1 rate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootRedeemInput"
+      responses:
+        "200":
+          description: Redeem result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootRedeemResult"
+
   /tournaments/{id}/leaderboard:
     get:
       operationId: getTournamentLeaderboard
@@ -1622,4 +1643,22 @@ components:
         score:
           type: number
         prize:
+          type: number
+
+    BootRedeemInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+
+    BootRedeemResult:
+      type: object
+      required: [redeemedBoot, newStrikerBalance, newBootBalance]
+      properties:
+        redeemedBoot:
+          type: number
+        newStrikerBalance:
+          type: number
+        newBootBalance:
           type: number
