@@ -5,6 +5,16 @@ import { initWebSocketServer } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
 import { startScheduler } from "./lib/scheduler";
 
+// ── Startup env guards ────────────────────────────────────────────────────────
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("FATAL: JWT_SECRET must be set in production. Refusing to start.");
+  }
+  if (!process.env.ADMIN_PASSWORD) {
+    throw new Error("FATAL: ADMIN_PASSWORD must be set in production. Refusing to start.");
+  }
+}
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

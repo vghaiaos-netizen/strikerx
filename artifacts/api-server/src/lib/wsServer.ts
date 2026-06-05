@@ -28,6 +28,11 @@ export function broadcastToAll(event: string, data: unknown) {
   broadcast(event, data);
 }
 
+/** Returns the number of currently connected WebSocket clients */
+export function getClientsCount(): number {
+  return clients.size;
+}
+
 /** Send event only to a specific authenticated player */
 export function broadcastToPlayer(playerId: number, event: string, data: unknown) {
   const msg = JSON.stringify({ event, data });
