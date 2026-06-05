@@ -1,6 +1,6 @@
 # StrikerX — Agent Handoff
 
-> Last updated: Session 2 (2026-06-05)
+> Last updated: Session 3 (2026-06-05)
 > Read this FIRST, every session, before touching any file.
 
 ---
