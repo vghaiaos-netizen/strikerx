@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable } from "@workspace/db";
+import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../lib/gameEngine";
 import { crashEngine } from "../lib/crashEngine";
 import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
+import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -147,7 +148,10 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
-  if (winAmount >= bigWinThreshold) broadcastBigWin(player.username, betStriker, winAmount, "Penalty").catch(() => {});
+  if (win && (winAmount >= bigWinThreshold || multiplier >= 5)) {
+    broadcastBigWin(player.username, betStriker, winAmount, "Penalty").catch(() => {});
+    broadcastToAll("big_win", { username: player.username, game: "Penalty", betStriker, winAmount, multiplier, at: Date.now() });
+  }
 
   res.json({
     gameId: game.id, gameType: "penalty", betStriker, outcome,
@@ -250,6 +254,13 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player");
+
+  const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
+  if (winAmount >= bigWinThreshold || session.currentMultiplier >= 5) {
+    broadcastBigWin(player?.username ?? "Player", session.betStriker, winAmount, "Minefield").catch(() => {});
+    broadcastToAll("big_win", { username: player?.username ?? "Player", game: "Minefield", betStriker: session.betStriker, winAmount, multiplier: session.currentMultiplier, at: Date.now() });
+  }
+
   res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: (player?.strikerBalance ?? 0) + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
 
@@ -304,9 +315,33 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
-  if (winAmount >= bigWinThreshold) broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
+  if (winAmount >= bigWinThreshold || multiplier >= 5) {
+    broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
+    broadcastToAll("big_win", { username: player.username, game: "Free Kick", betStriker, winAmount, multiplier, at: Date.now() });
+  }
 
   res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: newBalance + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
+});
+
+// ─── PROVABLY FAIR — round lookup ────────────────────────────────────────────
+
+router.get("/games/rounds/:id", async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid round id" }); return; }
+
+  const [round] = await db.select().from(crashRoundsTable).where(eq(crashRoundsTable.id, id));
+  if (!round) { res.status(404).json({ error: "Round not found" }); return; }
+
+  // Only reveal serverSeed after round has crashed (provably fair)
+  res.json({
+    id: round.id,
+    status: round.status,
+    crashPoint: round.status === "crashed" ? round.crashPoint : null,
+    serverSeed: round.status === "crashed" ? round.serverSeed : null,
+    startedAt: round.startedAt?.toISOString() ?? null,
+    endedAt: round.endedAt?.toISOString() ?? null,
+    createdAt: round.createdAt.toISOString(),
+  });
 });
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────────

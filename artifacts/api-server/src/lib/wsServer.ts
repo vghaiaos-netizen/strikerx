@@ -23,6 +23,11 @@ function broadcast(event: string, data: unknown) {
   }
 }
 
+/** Exported broadcast — lets other modules push events to all WS clients */
+export function broadcastToAll(event: string, data: unknown) {
+  broadcast(event, data);
+}
+
 function sendToClient(ws: WebSocket, event: string, data: unknown) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ event, data }));

@@ -297,7 +297,7 @@ router.get("/admin/config/raw", requireAdmin, async (_req, res): Promise<void> =
 });
 
 router.put("/admin/config/:key", requireAdmin, async (req, res): Promise<void> => {
-  const { key } = req.params;
+  const key = String(req.params.key);
   const { value } = req.body as { value: string };
   if (value === undefined) { res.status(400).json({ error: "value required" }); return; }
   if (value === "••••••••") { res.json({ ok: true, note: "Masked value unchanged" }); return; }

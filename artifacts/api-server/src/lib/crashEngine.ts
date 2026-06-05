@@ -289,8 +289,16 @@ class CrashEngine {
 
     // Big win announcement
     const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
-    if (winAmount >= bigWinThreshold) {
+    if (winAmount >= bigWinThreshold || cashoutMult >= 5) {
       broadcastBigWin(bet.username, bet.betStriker, winAmount, "The Shot").catch(() => {});
+      this.broadcast("big_win", {
+        username: bet.username,
+        game: "The Shot",
+        betStriker: bet.betStriker,
+        winAmount,
+        multiplier: cashoutMult,
+        at: Date.now(),
+      });
     }
 
     return { success: true, winAmount, multiplier: cashoutMult };
