@@ -309,11 +309,40 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 - [x] Telegram GameBot fully implemented (/start, /balance, /deposit, /withdraw, /stats, /streak, /vip, /referral, /leaderboard, /help)
 - [x] Telegram GroupBot fully implemented (big win alerts, jackpot alerts, withdrawal alerts, daily morning message, 30min jackpot updates)
 
-### Phase 5 (Engagement & Retention) — NEXT
-- [ ] Cashback system: weekly VIP cashback payout (triggered on login or via cron)
-- [ ] Push notifications via Telegram when player wins jackpot or hits milestone
-- [ ] Tournament leaderboard real-time updates via WebSocket
-- [ ] Player achievements / milestone badges
-- [ ] Referral dashboard panel (earnings breakdown per referee)
+### Phase 5 (Engagement & Retention) ✅
+- [x] Cashback system: weekly VIP cashback payout with REST claim endpoint
+- [x] Player achievements / milestone badges (16 badges, `player_achievements` table)
+- [x] Referral dashboard panel (referee list + earnings breakdown)
+- [x] Tournament leaderboard REST endpoint
+- [x] Achievements page (`/achievements`) with rarity rings and progress
+- [x] Profile: cashback card, achievements preview, referral squad section
+
+### Phase 6 (Live Achievement Notifications + Boot Shop) ✅
+- [x] `broadcastToPlayer(playerId, event, data)` added to wsServer.ts — targeted WS delivery
+- [x] `achievement_unlocked` WS event broadcast from all 4 game types + streak claim
+- [x] The Shot (crashEngine.ts) — achievement triggers on bet placed + cashout (first_bet, crash_5x/25x/100x, centurion, high_roller, vip upgrades, big_winner)
+- [x] Penalty, Minefield, Free Kick — fire-and-forget achievements broadcast `achievement_unlocked` to all
+- [x] Streak claim triggers `lucky_7` and `streak_legend` achievements
+- [x] `ws-notifications.tsx` — authenticates WS on open (sends JWT), stores `myPlayerId` from `auth_ok`, filters `achievement_unlocked` by playerId, handles `tournament_ended`
+- [x] `ACHIEVEMENT_MAP` mirrored to `artifacts/strikerx/src/lib/achievement-defs.ts`
+- [x] `NotificationBell` updated — distinct icons for achievement_unlocked, jackpot_won, tournament_ended
+- [x] Boot Shop UI in profile — expandable form to convert BOOT → STRIKER at 1:1 (only shown if bootBalance > 0)
+- [x] `POST /players/me/boot/redeem` backend route + OpenAPI spec + codegen
+- [x] Scheduler (`artifacts/api-server/src/lib/scheduler.ts`) — tournament auto-end cron (every 60s), pays top-5 prizes, broadcasts `tournament_ended`
+- [x] `startScheduler()` called in `index.ts` after crash engine starts
+
+### Phase 7 (Admin Enhancements) ✅
+- [x] Admin Rate Events system — `GET/POST /admin/rate-events/status/start/end` using configService
+- [x] Admin Rate Events page (`/admin/rate-events`) — launch limited-time STRIKER deposit bonus windows with countdown timer
+- [x] Admin Flagged Players page (`/admin/flagged`) — list flagged players, one-click clear/ban actions
+- [x] `POST /admin/players/:id/flag` — flag/unflag any player with reason + audit log
+- [x] `GET /admin/flagged` — list all currently flagged players
+- [x] Admin layout updated with Rate Events + Flagged nav items
+- [x] App.tsx wired with `/admin/rate-events` and `/admin/flagged` routes
+
+### Phase 8 (Next)
+- [ ] Deposit page rate event banner (show boosted rate during active rate event)
+- [ ] Push notifications via Telegram for jackpot wins + achievement milestones
+- [ ] World Cup themed UI skin (Phase 5 from ROADMAP)
 - [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) and go live
 - [ ] Deploy via Replit deployment
