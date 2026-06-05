@@ -1,9 +1,10 @@
 import crypto from "crypto";
 import { db, crashRoundsTable, gamesTable, playersTable, transactionsTable, jackpotTable } from "@workspace/db";
-import { eq, count } from "drizzle-orm";
+import { eq, count, sql } from "drizzle-orm";
 import { checkAndAward } from "./achievementsService";
 import { logger } from "./logger";
 import { broadcastBigWin, broadcastJackpot } from "./groupBot";
+import { sendJackpotWin } from "../services/telegramNotify";
 import {
   generateCrashPoint,
   generateServerSeed,
@@ -312,6 +313,43 @@ class CrashEngine {
         at: Date.now(),
       });
     }
+
+    // Jackpot check — fire-and-forget
+    (async () => {
+      const [currentJackpot] = await db.select().from(jackpotTable).limit(1);
+      if (!currentJackpot || currentJackpot.status !== "ready") return;
+      if (!shouldTriggerJackpot(currentJackpot.currentAmountTon, bet.betStriker)) return;
+
+      const winnerAmountTon = currentJackpot.currentAmountTon * 0.9;
+      const seedAmount      = parseFloat(process.env.JACKPOT_SEED_AMOUNT ?? "10");
+      const depositRate     = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+      const strikerWin      = Math.round(winnerAmountTon * depositRate);
+
+      await db.update(jackpotTable).set({
+        currentAmountTon: seedAmount,
+        status: "building",
+        lastTriggeredAt: new Date(),
+        lastWinnerId: playerId,
+        lastWinnerUsername: bet.username,
+      }).where(eq(jackpotTable.id, currentJackpot.id));
+
+      // Credit STRIKER jackpot winnings + 1 CAPTAIN token atomically
+      await db.update(playersTable).set({
+        strikerBalance:  sql`${playersTable.strikerBalance}  + ${strikerWin}`,
+        captainBalance:  sql`${playersTable.captainBalance}  + 1`,
+      }).where(eq(playersTable.id, playerId));
+
+      await db.insert(transactionsTable).values({ playerId, type: "win",           amountStriker: strikerWin,   amountTon: winnerAmountTon, status: "completed" });
+      await db.insert(transactionsTable).values({ playerId, type: "captain_award", captainAmount: 1,            status: "completed" });
+
+      broadcastJackpot(bet.username, winnerAmountTon).catch(() => {});
+      this.broadcast("jackpot_won", { playerId, username: bet.username, amountTon: winnerAmountTon, strikerWin, at: Date.now() });
+
+      // Telegram push + achievement
+      if (player?.telegramId) sendJackpotWin(player.telegramId, strikerWin, "The Shot");
+      checkAndAward(playerId, { event: "jackpot_won" }).catch(() => {});
+      logger.info({ playerId, amountTon: winnerAmountTon, strikerWin }, "Shot jackpot triggered");
+    })().catch((err) => logger.error({ err }, "Shot jackpot check failed"));
 
     // fire-and-forget achievement checks for Shot cashout
     (async () => {

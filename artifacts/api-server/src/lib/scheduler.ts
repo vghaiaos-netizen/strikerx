@@ -1,5 +1,5 @@
 import { db, tournamentsTable, tournamentEntriesTable, playersTable, transactionsTable } from "@workspace/db";
-import { eq, lt, and, desc } from "drizzle-orm";
+import { eq, lt, and, desc, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { broadcastToAll } from "./wsServer";
 
@@ -26,6 +26,9 @@ async function processTournamentEnds() {
       // Mark tournament ended first to prevent double-processing
       await db.update(tournamentsTable).set({ status: "ended" }).where(eq(tournamentsTable.id, tournament.id));
 
+      // CAPTAIN tokens for top 3: 3 for 1st, 2 for 2nd, 1 for 3rd
+      const CAPTAIN_AWARDS = [3, 2, 1];
+
       // Pay prizes to top finishers
       for (let i = 0; i < Math.min(entries.length, PRIZE_DISTRIBUTION.length); i++) {
         const entry = entries[i]!;
@@ -34,11 +37,8 @@ async function processTournamentEnds() {
 
         if (prizeStriker <= 0) continue;
 
-        const [player] = await db.select().from(playersTable).where(eq(playersTable.id, entry.playerId));
-        if (!player) continue;
-
         await db.update(playersTable)
-          .set({ strikerBalance: player.strikerBalance + prizeStriker })
+          .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${prizeStriker}` })
           .where(eq(playersTable.id, entry.playerId));
 
         await db.insert(transactionsTable).values({
@@ -47,6 +47,20 @@ async function processTournamentEnds() {
           amountStriker: prizeStriker,
           status:   "completed",
         });
+
+        // Award CAPTAIN tokens to top 3
+        const captainAmt = CAPTAIN_AWARDS[i];
+        if (captainAmt) {
+          await db.update(playersTable)
+            .set({ captainBalance: sql`${playersTable.captainBalance} + ${captainAmt}` })
+            .where(eq(playersTable.id, entry.playerId));
+          await db.insert(transactionsTable).values({
+            playerId: entry.playerId,
+            type: "captain_award",
+            captainAmount: captainAmt,
+            status: "completed",
+          });
+        }
       }
 
       broadcastToAll("tournament_ended", {

@@ -43,9 +43,15 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
 
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
 
+  // Credit STRIKER + 1 CAPTAIN token atomically
   await db.update(playersTable)
-    .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}` })
+    .set({
+      strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}`,
+      captainBalance: sql`${playersTable.captainBalance} + 1`,
+    })
     .where(eq(playersTable.id, playerId));
+
+  await db.insert(transactionsTable).values({ playerId, type: "captain_award", captainAmount: 1, status: "completed" });
 
   broadcastJackpot(username, winnerAmount).catch((err) => logger.error({ err }, "Failed to broadcast jackpot"));
 

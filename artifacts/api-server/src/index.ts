@@ -4,6 +4,7 @@ import { logger } from "./lib/logger";
 import { initWebSocketServer } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
 import { startScheduler } from "./lib/scheduler";
+import { startSessionCleaner } from "./services/sessionCleaner";
 
 // ── Startup env guards ────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === "production") {
@@ -40,6 +41,9 @@ server.listen(port, async () => {
 
   // Start scheduler (tournament auto-end, cron jobs)
   startScheduler();
+
+  // Start session cleaner (orphaned minefield sessions — refund after 10 min)
+  startSessionCleaner();
 });
 
 server.on("error", (err) => {
