@@ -1,73 +1,168 @@
 import { useAuth } from "@/lib/auth";
 import { useTelegramAuth, useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { Card } from "@/components/ui/card";
-import { Flame, Target, Bomb, Zap } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Dev auth bypass — uses Telegram format in dev mode
+function useDevAuth() {
+  const { player, isLoading, setToken } = useAuth();
+  const telegramAuth = useTelegramAuth();
+  const tried = useRef(false);
+
+  useEffect(() => {
+    if (tried.current || player || isLoading || localStorage.getItem("strikerx_token")) return;
+    tried.current = true;
+
+    // Try real Telegram init data first
+    const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
+    const initData = tg?.WebApp?.initData;
+
+    if (initData) {
+      telegramAuth.mutate({ data: { initData } }, { onSuccess: d => setToken(d.token) });
+    } else if (import.meta.env.DEV) {
+      // Dev bypass: format is "dev:telegramId:username"
+      telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
+    }
+  }, [player, isLoading]);
+}
+
+const GAMES = [
+  { href: "/games/shot",      name: "The Shot",   sub: "Crash",    icon: TrendingUp, color: "#00ff88", bg: "from-[#00ff88]/10" },
+  { href: "/games/penalty",   name: "Penalty",    sub: "1.92x",    icon: Target,     color: "#3b82f6", bg: "from-[#3b82f6]/10" },
+  { href: "/games/minefield", name: "Minefield",  sub: "Compound", icon: Bomb,       color: "#ef4444", bg: "from-[#ef4444]/10" },
+  { href: "/games/freekick",  name: "Free Kick",  sub: "Plinko",   icon: Zap,        color: "#f59e0b", bg: "from-[#f59e0b]/10" },
+];
+
+// Mock recent wins ticker (replace with WS feed when big-win events are implemented)
+const MOCK_WINS = [
+  { user: "striker_99", amount: 2840, game: "The Shot", mult: "5.23x" },
+  { user: "goalie_k",   amount: 920,  game: "Penalty",  mult: "1.92x" },
+  { user: "mfield_pro", amount: 4500, game: "Minefield",mult: "9.10x" },
+  { user: "fk_beast",   amount: 1200, game: "Free Kick",mult: "12x"   },
+];
 
 export function Home() {
-  const { player, setToken, isLoading } = useAuth();
-  const telegramAuth = useTelegramAuth();
-  
-  useEffect(() => {
-    // Mock telegram auth for development
-    if (!player && !isLoading && !localStorage.getItem("strikerx_token")) {
-      telegramAuth.mutate({ data: { initData: "mock_init_data" } }, {
-        onSuccess: (data) => {
-          setToken(data.token);
-        }
-      });
-    }
-  }, [player, isLoading, telegramAuth, setToken]);
+  useDevAuth();
+
+  const { player } = useAuth();
+  const [tickerIdx, setTickerIdx] = useState(0);
 
   const { data: jackpot } = useGetJackpot({
-    query: {
-      queryKey: getGetJackpotQueryKey(),
-      refetchInterval: 30000
-    }
+    query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
   });
+
+  // Cycle wins ticker
+  useEffect(() => {
+    const t = setInterval(() => setTickerIdx(i => (i + 1) % MOCK_WINS.length), 3500);
+    return () => clearInterval(t);
+  }, []);
+
+  const pct = jackpot?.percentFull ?? 0;
 
   return (
     <Layout>
-      <div className="p-4 flex flex-col gap-6">
-        
-        {/* Jackpot Widget */}
-        <div className="bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 rounded-xl p-4 flex flex-col items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent opacity-50 mix-blend-overlay"></div>
-          <span className="text-xs font-bold uppercase tracking-widest text-primary mb-1">Live Jackpot</span>
-          <div className="text-4xl font-mono font-black text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
-            {jackpot?.currentAmountTon || 0} TON
+      <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
+
+        {/* ── Jackpot Banner ── */}
+        <div className="relative overflow-hidden rounded-2xl border border-[#f59e0b]/20 bg-gradient-to-br from-[#f59e0b]/10 via-[#0d1117] to-[#0d1117] p-4">
+          <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-[#f59e0b]/5 blur-2xl" />
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Trophy className="w-3.5 h-3.5 text-[#f59e0b]" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]">Golden Boot</span>
+              </div>
+              <motion.div
+                className="font-display font-black text-3xl text-white"
+                animate={{ opacity: [1, 0.7, 1] }} transition={{ duration: 2, repeat: Infinity }}
+              >
+                {Number(jackpot?.currentAmountTon ?? 0).toFixed(2)}
+                <span className="text-[#f59e0b] ml-1 text-2xl">TON</span>
+              </motion.div>
+              <div className="text-[10px] font-mono text-white/30 mt-0.5">
+                {jackpot?.status === "ready" ? "READY TO TRIGGER" : `Building to ${jackpot?.minimumTrigger ?? 100} TON`}
+              </div>
+            </div>
+            <div className={`px-2 py-1 rounded-md text-[9px] font-mono font-bold uppercase ${jackpot?.status === "ready" ? "bg-[#f59e0b]/20 text-[#f59e0b]" : "bg-white/5 text-white/30"}`}>
+              {jackpot?.status ?? "building"}
+            </div>
           </div>
-          <div className="w-full bg-black/50 h-2 rounded-full mt-3 overflow-hidden">
-            <div className="bg-gradient-to-r from-primary to-secondary h-full" style={{ width: `${jackpot?.percentFull || 0}%` }} />
+          {/* Progress bar */}
+          <div className="mt-3 bg-black/30 rounded-full h-1.5 overflow-hidden">
+            <motion.div className="h-full bg-gradient-to-r from-[#f59e0b] to-[#00ff88] rounded-full"
+              style={{ width: `${Math.min(pct, 100)}%` }}
+              animate={{ width: `${Math.min(pct, 100)}%` }} transition={{ duration: 0.5 }} />
           </div>
         </div>
 
-        {/* Balance Strip */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-card border border-border rounded-lg p-3 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase">Striker</span>
-            <span className="font-mono font-bold text-sm text-foreground mt-1">{player?.strikerBalance || 0}</span>
+        {/* ── Balance Strip ── */}
+        {player && (
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "STRIKER", val: (player as Record<string,unknown>)?.strikerBalance, color: "#00ff88" },
+              { label: "BOOT",    val: (player as Record<string,unknown>)?.bootBalance,    color: "#f59e0b" },
+              { label: "CAPTAIN", val: (player as Record<string,unknown>)?.captainBalance, color: "#a855f7" },
+            ].map(({ label, val, color }) => (
+              <div key={label} className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
+                <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-white/30 mb-1">{label}</div>
+                <div className="font-display font-bold text-base" style={{ color }}>
+                  {Number(val ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="bg-card border border-border rounded-lg p-3 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase">Boot</span>
-            <span className="font-mono font-bold text-sm text-secondary mt-1">{player?.bootBalance || 0}</span>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-3 flex flex-col items-center justify-center">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase">Captain</span>
-            <span className="font-mono font-bold text-sm text-primary mt-1">{player?.captainBalance || 0}</span>
-          </div>
-        </div>
+        )}
 
-        {/* Games */}
+        {/* ── Game Grid ── */}
         <div>
-          <h2 className="text-lg font-bold mb-3 font-mono tracking-tight">ORIGINALS</h2>
+          <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30 mb-2.5">ORIGINALS</div>
           <div className="grid grid-cols-2 gap-3">
-            <GameCard href="/games/shot" name="The Shot" icon={<Flame className="text-primary" />} bg="bg-primary/5" />
-            <GameCard href="/games/penalty" name="Penalty" icon={<Target className="text-blue-500" />} bg="bg-blue-500/5" />
-            <GameCard href="/games/minefield" name="Minefield" icon={<Bomb className="text-destructive" />} bg="bg-destructive/5" />
-            <GameCard href="/games/freekick" name="Free Kick" icon={<Zap className="text-secondary" />} bg="bg-secondary/5" />
+            {GAMES.map(({ href, name, sub, icon: Icon, color, bg }) => (
+              <Link key={href} href={href}>
+                <motion.div whileTap={{ scale: 0.95 }}
+                  className={`relative rounded-xl border border-white/8 bg-gradient-to-br ${bg} to-transparent p-4 flex flex-col gap-3 overflow-hidden cursor-pointer`}
+                  style={{ boxShadow: `0 0 0 0 ${color}` }}
+                  whileHover={{ boxShadow: `0 0 16px ${color}22`, borderColor: `${color}40` }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-black/30 border border-white/5">
+                    <Icon className="w-4 h-4" style={{ color }} />
+                  </div>
+                  <div>
+                    <div className="font-display font-bold text-sm text-white tracking-tight">{name}</div>
+                    <div className="text-[10px] font-mono text-white/30 mt-0.5">{sub}</div>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-white/20 absolute bottom-3.5 right-3.5" />
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Recent Wins Ticker ── */}
+        <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
+          <div className="px-3 pt-2.5 pb-0 text-[9px] font-mono font-bold uppercase tracking-widest text-white/25">Live Wins</div>
+          <div className="relative h-11 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div key={tickerIdx}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.4 }}
+                className="absolute inset-0 flex items-center px-3 gap-2"
+              >
+                <div className="w-6 h-6 rounded-full bg-[#00ff88]/15 border border-[#00ff88]/20 flex items-center justify-center text-[10px] font-mono font-bold text-[#00ff88]">
+                  {MOCK_WINS[tickerIdx].user[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-xs text-white font-semibold">{MOCK_WINS[tickerIdx].user}</span>
+                  <span className="font-mono text-xs text-white/40"> won </span>
+                  <span className="font-mono text-xs text-[#00ff88] font-bold">{MOCK_WINS[tickerIdx].amount.toLocaleString()} STRIKER</span>
+                  <span className="font-mono text-[10px] text-white/25"> · {MOCK_WINS[tickerIdx].game} · {MOCK_WINS[tickerIdx].mult}</span>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
@@ -76,13 +171,3 @@ export function Home() {
   );
 }
 
-function GameCard({ href, name, icon, bg }: { href: string; name: string; icon: React.ReactNode; bg: string }) {
-  return (
-    <Link href={href} className={`relative flex flex-col p-4 rounded-xl border border-border overflow-hidden transition-all hover:border-primary/50 active:scale-95 ${bg}`}>
-      <div className="mb-4 bg-background/50 w-10 h-10 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/5">
-        {icon}
-      </div>
-      <div className="font-bold font-mono tracking-tight">{name}</div>
-    </Link>
-  );
-}

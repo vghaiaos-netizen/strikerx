@@ -1,2 +1,5 @@
-- [StrikerX Architecture](strikerx-architecture.md) — Both bots run in the same Express process; crash game simulated (not live shared round); bots disabled without bot tokens.
-- [StrikerX Dev Auth Bypass](strikerx-dev-auth.md) — Use `initData: "dev:123456:username"` to bypass Telegram validation in development mode.
+- [WebSocket crash game](crash-ws.md) — The Shot uses WS at /ws on same HTTP server; crashEngine is a singleton; round lifecycle: waiting→running→crashed.
+- [GitHub push](github-push.md) — Use `node scripts/github-push.mjs` (contents API, SHA retry on 422); `git push` is blocked by Replit; GITHUB_PAT not available in code_execution sandbox, use bash shell only.
+- [Dev auth bypass](dev-auth.md) — POST /api/auth/telegram with {"initData":"dev:123456:player_dev"}; "mock_init_data" returns 401.
+- [OpenAPI type quirks](openapi-types.md) — ReferralInfo.code (not referralCode); StreakInfo.streakDays/canClaim (not currentStreak/canClaimToday); DepositInvoice.payLink (not payUrl); claimStreakReward takes void; DepositInputCurrency is uppercase TON/USDT_TON/BNB/SOL; WithdrawalInput uses destinationAddress (not walletAddress).
+- [qrcode.react exports](qrcode-exports.md) — Use QRCodeSVG or QRCodeCanvas; no default export, no named QRCode export.

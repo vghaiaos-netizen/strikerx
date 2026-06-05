@@ -350,9 +350,7 @@ export async function customFetch<T = unknown>(
   }
 
   if (!headers.has("authorization")) {
-    const isAdminRoute = requestInfo.url.includes('/api/admin') || requestInfo.url.includes('/api/auth/admin');
-    const tokenKey = isAdminRoute ? 'strikerx_admin_token' : 'strikerx_token';
-    const token = localStorage.getItem(tokenKey);
+    const token = localStorage.getItem('strikerx_token') || localStorage.getItem('strikerx_admin_token');
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
