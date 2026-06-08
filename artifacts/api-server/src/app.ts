@@ -1,5 +1,5 @@
 import express from "express";
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
@@ -42,6 +42,9 @@ app.use(
 
 // CORS — allow configured origins; defaults to all in dev, locked to domain in prod
 const corsOrigin = process.env.CORS_ORIGIN;
+if (!corsOrigin && process.env.NODE_ENV === "production") {
+  logger.warn("CORS_ORIGIN is not set — all origins are allowed. Set CORS_ORIGIN for production.");
+}
 app.use(
   cors(
     corsOrigin
@@ -61,6 +64,15 @@ app.use(
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Global error handler — must have 4 params so Express recognises it as error middleware
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error({ err }, "Unhandled error");
+  const status = (err as Error & { status?: number; statusCode?: number }).status
+    ?? (err as Error & { status?: number; statusCode?: number }).statusCode
+    ?? 500;
+  res.status(status).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+});
 
 // Initialize config, bots, jackpot, and auto-register webhooks
 (async () => {

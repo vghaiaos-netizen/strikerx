@@ -5,6 +5,10 @@ import { logger } from "./logger";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-prod";
 
+if (!process.env.JWT_SECRET) {
+  logger.warn("JWT_SECRET not set — using insecure dev fallback. Set a strong secret in production.");
+}
+
 export interface JwtPayload {
   playerId: number;
   telegramId: string;
