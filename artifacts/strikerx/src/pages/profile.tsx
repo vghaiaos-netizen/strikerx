@@ -11,7 +11,7 @@ import {
   useClaimCashback,
   useRedeemBoot,
 } from "@workspace/api-client-react";
-import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp, Star, ChevronRight, Users, Percent, ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
+import { Trophy, Copy, Check, LogOut, Zap, Target, TrendingUp, Star, ChevronRight, Users, Percent, ShoppingBag, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -27,11 +27,15 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export function Profile() {
-  const { player, setToken } = useAuth();
+  const { player, token, setToken } = useAuth();
   const { toast } = useToast();
   const [copied, setCopied]       = useState(false);
   const [bootAmount, setBootAmount] = useState("");
   const [showBootShop, setShowBootShop] = useState(false);
+  const [kycFullName, setKycFullName]   = useState("");
+  const [kycCountry, setKycCountry]     = useState("");
+  const [kycDocType, setKycDocType]     = useState("passport");
+  const [kycSubmitting, setKycSubmitting] = useState(false);
 
   const { data: stats }    = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey() } });
   const { data: streak }   = useGetMyStreak({ query: { queryKey: getGetMyStreakQueryKey() } });
@@ -399,6 +403,114 @@ export function Profile() {
             )}
           </div>
         )}
+
+        {/* ── KYC Identity Verification ── */}
+        {(() => {
+          const kycStatus = (player as Record<string, unknown>)?.kycStatus as string ?? "none";
+          return (
+            <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+              <div className="flex items-center gap-2 mb-4">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm font-mono font-semibold">Identity Verification (KYC)</span>
+              </div>
+
+              {kycStatus === "verified" && (
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <ShieldCheck className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-mono font-bold text-emerald-400">Verified</div>
+                    <div className="text-xs text-white/50 mt-0.5">Your identity has been verified. Withdrawal limits are fully unlocked.</div>
+                  </div>
+                </div>
+              )}
+
+              {kycStatus === "pending" && (
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                  <Loader2 className="w-5 h-5 text-yellow-400 animate-spin flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-mono font-bold text-yellow-400">Under Review</div>
+                    <div className="text-xs text-white/50 mt-0.5">Our team is reviewing your submission. This usually takes 24–48 hours.</div>
+                  </div>
+                </div>
+              )}
+
+              {(kycStatus === "none" || kycStatus === "rejected" || !kycStatus) && (
+                <div className="space-y-3">
+                  {kycStatus === "rejected" && (
+                    <div className="text-xs font-mono text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                      Your previous submission was rejected. Please re-submit with valid details.
+                    </div>
+                  )}
+                  {kycStatus === "none" && (
+                    <p className="text-xs text-white/50">
+                      Verify your identity to unlock full withdrawal limits and higher daily limits.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-mono text-white/40 block mb-1">Full Name</label>
+                      <input
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
+                        placeholder="As on your ID"
+                        value={kycFullName}
+                        onChange={e => setKycFullName(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono text-white/40 block mb-1">Country</label>
+                      <input
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
+                        placeholder="e.g. Nigeria"
+                        value={kycCountry}
+                        onChange={e => setKycCountry(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono text-white/40 block mb-1">Document Type</label>
+                    <select
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
+                      value={kycDocType}
+                      onChange={e => setKycDocType(e.target.value)}
+                    >
+                      <option value="passport">Passport</option>
+                      <option value="national_id">National ID</option>
+                      <option value="drivers_license">Driver's License</option>
+                    </select>
+                  </div>
+                  <Button
+                    className="w-full font-mono text-xs h-9 gap-2"
+                    disabled={kycSubmitting || !kycFullName.trim() || !kycCountry.trim()}
+                    onClick={async () => {
+                      setKycSubmitting(true);
+                      try {
+                        const r = await fetch("/api/players/me/kyc", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+                          body: JSON.stringify({ fullName: kycFullName.trim(), country: kycCountry.trim(), docType: kycDocType }),
+                        });
+                        if (r.ok) {
+                          toast({ title: "KYC submitted!", description: "We'll review your request within 24–48 hours." });
+                          setKycFullName(""); setKycCountry("");
+                        } else {
+                          const d = await r.json() as { error?: string };
+                          toast({ title: "Submission failed", description: d.error ?? "Please try again.", variant: "destructive" });
+                        }
+                      } catch {
+                        toast({ title: "Network error", variant: "destructive" });
+                      } finally {
+                        setKycSubmitting(false);
+                      }
+                    }}
+                  >
+                    {kycSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    Submit for Verification
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       </div>
     </Layout>
