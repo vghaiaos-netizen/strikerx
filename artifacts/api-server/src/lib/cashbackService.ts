@@ -126,8 +126,7 @@ export async function claimCashback(playerId: number) {
     });
   }
 
-  const newBalance = player.strikerBalance + pendingStriker;
-  await db.update(playersTable).set({ strikerBalance: newBalance }).where(eq(playersTable.id, playerId));
+  await db.update(playersTable).set({ strikerBalance: sql`${playersTable.strikerBalance} + ${pendingStriker}` }).where(eq(playersTable.id, playerId));
 
   await db.insert(transactionsTable).values({
     playerId,
@@ -136,5 +135,6 @@ export async function claimCashback(playerId: number) {
     status: "completed",
   });
 
-  return { claimedStriker: pendingStriker, newBalance, period };
+  const [updated] = await db.select({ strikerBalance: playersTable.strikerBalance }).from(playersTable).where(eq(playersTable.id, playerId));
+  return { claimedStriker: pendingStriker, newBalance: updated?.strikerBalance ?? 0, period };
 }

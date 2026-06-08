@@ -5,6 +5,7 @@ import { requireAdmin } from "../lib/auth";
 import { broadcastMessage } from "../lib/groupBot";
 import { logger } from "../lib/logger";
 import { getAllConfig, setConfig, getConfig, getConfigFloat } from "../lib/configService";
+import { processCryptoBotTransfer } from "../lib/cryptobotService";
 
 const router: IRouter = Router();
 
@@ -256,12 +257,27 @@ router.post("/admin/withdrawals/:id/approve", requireAdmin, async (req, res): Pr
   const id = parseInt(String(req.params.id), 10);
   const [withdrawal] = await db.select().from(withdrawalsTable).where(eq(withdrawalsTable.id, id));
   if (!withdrawal) { res.status(404).json({ error: "Withdrawal not found" }); return; }
+  if (withdrawal.status !== "under_review") {
+    res.status(400).json({ error: `Withdrawal is already ${withdrawal.status}` }); return;
+  }
 
   await db.update(withdrawalsTable).set({ status: "approved", reviewedBy: "admin" }).where(eq(withdrawalsTable.id, id));
   await db.update(playersTable).set({ firstWithdrawalReviewed: true }).where(eq(playersTable.id, withdrawal.playerId));
   await db.insert(auditLogTable).values({ adminAction: "approve_withdrawal", targetPlayerId: withdrawal.playerId, newValue: `${withdrawal.amountTon} TON`, performedBy: "admin" });
 
   const [player] = await db.select().from(playersTable).where(eq(playersTable.id, withdrawal.playerId));
+
+  // Trigger actual CryptoBot payout now that review is done
+  if (player) {
+    processCryptoBotTransfer(
+      withdrawal.id,
+      Number(player.telegramId),
+      withdrawal.amountTon,
+      withdrawal.destinationAddress,
+      player.username,
+    ).catch((err) => logger.error({ err }, "CryptoBot transfer failed after admin approval"));
+  }
+
   res.json({ id: withdrawal.id, status: "approved", username: player?.username ?? "Unknown", amountTon: withdrawal.amountTon, destinationAddress: withdrawal.destinationAddress });
 });
 
@@ -269,12 +285,15 @@ router.post("/admin/withdrawals/:id/reject", requireAdmin, async (req, res): Pro
   const id = parseInt(String(req.params.id), 10);
   const [withdrawal] = await db.select().from(withdrawalsTable).where(eq(withdrawalsTable.id, id));
   if (!withdrawal) { res.status(404).json({ error: "Withdrawal not found" }); return; }
+  if (withdrawal.status !== "under_review") {
+    res.status(400).json({ error: `Withdrawal is already ${withdrawal.status}` }); return;
+  }
 
   await db.update(withdrawalsTable).set({ status: "rejected", reviewedBy: "admin" }).where(eq(withdrawalsTable.id, id));
-  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, withdrawal.playerId));
-  if (player) {
-    await db.update(playersTable).set({ strikerBalance: player.strikerBalance + withdrawal.amountStriker }).where(eq(playersTable.id, withdrawal.playerId));
-  }
+  // Atomic refund — no stale-read race
+  await db.update(playersTable)
+    .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${withdrawal.amountStriker}` })
+    .where(eq(playersTable.id, withdrawal.playerId));
   await db.insert(auditLogTable).values({ adminAction: "reject_withdrawal", targetPlayerId: withdrawal.playerId, newValue: `${withdrawal.amountTon} TON refunded`, performedBy: "admin" });
   res.json({ id: withdrawal.id, status: "rejected", amountStriker: withdrawal.amountStriker, note: "Balance refunded" });
 });

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { db, crashRoundsTable, gamesTable, playersTable, transactionsTable, jackpotTable } from "@workspace/db";
-import { eq, count } from "drizzle-orm";
+import { eq, count, sql } from "drizzle-orm";
 import { checkAndAward } from "./achievementsService";
 import { logger } from "./logger";
 import { broadcastBigWin, broadcastJackpot } from "./groupBot";
@@ -205,30 +205,28 @@ class CrashEngine {
     if (player.isBanned) return { success: false, error: "Account banned" };
     if (player.strikerBalance < betStriker) return { success: false, error: "Insufficient balance" };
 
-    // Jackpot contribution
+    // Jackpot contribution — atomic increment to avoid concurrent-bet race
     const jackpotContrib = calculateJackpotContribution(betStriker);
-    const [jackpot] = await db.select().from(jackpotTable).limit(1);
-    if (jackpot) {
-      await db
-        .update(jackpotTable)
-        .set({
-          currentAmountTon: jackpot.currentAmountTon + jackpotContrib,
-          status: jackpot.currentAmountTon + jackpotContrib >= parseFloat(process.env.JACKPOT_MIN_POOL ?? "50") ? "ready" : "building",
-        })
-        .where(eq(jackpotTable.id, jackpot.id));
-    }
+    const minPool = parseFloat(process.env.JACKPOT_MIN_POOL ?? "50");
+    await db
+      .update(jackpotTable)
+      .set({
+        currentAmountTon: sql`${jackpotTable.currentAmountTon} + ${jackpotContrib}`,
+        status: sql`CASE WHEN ${jackpotTable.currentAmountTon} + ${jackpotContrib} >= ${minPool} THEN 'ready' ELSE 'building' END`,
+      });
 
     const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
     const betTon = betStriker / depositRate;
     const newTonWagered = player.tonWageredLifetime + betTon;
     const newVip = getVipTier(newTonWagered);
 
+    const bootEarned = calculateBootEarned(betStriker);
     await db.update(playersTable).set({
-      strikerBalance: player.strikerBalance - betStriker,
-      strikerWageredSinceBonus: player.strikerWageredSinceBonus + betStriker,
+      strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
+      strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
       tonWageredLifetime: newTonWagered,
       vipTier: newVip,
-      bootBalance: player.bootBalance + calculateBootEarned(betStriker),
+      bootBalance: sql`${playersTable.bootBalance} + ${bootEarned}`,
       lastActive: new Date(),
     }).where(eq(playersTable.id, playerId));
 
@@ -283,11 +281,11 @@ class CrashEngine {
     bet.cashoutMultiplier = cashoutMult;
     bet.winAmount = winAmount;
 
-    // Credit player
-    const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-    if (player) {
-      await db.update(playersTable).set({ strikerBalance: player.strikerBalance + winAmount }).where(eq(playersTable.id, playerId));
-    }
+    // Credit player — atomic increment to avoid concurrent-cashout race
+    await db
+      .update(playersTable)
+      .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${winAmount}` })
+      .where(eq(playersTable.id, playerId));
 
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
     creditAffiliateCommission(playerId, winAmount).catch(() => {});

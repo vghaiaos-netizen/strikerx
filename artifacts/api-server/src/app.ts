@@ -13,6 +13,9 @@ import { initConfig } from "./lib/configService";
 
 const app: Express = express();
 
+// Trust the Replit reverse proxy so rate-limit can read real IPs from X-Forwarded-For
+app.set("trust proxy", 1);
+
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 

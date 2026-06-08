@@ -153,7 +153,7 @@ router.post("/players/me/streak/claim", requireAuth, async (req, res): Promise<v
     .set({
       streakDays: newStreakDays,
       lastStreakClaim: new Date(),
-      strikerBalance: player.strikerBalance + reward,
+      strikerBalance: sql`${playersTable.strikerBalance} + ${reward}`,
     })
     .where(eq(playersTable.id, playerId));
 
@@ -328,13 +328,14 @@ router.post("/players/me/boot/redeem", requireAuth, async (req, res): Promise<vo
   const redeemAmount = Math.floor(Math.min(amount, player.bootBalance));
   if (redeemAmount < 1) { res.status(400).json({ error: "Insufficient BOOT balance" }); return; }
 
-  const newBootBalance    = player.bootBalance - redeemAmount;
-  const newStrikerBalance = player.strikerBalance + redeemAmount;
-
-  await db.update(playersTable).set({ bootBalance: newBootBalance, strikerBalance: newStrikerBalance }).where(eq(playersTable.id, playerId));
+  await db.update(playersTable).set({
+    bootBalance: sql`${playersTable.bootBalance} - ${redeemAmount}`,
+    strikerBalance: sql`${playersTable.strikerBalance} + ${redeemAmount}`,
+  }).where(eq(playersTable.id, playerId));
   await db.insert(transactionsTable).values({ playerId, type: "bonus", amountStriker: redeemAmount, status: "completed" });
 
-  res.json({ redeemedBoot: redeemAmount, newStrikerBalance, newBootBalance });
+  const [updated] = await db.select({ strikerBalance: playersTable.strikerBalance, bootBalance: playersTable.bootBalance }).from(playersTable).where(eq(playersTable.id, playerId));
+  res.json({ redeemedBoot: redeemAmount, newStrikerBalance: updated?.strikerBalance ?? 0, newBootBalance: updated?.bootBalance ?? 0 });
 });
 
 export default router;

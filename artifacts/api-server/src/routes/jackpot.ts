@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, jackpotTable, playersTable, transactionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth";
 import { getConfigFloat, setConfig } from "../lib/configService";
 import { logger } from "../lib/logger";
@@ -20,7 +20,7 @@ router.get("/jackpot", async (_req, res): Promise<void> => {
     jackpot = inserted[0];
   }
 
-  const minPool = parseFloat(process.env.JACKPOT_MIN_POOL ?? "50");
+  const minPool = await getConfigFloat("jackpot_min_pool", 50);
   const percentFull = Math.min(100, (jackpot.currentAmountTon / minPool) * 100);
 
   res.json({
@@ -96,7 +96,7 @@ router.post("/admin/jackpot/trigger", requireAdmin, async (req, res): Promise<vo
 
     await db
       .update(playersTable)
-      .set({ strikerBalance: player.strikerBalance + strikerWin })
+      .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}` })
       .where(eq(playersTable.id, playerId));
 
     await db.insert(transactionsTable).values({
