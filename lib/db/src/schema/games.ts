@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, real, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, real, integer, boolean, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,7 +13,9 @@ export const gamesTable = pgTable("games", {
   sessionId: text("session_id"),
   gameData: jsonb("game_data"), // game-specific state
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("games_player_id_idx").on(t.playerId),
+]);
 
 export const crashRoundsTable = pgTable("crash_rounds", {
   id: serial("id").primaryKey(),
@@ -37,7 +39,9 @@ export const minefieldSessionsTable = pgTable("minefield_sessions", {
   currentMultiplier: real("current_multiplier").notNull().default(1.0),
   status: text("status").notNull().default("active"), // active | won | lost
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("minefield_sessions_player_id_idx").on(t.playerId),
+]);
 
 export const insertGameSchema = createInsertSchema(gamesTable).omit({ id: true, createdAt: true });
 export type InsertGame = z.infer<typeof insertGameSchema>;
