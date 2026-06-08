@@ -3,24 +3,26 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Settings, BarChart,
   ScrollText, Radio, Trophy, LogOut, ChevronRight, Zap, Flag,
-  UserCheck, Link2, Calendar
+  UserCheck, Link2, Calendar, MessageSquare
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const LINKS = [
-  { href: "/admin/dashboard",     label: "Dashboard",   icon: LayoutDashboard },
-  { href: "/admin/players",       label: "Players",     icon: Users },
-  { href: "/admin/withdrawals",   label: "Withdrawals", icon: ArrowLeftRight },
-  { href: "/admin/analytics",     label: "Analytics",   icon: BarChart },
-  { href: "/admin/tournaments",   label: "Tournaments", icon: Trophy },
-  { href: "/admin/rate-events",   label: "Rate Events", icon: Zap },
-  { href: "/admin/match-events",  label: "Match Events",icon: Calendar },
-  { href: "/admin/kyc",           label: "KYC Queue",   icon: UserCheck },
-  { href: "/admin/affiliates",    label: "Affiliates",  icon: Link2 },
-  { href: "/admin/flagged",       label: "Flagged",     icon: Flag },
-  { href: "/admin/broadcast",     label: "Broadcast",   icon: Radio },
-  { href: "/admin/config",        label: "Config",      icon: Settings },
-  { href: "/admin/audit-log",     label: "Audit Log",   icon: ScrollText },
+  { href: "/admin/dashboard",    label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/admin/players",      label: "Players",     icon: Users },
+  { href: "/admin/withdrawals",  label: "Withdrawals", icon: ArrowLeftRight },
+  { href: "/admin/analytics",    label: "Analytics",   icon: BarChart },
+  { href: "/admin/tournaments",  label: "Tournaments", icon: Trophy },
+  { href: "/admin/jackpot",      label: "Jackpot",     icon: Trophy },
+  { href: "/admin/rate-events",  label: "Rate Events", icon: Zap },
+  { href: "/admin/match-events", label: "Match Events",icon: Calendar },
+  { href: "/admin/kyc",          label: "KYC Queue",   icon: UserCheck },
+  { href: "/admin/affiliates",   label: "Affiliates",  icon: Link2 },
+  { href: "/admin/inbox",        label: "Inbox Log",   icon: MessageSquare },
+  { href: "/admin/flagged",      label: "Flagged",     icon: Flag },
+  { href: "/admin/broadcast",    label: "Broadcast",   icon: Radio },
+  { href: "/admin/config",       label: "Config",      icon: Settings },
+  { href: "/admin/audit-log",    label: "Audit Log",   icon: ScrollText },
 ];
 
 export function AdminLayout({ children }: { children: ReactNode }) {

@@ -34,6 +34,8 @@ import { AdminFlagged } from "./pages/admin/flagged";
 import { AdminMatchEvents } from "./pages/admin/match-events";
 import { AdminKyc } from "./pages/admin/kyc";
 import { AdminAffiliates } from "./pages/admin/affiliates";
+import { AdminJackpot } from "./pages/admin/jackpot";
+import { AdminInbox } from "./pages/admin/inbox";
 
 const queryClient = new QueryClient();
 
@@ -69,6 +71,8 @@ function Router() {
       <Route path="/admin/match-events" component={AdminMatchEvents} />
       <Route path="/admin/kyc" component={AdminKyc} />
       <Route path="/admin/affiliates" component={AdminAffiliates} />
+      <Route path="/admin/jackpot" component={AdminJackpot} />
+      <Route path="/admin/inbox" component={AdminInbox} />
 
       <Route component={NotFound} />
     </Switch>
