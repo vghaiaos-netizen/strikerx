@@ -110,8 +110,40 @@ export async function initGroupBotScheduler(): Promise<void> {
     return;
   }
 
-  // Commands are now handled by the standalone GroupBot service (artifacts/groupbot/).
-  // The API server only schedules auto-broadcasts via direct sendMessage calls (no polling).
+  // Set up bot commands for admin
+  bot.command("stats", async (ctx) => {
+    try {
+      const { db, playersTable } = await import("@workspace/db");
+      const { sql } = await import("drizzle-orm");
+      const [count] = await db.select({ count: sql`COUNT(*)` }).from(playersTable);
+      ctx.reply(`Players: ${count?.count ?? 0}`);
+    } catch (err) {
+      ctx.reply("Error fetching stats");
+    }
+  });
+
+  bot.command("jackpot", async (ctx) => {
+    await broadcastJackpotUpdate();
+    ctx.reply("Jackpot announcement sent");
+  });
+
+  bot.command("broadcast", async (ctx) => {
+    const message = ctx.message.text.replace("/broadcast ", "");
+    if (message && message !== "/broadcast") {
+      await broadcastMessage(message);
+      ctx.reply("Broadcast sent");
+    }
+  });
+
+  // Set up polling or webhook
+  const webhookUrl = process.env.WEBHOOK_URL;
+  if (webhookUrl) {
+    await bot.telegram.setWebhook(`${webhookUrl}/api/bots/groupbot`);
+    logger.info("GroupBot webhook set");
+  } else {
+    bot.launch({ dropPendingUpdates: true });
+    logger.info("GroupBot polling started");
+  }
 
   // Schedule jackpot broadcasts every 30 minutes
   setInterval(() => {
@@ -120,7 +152,7 @@ export async function initGroupBotScheduler(): Promise<void> {
 
   // Schedule morning message at 9am UTC
   const scheduleDaily = () => {
-    const now    = new Date();
+    const now = new Date();
     const next9am = new Date();
     next9am.setUTCHours(9, 0, 0, 0);
     if (next9am <= now) next9am.setDate(next9am.getDate() + 1);
@@ -132,5 +164,5 @@ export async function initGroupBotScheduler(): Promise<void> {
   };
   scheduleDaily();
 
-  logger.info("GroupBot scheduler initialized (broadcast-only; commands handled by standalone groupbot service)");
+  logger.info("GroupBot scheduler initialized");
 }

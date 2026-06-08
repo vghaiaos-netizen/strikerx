@@ -4,8 +4,8 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 const VIP_CASHBACK_RATES: Record<string, number> = {
   sunday_league: 0,
   championship: 0.02,
-  premier_league: 0.05,
-  champions_league: 0.08,
+  premier_league: 0.03,
+  champions_league: 0.05,
   world_cup: 0.08,
 };
 

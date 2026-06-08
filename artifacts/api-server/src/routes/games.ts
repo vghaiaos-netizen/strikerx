@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable, referralsTable } from "@workspace/db";
-import { eq, desc, count, and, sql } from "drizzle-orm";
+import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable } from "@workspace/db";
+import { eq, desc, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import {
   playPenalty,
@@ -11,20 +11,18 @@ import {
   shouldTriggerJackpot,
   getVipTier,
   calculateBootEarned,
-  getReferralRate,
 } from "../lib/gameEngine";
 import { crashEngine } from "../lib/crashEngine";
 import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
 import { checkAndAward } from "../lib/achievementsService";
-import { sendJackpotWin } from "../services/telegramNotify";
 
 const router: IRouter = Router();
 
 // ─── Helper: check & trigger jackpot ─────────────────────────────────────────
 
-async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string, gameName: string) {
+async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string) {
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (!jackpot || jackpot.status !== "ready") return null;
   if (!shouldTriggerJackpot(jackpot.currentAmountTon, betStriker)) return null;
@@ -42,69 +40,10 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
   }).where(eq(jackpotTable.id, jackpot.id));
 
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
-
-  // Credit STRIKER + 1 CAPTAIN token atomically
-  await db.update(playersTable)
-    .set({
-      strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}`,
-      captainBalance: sql`${playersTable.captainBalance} + 1`,
-    })
-    .where(eq(playersTable.id, playerId));
-
-  await db.insert(transactionsTable).values({ playerId, type: "captain_award", captainAmount: 1, status: "completed" });
+  await db.update(playersTable).set({ strikerBalance: db.select().from(playersTable).where(eq(playersTable.id, playerId)) as unknown as number }).where(eq(playersTable.id, playerId));
 
   broadcastJackpot(username, winnerAmount).catch((err) => logger.error({ err }, "Failed to broadcast jackpot"));
-
-  // Push Telegram notification to winner (fire-and-forget)
-  db.select({ telegramId: playersTable.telegramId }).from(playersTable).where(eq(playersTable.id, playerId))
-    .then(([p]) => { if (p?.telegramId) sendJackpotWin(p.telegramId, Math.round(strikerWin), gameName); })
-    .catch(() => {});
-
   return { triggered: true, amountTon: winnerAmount, strikerWin };
-}
-
-// ─── Helper: pay referral earnings on every bet ───────────────────────────────
-
-async function payReferralEarnings(betterPlayerId: number, betStriker: number) {
-  try {
-    const [better] = await db.select({ referredBy: playersTable.referredBy }).from(playersTable).where(eq(playersTable.id, betterPlayerId));
-    if (!better?.referredBy) return;
-
-    // Tier 1 — direct referrer
-    const [tier1] = await db.select().from(playersTable).where(eq(playersTable.referralCode, better.referredBy));
-    if (!tier1) return;
-
-    const tier1Rate = getReferralRate(tier1.vipTier) / 100;
-    const tier1Earning = parseFloat((betStriker * tier1Rate).toFixed(2));
-    if (tier1Earning > 0) {
-      await db.update(playersTable)
-        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${tier1Earning}` })
-        .where(eq(playersTable.id, tier1.id));
-      await db.insert(transactionsTable).values({ playerId: tier1.id, type: "referral", amountStriker: tier1Earning, status: "completed" });
-      await db.update(referralsTable)
-        .set({ earningsPaidStriker: sql`${referralsTable.earningsPaidStriker} + ${tier1Earning}`, isActive: "active" })
-        .where(and(eq(referralsTable.referrerId, tier1.id), eq(referralsTable.referredId, betterPlayerId), eq(referralsTable.tier, 1)));
-    }
-
-    // Tier 2 — referrer's referrer
-    if (!tier1.referredBy) return;
-    const [tier2] = await db.select().from(playersTable).where(eq(playersTable.referralCode, tier1.referredBy));
-    if (!tier2) return;
-
-    const tier2Rate = parseFloat(process.env.REFERRAL_TIER2_PERCENTAGE ?? "5") / 100;
-    const tier2Earning = parseFloat((betStriker * tier2Rate).toFixed(2));
-    if (tier2Earning > 0) {
-      await db.update(playersTable)
-        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${tier2Earning}` })
-        .where(eq(playersTable.id, tier2.id));
-      await db.insert(transactionsTable).values({ playerId: tier2.id, type: "referral", amountStriker: tier2Earning, status: "completed" });
-      await db.update(referralsTable)
-        .set({ earningsPaidStriker: sql`${referralsTable.earningsPaidStriker} + ${tier2Earning}`, isActive: "active" })
-        .where(and(eq(referralsTable.referrerId, tier2.id), eq(referralsTable.referredId, betterPlayerId), eq(referralsTable.tier, 2)));
-    }
-  } catch (err) {
-    logger.error({ err }, "payReferralEarnings failed");
-  }
 }
 
 // ─── THE SHOT (crash) — WebSocket-backed ─────────────────────────────────────
@@ -130,8 +69,6 @@ router.post("/games/shot/bet", requireAuth, async (req, res): Promise<void> => {
 
   const result = await crashEngine.placeBet(playerId, player.username, betStriker, autoCashout ?? null);
   if (!result.success) { res.status(400).json({ error: result.error }); return; }
-
-  payReferralEarnings(playerId, betStriker).catch(() => {});
 
   res.json({ roundId: result.roundId, betStriker, status: "placed", newBalance: player.strikerBalance - betStriker });
 });
@@ -194,9 +131,6 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
 
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
-  // Pay referral earnings (fire-and-forget)
-  payReferralEarnings(playerId, betStriker).catch(() => {});
-
   const { keeperDirection, win, multiplier } = playPenalty(direction);
   const winAmount = win ? parseFloat((betStriker * multiplier).toFixed(2)) : 0;
   const outcome = win ? "win" : "loss";
@@ -213,7 +147,7 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     gameData: { keeperDirection, direction },
   }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, "Penalty");
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (win && (winAmount >= bigWinThreshold || multiplier >= 5)) {
     broadcastBigWin(player.username, betStriker, winAmount, "Penalty").catch(() => {});
@@ -274,9 +208,6 @@ router.post("/games/minefield/start", requireAuth, async (req, res): Promise<voi
 
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
-  // Pay referral earnings (fire-and-forget)
-  payReferralEarnings(playerId, betStriker).catch(() => {});
-
   const minePositions = generateMinePositions(gridSize, mineCount);
   const [session] = await db.insert(minefieldSessionsTable).values({ playerId, betStriker, gridSize, mineCount, minePositions, revealedPositions: [] }).returning();
 
@@ -333,7 +264,7 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player", "Minefield");
+  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player");
 
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || session.currentMultiplier >= 5) {
@@ -391,9 +322,6 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
 
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
-  // Pay referral earnings (fire-and-forget)
-  payReferralEarnings(playerId, betStriker).catch(() => {});
-
   const { slot, multiplier } = playFreekick(riskLevel);
   const winAmount = parseFloat((betStriker * multiplier).toFixed(2));
   const outcome = multiplier >= 1 ? "win" : "loss";
@@ -406,7 +334,7 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
 
   const [game] = await db.insert(gamesTable).values({ playerId, gameType: "freekick", betStriker, resultMultiplier: multiplier, winAmount, outcome, gameData: { slot, riskLevel } }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, "Free Kick");
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || multiplier >= 5) {
     broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
@@ -451,7 +379,7 @@ router.get("/games/rounds/:id", async (req, res): Promise<void> => {
 
 router.get("/games/history", requireAuth, async (req, res): Promise<void> => {
   const { playerId } = req.player!;
-  const limit = Math.min(parseInt(String(req.query.limit ?? 20)), 100);
+  const limit = parseInt(String(req.query.limit ?? 20));
   const games = await db.select().from(gamesTable).where(eq(gamesTable.playerId, playerId)).orderBy(desc(gamesTable.createdAt)).limit(limit);
   res.json(games.map((g) => ({ id: g.id, gameType: g.gameType, betStriker: g.betStriker, outcome: g.outcome, multiplier: g.resultMultiplier, winAmount: g.winAmount, createdAt: g.createdAt.toISOString() })));
 });

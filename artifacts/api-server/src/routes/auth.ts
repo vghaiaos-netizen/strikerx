@@ -1,10 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, referralsTable } from "@workspace/db";
+import { db, playersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken, validateTelegramInitData } from "../lib/auth";
 import { generateReferralCode } from "../lib/referralCode";
 import { logger } from "../lib/logger";
-import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
@@ -23,6 +22,7 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
 
   const gamebotToken = process.env.GAMEBOT_TOKEN ?? "";
 
+  // In dev mode, allow test initData
   let userData: Record<string, string> | null = null;
 
   if (process.env.NODE_ENV === "development" && initData.startsWith("dev:")) {
@@ -63,7 +63,6 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     const newCode = generateReferralCode();
 
     // Find referrer if code provided
-    let referrerPlayer: typeof playersTable.$inferSelect | null = null;
     let referredByCode: string | undefined;
     if (referralCode) {
       const [referrer] = await db
@@ -72,7 +71,6 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
         .where(eq(playersTable.referralCode, referralCode));
       if (referrer) {
         referredByCode = referralCode;
-        referrerPlayer = referrer;
       }
     }
 
@@ -91,35 +89,6 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
       .returning();
     player = inserted[0];
     req.log.info({ telegramId, username }, "New player registered");
-
-    // Create referral records now that we have the new player's id
-    if (referrerPlayer && player) {
-      try {
-        // Tier 1 — direct referrer
-        await db.insert(referralsTable).values({
-          referrerId: referrerPlayer.id,
-          referredId: player.id,
-          tier: 1,
-        });
-
-        // Tier 2 — referrer's referrer (if they were also referred)
-        if (referrerPlayer.referredBy) {
-          const [tier2Referrer] = await db
-            .select()
-            .from(playersTable)
-            .where(eq(playersTable.referralCode, referrerPlayer.referredBy));
-          if (tier2Referrer) {
-            await db.insert(referralsTable).values({
-              referrerId: tier2Referrer.id,
-              referredId: player.id,
-              tier: 2,
-            });
-          }
-        }
-      } catch (err) {
-        logger.error({ err }, "Failed to create referral records");
-      }
-    }
   } else {
     // Update last active
     await db
@@ -168,19 +137,7 @@ router.post("/auth/admin/login", async (req, res): Promise<void> => {
   const adminUsername = process.env.ADMIN_USERNAME ?? "admin";
   const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123";
 
-  if (username !== adminUsername) {
-    req.log.warn({ username }, "Failed admin login attempt");
-    res.status(401).json({ error: "Invalid credentials" });
-    return;
-  }
-
-  // Support bcrypt-hashed passwords (starts with $2b$ or $2a$) for production hardening.
-  // To hash: node -e "const b=require('bcryptjs');b.hash('yourpassword',12).then(console.log)"
-  const passwordMatch = adminPassword.startsWith("$2")
-    ? await bcrypt.compare(password, adminPassword)
-    : password === adminPassword;
-
-  if (!passwordMatch) {
+  if (username !== adminUsername || password !== adminPassword) {
     req.log.warn({ username }, "Failed admin login attempt");
     res.status(401).json({ error: "Invalid credentials" });
     return;

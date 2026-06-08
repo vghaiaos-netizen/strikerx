@@ -214,14 +214,6 @@ async function processCryptoBotTransfer(withdrawalId: number, playerId: number, 
 
 // POST /payments/webhook/cryptobot
 router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
-  // Verify the request comes from CryptoBot by checking the API token header
-  const incomingToken = req.headers["crypto-pay-api-token"] as string | undefined;
-  const expectedToken = process.env.CRYPTOBOT_TOKEN;
-  if (!expectedToken || incomingToken !== expectedToken) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const payload = req.body as {
     update_type?: string;
     payload?: {

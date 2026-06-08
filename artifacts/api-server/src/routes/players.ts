@@ -165,14 +165,6 @@ router.post("/players/me/streak/claim", requireAuth, async (req, res): Promise<v
     status: "completed",
   });
 
-  // Award 1 CAPTAIN token at every 7+ day streak milestone (7, 14, 21, 28 ...)
-  if (newStreakDays >= 7 && newStreakDays % 7 === 0) {
-    await db.update(playersTable)
-      .set({ captainBalance: sql`${playersTable.captainBalance} + 1` })
-      .where(eq(playersTable.id, playerId));
-    await db.insert(transactionsTable).values({ playerId, type: "captain_award", captainAmount: 1, status: "completed" });
-  }
-
   // fire-and-forget streak achievement check
   checkAndAward(playerId, { event: "streak_claimed", streakDays: newStreakDays })
     .then(awarded => {
@@ -343,29 +335,6 @@ router.post("/players/me/boot/redeem", requireAuth, async (req, res): Promise<vo
   await db.insert(transactionsTable).values({ playerId, type: "bonus", amountStriker: redeemAmount, status: "completed" });
 
   res.json({ redeemedBoot: redeemAmount, newStrikerBalance, newBootBalance });
-});
-
-// GET /players/me/captain
-router.get("/players/me/captain", requireAuth, async (req, res): Promise<void> => {
-  const { playerId } = req.player!;
-  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
-
-  const history = await db
-    .select()
-    .from(transactionsTable)
-    .where(and(eq(transactionsTable.playerId, playerId), eq(transactionsTable.type, "captain_award")))
-    .orderBy(desc(transactionsTable.createdAt))
-    .limit(20);
-
-  res.json({
-    captainBalance: player.captainBalance,
-    history: history.map((t) => ({
-      id: t.id,
-      captainAmount: t.captainAmount ?? 1,
-      createdAt: t.createdAt.toISOString(),
-    })),
-  });
 });
 
 export default router;

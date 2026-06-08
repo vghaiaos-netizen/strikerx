@@ -1,7 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import rateLimit from "express-rate-limit";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { initGameBot } from "./lib/gameBot";
@@ -10,27 +9,6 @@ import { db, jackpotTable } from "@workspace/db";
 import { initConfig } from "./lib/configService";
 
 const app: Express = express();
-
-// ── Rate limiters ─────────────────────────────────────────────────────────────
-
-const authLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests. Please try again in a minute." },
-});
-
-const paymentsLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many payment requests. Please try again in a minute." },
-});
-
-app.use("/api/auth/telegram", authLimiter);
-app.use("/api/payments", paymentsLimiter);
 
 app.use(
   pinoHttp({

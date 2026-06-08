@@ -8,7 +8,6 @@ import jackpotRouter from "./jackpot";
 import leaderboardRouter from "./leaderboard";
 import adminRouter from "./admin";
 import botsRouter from "./bots";
-import rateEventsRouter from "./rateEvents";
 
 const router: IRouter = Router();
 
@@ -21,6 +20,5 @@ router.use(jackpotRouter);
 router.use(leaderboardRouter);
 router.use(adminRouter);
 router.use(botsRouter);
-router.use(rateEventsRouter);
 
 export default router;
