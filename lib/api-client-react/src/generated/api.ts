@@ -28,7 +28,11 @@ import type {
   AdminPlayer,
   AdminPlayerUpdate,
   AuthToken,
+  BootRedeemInput,
+  BootRedeemResult,
   BroadcastInput,
+  CashbackClaimResult,
+  CashbackStatus,
   CrashRound,
   DepositInput,
   DepositInvoice,
@@ -43,19 +47,26 @@ import type {
   HealthStatus,
   Jackpot,
   JackpotSeedInput,
+  KycStatusResponse,
+  KycSubmitInput,
   LeaderboardEntry,
+  MatchEventStatus,
   MinefieldInput,
   MinefieldPickInput,
   MinefieldState,
   PenaltyInput,
   Player,
+  PlayerAchievement,
   PlayerStats,
+  RateEventStatus,
+  ReferralDetail,
   ReferralInfo,
   ShotBetInput,
   StreakInfo,
   TelegramAuthInput,
   Tournament,
   TournamentInput,
+  TournamentLeaderboardEntry,
   Transaction,
   WithdrawalInput,
   WithdrawalRecord,
@@ -2904,4 +2915,755 @@ export function useGetAdminAnalytics<TData = Awaited<ReturnType<typeof getAdminA
 
 
 
+
+export const getGetMyCashbackUrl = () => {
+
+
+
+
+  return `/api/players/me/cashback`
+}
+
+/**
+ * @summary Get VIP cashback status for current week
+ */
+export const getMyCashback = async ( options?: RequestInit): Promise<CashbackStatus> => {
+
+  return customFetch<CashbackStatus>(getGetMyCashbackUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyCashbackQueryKey = () => {
+    return [
+    `/api/players/me/cashback`
+    ] as const;
+    }
+
+
+export const getGetMyCashbackQueryOptions = <TData = Awaited<ReturnType<typeof getMyCashback>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyCashback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyCashbackQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyCashback>>> = ({ signal }) => getMyCashback({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyCashback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyCashbackQueryResult = NonNullable<Awaited<ReturnType<typeof getMyCashback>>>
+export type GetMyCashbackQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get VIP cashback status for current week
+ */
+
+export function useGetMyCashback<TData = Awaited<ReturnType<typeof getMyCashback>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyCashback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyCashbackQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getClaimCashbackUrl = () => {
+
+
+
+
+  return `/api/players/me/cashback/claim`
+}
+
+/**
+ * @summary Claim weekly VIP cashback
+ */
+export const claimCashback = async ( options?: RequestInit): Promise<CashbackClaimResult> => {
+
+  return customFetch<CashbackClaimResult>(getClaimCashbackUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getClaimCashbackMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimCashback>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof claimCashback>>, TError,void, TContext> => {
+
+const mutationKey = ['claimCashback'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimCashback>>, void> = () => {
+
+
+          return  claimCashback(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClaimCashbackMutationResult = NonNullable<Awaited<ReturnType<typeof claimCashback>>>
+
+    export type ClaimCashbackMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Claim weekly VIP cashback
+ */
+export const useClaimCashback = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimCashback>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof claimCashback>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClaimCashbackMutationOptions(options));
+    }
+
+export const getGetMyAchievementsUrl = () => {
+
+
+
+
+  return `/api/players/me/achievements`
+}
+
+/**
+ * @summary Get all achievements (unlocked and locked)
+ */
+export const getMyAchievements = async ( options?: RequestInit): Promise<PlayerAchievement[]> => {
+
+  return customFetch<PlayerAchievement[]>(getGetMyAchievementsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyAchievementsQueryKey = () => {
+    return [
+    `/api/players/me/achievements`
+    ] as const;
+    }
+
+
+export const getGetMyAchievementsQueryOptions = <TData = Awaited<ReturnType<typeof getMyAchievements>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAchievements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyAchievementsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyAchievements>>> = ({ signal }) => getMyAchievements({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyAchievements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyAchievementsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyAchievements>>>
+export type GetMyAchievementsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get all achievements (unlocked and locked)
+ */
+
+export function useGetMyAchievements<TData = Awaited<ReturnType<typeof getMyAchievements>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAchievements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyAchievementsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMyReferralDetailUrl = () => {
+
+
+
+
+  return `/api/players/me/referrals/detail`
+}
+
+/**
+ * @summary Get detailed referral breakdown with per-referee stats
+ */
+export const getMyReferralDetail = async ( options?: RequestInit): Promise<ReferralDetail> => {
+
+  return customFetch<ReferralDetail>(getGetMyReferralDetailUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyReferralDetailQueryKey = () => {
+    return [
+    `/api/players/me/referrals/detail`
+    ] as const;
+    }
+
+
+export const getGetMyReferralDetailQueryOptions = <TData = Awaited<ReturnType<typeof getMyReferralDetail>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReferralDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyReferralDetailQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReferralDetail>>> = ({ signal }) => getMyReferralDetail({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyReferralDetail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyReferralDetailQueryResult = NonNullable<Awaited<ReturnType<typeof getMyReferralDetail>>>
+export type GetMyReferralDetailQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get detailed referral breakdown with per-referee stats
+ */
+
+export function useGetMyReferralDetail<TData = Awaited<ReturnType<typeof getMyReferralDetail>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReferralDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyReferralDetailQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getRedeemBootUrl = () => {
+
+
+
+
+  return `/api/players/me/boot/redeem`
+}
+
+/**
+ * @summary Convert BOOT tokens to STRIKER at 1:1 rate
+ */
+export const redeemBoot = async (bootRedeemInput: BootRedeemInput, options?: RequestInit): Promise<BootRedeemResult> => {
+
+  return customFetch<BootRedeemResult>(getRedeemBootUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bootRedeemInput,)
+  }
+);}
+
+
+
+
+export const getRedeemBootMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemBoot>>, TError,{data: BodyType<BootRedeemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof redeemBoot>>, TError,{data: BodyType<BootRedeemInput>}, TContext> => {
+
+const mutationKey = ['redeemBoot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof redeemBoot>>, {data: BodyType<BootRedeemInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  redeemBoot(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RedeemBootMutationResult = NonNullable<Awaited<ReturnType<typeof redeemBoot>>>
+    export type RedeemBootMutationBody = BodyType<BootRedeemInput>
+    export type RedeemBootMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Convert BOOT tokens to STRIKER at 1:1 rate
+ */
+export const useRedeemBoot = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemBoot>>, TError,{data: BodyType<BootRedeemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof redeemBoot>>,
+        TError,
+        {data: BodyType<BootRedeemInput>},
+        TContext
+      > => {
+      return useMutation(getRedeemBootMutationOptions(options));
+    }
+
+export const getGetTournamentLeaderboardUrl = (id: number,) => {
+
+
+
+
+  return `/api/tournaments/${id}/leaderboard`
+}
+
+/**
+ * @summary Get tournament leaderboard
+ */
+export const getTournamentLeaderboard = async (id: number, options?: RequestInit): Promise<TournamentLeaderboardEntry[]> => {
+
+  return customFetch<TournamentLeaderboardEntry[]>(getGetTournamentLeaderboardUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTournamentLeaderboardQueryKey = (id: number,) => {
+    return [
+    `/api/tournaments/${id}/leaderboard`
+    ] as const;
+    }
+
+
+export const getGetTournamentLeaderboardQueryOptions = <TData = Awaited<ReturnType<typeof getTournamentLeaderboard>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTournamentLeaderboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTournamentLeaderboardQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTournamentLeaderboard>>> = ({ signal }) => getTournamentLeaderboard(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTournamentLeaderboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTournamentLeaderboardQueryResult = NonNullable<Awaited<ReturnType<typeof getTournamentLeaderboard>>>
+export type GetTournamentLeaderboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get tournament leaderboard
+ */
+
+export function useGetTournamentLeaderboard<TData = Awaited<ReturnType<typeof getTournamentLeaderboard>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTournamentLeaderboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTournamentLeaderboardQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPublicRateEventUrl = () => {
+
+
+
+
+  return `/api/public/rate-event`
+}
+
+/**
+ * @summary Get active rate event status (public, no auth)
+ */
+export const getPublicRateEvent = async ( options?: RequestInit): Promise<RateEventStatus> => {
+
+  return customFetch<RateEventStatus>(getGetPublicRateEventUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicRateEventQueryKey = () => {
+    return [
+    `/api/public/rate-event`
+    ] as const;
+    }
+
+
+export const getGetPublicRateEventQueryOptions = <TData = Awaited<ReturnType<typeof getPublicRateEvent>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicRateEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicRateEventQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicRateEvent>>> = ({ signal }) => getPublicRateEvent({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicRateEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicRateEventQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicRateEvent>>>
+export type GetPublicRateEventQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get active rate event status (public, no auth)
+ */
+
+export function useGetPublicRateEvent<TData = Awaited<ReturnType<typeof getPublicRateEvent>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicRateEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicRateEventQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetPublicMatchEventUrl = () => {
+
+
+
+
+  return `/api/public/match-event`
+}
+
+/**
+ * @summary Get active match event status (public, no auth)
+ */
+export const getPublicMatchEvent = async ( options?: RequestInit): Promise<MatchEventStatus> => {
+
+  return customFetch<MatchEventStatus>(getGetPublicMatchEventUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicMatchEventQueryKey = () => {
+    return [
+    `/api/public/match-event`
+    ] as const;
+    }
+
+
+export const getGetPublicMatchEventQueryOptions = <TData = Awaited<ReturnType<typeof getPublicMatchEvent>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicMatchEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicMatchEventQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicMatchEvent>>> = ({ signal }) => getPublicMatchEvent({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicMatchEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicMatchEventQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicMatchEvent>>>
+export type GetPublicMatchEventQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get active match event status (public, no auth)
+ */
+
+export function useGetPublicMatchEvent<TData = Awaited<ReturnType<typeof getPublicMatchEvent>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicMatchEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicMatchEventQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMyKycStatusUrl = () => {
+
+
+
+
+  return `/api/players/me/kyc`
+}
+
+/**
+ * @summary Get KYC verification status
+ */
+export const getMyKycStatus = async ( options?: RequestInit): Promise<KycStatusResponse> => {
+
+  return customFetch<KycStatusResponse>(getGetMyKycStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyKycStatusQueryKey = () => {
+    return [
+    `/api/players/me/kyc`
+    ] as const;
+    }
+
+
+export const getGetMyKycStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMyKycStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyKycStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyKycStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyKycStatus>>> = ({ signal }) => getMyKycStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyKycStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyKycStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMyKycStatus>>>
+export type GetMyKycStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get KYC verification status
+ */
+
+export function useGetMyKycStatus<TData = Awaited<ReturnType<typeof getMyKycStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyKycStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyKycStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSubmitKycUrl = () => {
+
+
+
+
+  return `/api/players/me/kyc`
+}
+
+/**
+ * @summary Submit KYC verification request
+ */
+export const submitKyc = async (kycSubmitInput: KycSubmitInput, options?: RequestInit): Promise<KycStatusResponse> => {
+
+  return customFetch<KycStatusResponse>(getSubmitKycUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      kycSubmitInput,)
+  }
+);}
+
+
+
+
+export const getSubmitKycMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitKyc>>, TError,{data: BodyType<KycSubmitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitKyc>>, TError,{data: BodyType<KycSubmitInput>}, TContext> => {
+
+const mutationKey = ['submitKyc'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitKyc>>, {data: BodyType<KycSubmitInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitKyc(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitKycMutationResult = NonNullable<Awaited<ReturnType<typeof submitKyc>>>
+    export type SubmitKycMutationBody = BodyType<KycSubmitInput>
+    export type SubmitKycMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Submit KYC verification request
+ */
+export const useSubmitKyc = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitKyc>>, TError,{data: BodyType<KycSubmitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitKyc>>,
+        TError,
+        {data: BodyType<KycSubmitInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitKycMutationOptions(options));
+    }
 

@@ -772,3 +772,147 @@ export const GetAdminAnalyticsResponse = zod.object({
 })
 
 
+/**
+ * @summary Get VIP cashback status for current week
+ */
+export const GetMyCashbackResponse = zod.object({
+  "period": zod.string(),
+  "vipTier": zod.string(),
+  "cashbackRate": zod.number(),
+  "estimatedLossesStriker": zod.number(),
+  "pendingStriker": zod.number(),
+  "claimedThisPeriod": zod.boolean(),
+  "canClaim": zod.boolean(),
+  "nextClaimAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Claim weekly VIP cashback
+ */
+export const ClaimCashbackResponse = zod.object({
+  "claimedStriker": zod.number(),
+  "newBalance": zod.number(),
+  "period": zod.string()
+})
+
+
+/**
+ * @summary Get all achievements (unlocked and locked)
+ */
+export const GetMyAchievementsResponseItem = zod.object({
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "rarity": zod.enum(['common', 'rare', 'epic', 'legendary']),
+  "unlockedAt": zod.string().nullish(),
+  "metadata": zod.object({
+
+}).passthrough().nullish()
+})
+export const GetMyAchievementsResponse = zod.array(GetMyAchievementsResponseItem)
+
+
+/**
+ * @summary Get detailed referral breakdown with per-referee stats
+ */
+export const GetMyReferralDetailResponse = zod.object({
+  "code": zod.string(),
+  "referralLink": zod.string(),
+  "totalReferred": zod.number(),
+  "totalEarned": zod.number(),
+  "tier1Earnings": zod.number(),
+  "tier2Earnings": zod.number(),
+  "referees": zod.array(zod.object({
+  "username": zod.string(),
+  "tier": zod.number(),
+  "earnedStriker": zod.number(),
+  "joinedAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Convert BOOT tokens to STRIKER at 1:1 rate
+ */
+export const RedeemBootBody = zod.object({
+  "amount": zod.number()
+})
+
+export const RedeemBootResponse = zod.object({
+  "redeemedBoot": zod.number(),
+  "newStrikerBalance": zod.number(),
+  "newBootBalance": zod.number()
+})
+
+
+/**
+ * @summary Get tournament leaderboard
+ */
+export const GetTournamentLeaderboardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetTournamentLeaderboardResponseItem = zod.object({
+  "rank": zod.number(),
+  "playerId": zod.number(),
+  "username": zod.string(),
+  "score": zod.number(),
+  "prize": zod.number()
+})
+export const GetTournamentLeaderboardResponse = zod.array(GetTournamentLeaderboardResponseItem)
+
+
+/**
+ * @summary Get active rate event status (public, no auth)
+ */
+export const GetPublicRateEventResponse = zod.object({
+  "active": zod.boolean(),
+  "depositRate": zod.number(),
+  "endsAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get active match event status (public, no auth)
+ */
+export const GetPublicMatchEventResponse = zod.object({
+  "active": zod.boolean(),
+  "teamA": zod.string(),
+  "teamB": zod.string(),
+  "bonusMultiplier": zod.number(),
+  "endsAt": zod.string().nullish(),
+  "label": zod.string()
+})
+
+
+/**
+ * @summary Get KYC verification status
+ */
+export const GetMyKycStatusResponse = zod.object({
+  "status": zod.enum(['none', 'pending', 'verified', 'rejected']),
+  "submittedAt": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "reviewNote": zod.string().nullish(),
+  "message": zod.string().nullish()
+})
+
+
+/**
+ * @summary Submit KYC verification request
+ */
+export const SubmitKycBody = zod.object({
+  "fullName": zod.string(),
+  "country": zod.string(),
+  "docType": zod.enum(['passport', 'national_id', 'drivers_license'])
+})
+
+export const SubmitKycResponse = zod.object({
+  "status": zod.enum(['none', 'pending', 'verified', 'rejected']),
+  "submittedAt": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "reviewNote": zod.string().nullish(),
+  "message": zod.string().nullish()
+})
+
+

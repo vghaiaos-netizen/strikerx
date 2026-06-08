@@ -522,6 +522,133 @@ export interface AdminAnalytics {
   vipDistribution: AdminAnalyticsVipDistribution;
 }
 
+export interface CashbackStatus {
+  period: string;
+  vipTier: string;
+  cashbackRate: number;
+  estimatedLossesStriker: number;
+  pendingStriker: number;
+  claimedThisPeriod: boolean;
+  canClaim: boolean;
+  nextClaimAt?: string | null;
+}
+
+export interface CashbackClaimResult {
+  claimedStriker: number;
+  newBalance: number;
+  period: string;
+}
+
+export type PlayerAchievementRarity = typeof PlayerAchievementRarity[keyof typeof PlayerAchievementRarity];
+
+
+export const PlayerAchievementRarity = {
+  common: 'common',
+  rare: 'rare',
+  epic: 'epic',
+  legendary: 'legendary',
+} as const;
+
+export type PlayerAchievementMetadata = { [key: string]: unknown } | null;
+
+export interface PlayerAchievement {
+  key: string;
+  title: string;
+  description: string;
+  rarity: PlayerAchievementRarity;
+  unlockedAt?: string | null;
+  metadata?: PlayerAchievementMetadata;
+}
+
+export interface RefereeEntry {
+  username: string;
+  tier: number;
+  earnedStriker: number;
+  joinedAt: string;
+}
+
+export interface ReferralDetail {
+  code: string;
+  referralLink: string;
+  totalReferred: number;
+  totalEarned: number;
+  tier1Earnings: number;
+  tier2Earnings: number;
+  referees: RefereeEntry[];
+}
+
+export interface TournamentLeaderboardEntry {
+  rank: number;
+  playerId: number;
+  username: string;
+  score: number;
+  prize: number;
+}
+
+export interface BootRedeemInput {
+  amount: number;
+}
+
+export interface BootRedeemResult {
+  redeemedBoot: number;
+  newStrikerBalance: number;
+  newBootBalance: number;
+}
+
+export interface RateEventStatus {
+  active: boolean;
+  depositRate: number;
+  /** @nullable */
+  endsAt?: string | null;
+}
+
+export interface MatchEventStatus {
+  active: boolean;
+  teamA: string;
+  teamB: string;
+  bonusMultiplier: number;
+  /** @nullable */
+  endsAt?: string | null;
+  label: string;
+}
+
+export type KycSubmitInputDocType = typeof KycSubmitInputDocType[keyof typeof KycSubmitInputDocType];
+
+
+export const KycSubmitInputDocType = {
+  passport: 'passport',
+  national_id: 'national_id',
+  drivers_license: 'drivers_license',
+} as const;
+
+export interface KycSubmitInput {
+  fullName: string;
+  country: string;
+  docType: KycSubmitInputDocType;
+}
+
+export type KycStatusResponseStatus = typeof KycStatusResponseStatus[keyof typeof KycStatusResponseStatus];
+
+
+export const KycStatusResponseStatus = {
+  none: 'none',
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
+} as const;
+
+export interface KycStatusResponse {
+  status: KycStatusResponseStatus;
+  /** @nullable */
+  submittedAt?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  /** @nullable */
+  reviewNote?: string | null;
+  /** @nullable */
+  message?: string | null;
+}
+
 export type GetMyTransactionsParams = {
 limit?: number;
 offset?: number;
