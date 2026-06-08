@@ -513,7 +513,7 @@ router.post("/admin/rate-events/start", requireAdmin, async (req, res): Promise<
   await setConfig("rate_event_deposit_rate", String(depositRate));
   await setConfig("rate_event_ends_at", endsAt);
   await db.insert(auditLogTable).values({ adminAction: "rate_event_start", targetPlayerId: null, newValue: JSON.stringify({ depositRate, durationMinutes }), performedBy: "admin" });
-  res.json({ ok: true, depositRate, endsAt });
+  res.json({ active: true, depositRate, endsAt });
 });
 
 router.post("/admin/rate-events/end", requireAdmin, async (_req, res): Promise<void> => {
@@ -595,7 +595,7 @@ router.post("/admin/match-events/start", requireAdmin, async (req, res): Promise
     performedBy: "admin",
   });
   logger.info({ teamA, teamB, endsAt }, "Match event started");
-  res.json({ ok: true, teamA, teamB, bonusMultiplier, endsAt });
+  res.json({ active: true, teamA, teamB, bonusMultiplier, endsAt });
 });
 
 router.post("/admin/match-events/end", requireAdmin, async (_req, res): Promise<void> => {

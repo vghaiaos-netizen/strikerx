@@ -76,10 +76,11 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
       score: p.streakDays,
     }));
   } else if (type === "referrals") {
-    // Top players by referral count — single SQL GROUP BY query
+    // Top players by referral count — group by referredBy (the code used to sign up),
+    // then look up the player who owns that referral code
     const referrers = await db
       .select({
-        referralCode: playersTable.referralCode,
+        referredBy: playersTable.referredBy,
         referralCount: sql<number>`COUNT(*)`,
       })
       .from(playersTable)
@@ -91,10 +92,11 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
     entries = (
       await Promise.all(
         referrers.map(async (r, i) => {
+          if (!r.referredBy) return null;
           const [owner] = await db
             .select({ id: playersTable.id, username: playersTable.username, vipTier: playersTable.vipTier })
             .from(playersTable)
-            .where(eq(playersTable.referralCode, r.referralCode));
+            .where(eq(playersTable.referralCode, r.referredBy));
           if (!owner) return null;
           return {
             rank: i + 1,

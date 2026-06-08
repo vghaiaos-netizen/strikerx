@@ -30,6 +30,7 @@ router.get("/players/me", requireAuth, async (req, res): Promise<void> => {
     streakDays: player.streakDays,
     tonWageredLifetime: player.tonWageredLifetime,
     referralCode: player.referralCode,
+    kycStatus: player.kycStatus,
     isBanned: player.isBanned,
     isFlagged: player.isFlagged,
     wagerProgress: Math.min(100, (player.strikerWageredSinceBonus / wagerRequirement) * 100),

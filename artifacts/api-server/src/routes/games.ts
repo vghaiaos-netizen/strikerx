@@ -300,10 +300,10 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
 
 router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
   const { playerId } = req.player!;
-  const { betStriker, riskLevel = "medium" } = req.body as { betStriker: number; riskLevel: "low" | "medium" | "high" };
+  const { betStriker, riskLevel } = req.body as { betStriker: number; riskLevel: "low" | "medium" | "high" };
 
-  if (!betStriker || betStriker <= 0 || !["low", "medium", "high"].includes(riskLevel)) {
-    res.status(400).json({ error: "Invalid bet or risk level" }); return;
+  if (!betStriker || betStriker <= 0 || !riskLevel || !["low", "medium", "high"].includes(riskLevel)) {
+    res.status(400).json({ error: "Invalid bet or risk level. riskLevel must be low, medium, or high" }); return;
   }
 
   const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
