@@ -104,16 +104,26 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid bet or direction" }); return;
   }
 
-  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
-  if (player.isBanned) { res.status(403).json({ error: "Banned" }); return; }
-  if (player.strikerBalance < betStriker) { res.status(400).json({ error: "Insufficient balance" }); return; }
+  const [precheck] = await db.select({ isBanned: playersTable.isBanned }).from(playersTable).where(eq(playersTable.id, playerId));
+  if (!precheck) { res.status(404).json({ error: "Player not found" }); return; }
+  if (precheck.isBanned) { res.status(403).json({ error: "Banned" }); return; }
 
-  // Deduct bet
+  // Atomic deduction: only succeeds if balance >= betStriker at the DB level (race-safe)
   const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
   const betTon = betStriker / depositRate;
-  const newTonWagered = player.tonWageredLifetime + betTon;
   const jackpotContrib = calculateJackpotContribution(betStriker);
+  const [player] = await db.update(playersTable).set({
+    strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
+    strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
+    tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
+    lastActive: new Date(),
+  }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
+
+  if (!player) { res.status(400).json({ error: "Insufficient balance" }); return; }
+
+  const newTonWagered = parseFloat(String(player.tonWageredLifetime));
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (jackpot) {
     await db.update(jackpotTable).set({
@@ -122,25 +132,17 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     }).where(eq(jackpotTable.id, jackpot.id));
   }
 
-  await db.update(playersTable).set({
-    strikerBalance: player.strikerBalance - betStriker,
-    strikerWageredSinceBonus: player.strikerWageredSinceBonus + betStriker,
-    tonWageredLifetime: newTonWagered,
-    vipTier: getVipTier(newTonWagered),
-    bootBalance: player.bootBalance + calculateBootEarned(betStriker),
-    lastActive: new Date(),
-  }).where(eq(playersTable.id, playerId));
-
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
   const { keeperDirection, win, multiplier } = playPenalty(direction);
   const matchBonus = await getMatchEventBonus();
   const winAmount = win ? parseFloat((betStriker * multiplier * matchBonus).toFixed(2)) : 0;
   const outcome = win ? "win" : "loss";
-  const newBalance = player.strikerBalance - betStriker;
+  // player.strikerBalance is already post-deduction (from atomic UPDATE RETURNING)
+  const newBalance = parseFloat(String(player.strikerBalance));
 
   if (win) {
-    await db.update(playersTable).set({ strikerBalance: newBalance + winAmount }).where(eq(playersTable.id, playerId));
+    await db.update(playersTable).set({ strikerBalance: sql`${playersTable.strikerBalance} + ${winAmount}` }).where(eq(playersTable.id, playerId));
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
     creditAffiliateCommission(playerId, winAmount).catch(() => {});
   }
@@ -186,19 +188,26 @@ router.post("/games/minefield/start", requireAuth, async (req, res): Promise<voi
     res.status(400).json({ error: "Invalid parameters" }); return;
   }
 
-  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
-  if (player.strikerBalance < betStriker) { res.status(400).json({ error: "Insufficient balance" }); return; }
-
   // Expire any lingering active session (player abandoned without cashing out)
   await db.update(minefieldSessionsTable)
     .set({ status: "lost" })
     .where(eq(minefieldSessionsTable.playerId, playerId));
 
+  // Atomic deduction: only succeeds if balance >= betStriker at the DB level (race-safe)
   const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
   const betTon = betStriker / depositRate;
-  const newTonWagered = player.tonWageredLifetime + betTon;
   const jackpotContrib = calculateJackpotContribution(betStriker);
+  const [player] = await db.update(playersTable).set({
+    strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
+    strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
+    tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
+  }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
+
+  if (!player) { res.status(400).json({ error: "Insufficient balance" }); return; }
+
+  const newTonWagered = parseFloat(String(player.tonWageredLifetime));
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (jackpot) {
     await db.update(jackpotTable).set({
@@ -206,14 +215,6 @@ router.post("/games/minefield/start", requireAuth, async (req, res): Promise<voi
       status: jackpot.currentAmountTon + jackpotContrib >= parseFloat(process.env.JACKPOT_MIN_POOL ?? "50") ? "ready" : "building",
     }).where(eq(jackpotTable.id, jackpot.id));
   }
-
-  await db.update(playersTable).set({
-    strikerBalance: player.strikerBalance - betStriker,
-    strikerWageredSinceBonus: player.strikerWageredSinceBonus + betStriker,
-    tonWageredLifetime: newTonWagered,
-    vipTier: getVipTier(newTonWagered),
-    bootBalance: player.bootBalance + calculateBootEarned(betStriker),
-  }).where(eq(playersTable.id, playerId));
 
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
@@ -306,14 +307,25 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid bet or risk level. riskLevel must be low, medium, or high" }); return;
   }
 
-  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-  if (!player) { res.status(404).json({ error: "Player not found" }); return; }
-  if (player.strikerBalance < betStriker) { res.status(400).json({ error: "Insufficient balance" }); return; }
+  const [precheck] = await db.select({ isBanned: playersTable.isBanned }).from(playersTable).where(eq(playersTable.id, playerId));
+  if (!precheck) { res.status(404).json({ error: "Player not found" }); return; }
 
+  // Atomic deduction: only succeeds if balance >= betStriker at the DB level (race-safe)
   const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
   const betTon = betStriker / depositRate;
-  const newTonWagered = player.tonWageredLifetime + betTon;
   const jackpotContrib = calculateJackpotContribution(betStriker);
+  const [player] = await db.update(playersTable).set({
+    strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
+    strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
+    tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
+    lastActive: new Date(),
+  }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
+
+  if (!player) { res.status(400).json({ error: "Insufficient balance" }); return; }
+
+  const newTonWagered = parseFloat(String(player.tonWageredLifetime));
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (jackpot) {
     await db.update(jackpotTable).set({
@@ -322,25 +334,17 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     }).where(eq(jackpotTable.id, jackpot.id));
   }
 
-  await db.update(playersTable).set({
-    strikerBalance: player.strikerBalance - betStriker,
-    strikerWageredSinceBonus: player.strikerWageredSinceBonus + betStriker,
-    tonWageredLifetime: newTonWagered,
-    vipTier: getVipTier(newTonWagered),
-    bootBalance: player.bootBalance + calculateBootEarned(betStriker),
-    lastActive: new Date(),
-  }).where(eq(playersTable.id, playerId));
-
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
   const { slot, multiplier } = playFreekick(riskLevel);
   const matchBonus = await getMatchEventBonus();
   const winAmount = parseFloat((betStriker * multiplier * matchBonus).toFixed(2));
   const outcome = multiplier >= 1 ? "win" : "loss";
-  const newBalance = player.strikerBalance - betStriker;
+  // player.strikerBalance is already post-deduction (from atomic UPDATE RETURNING)
+  const newBalance = parseFloat(String(player.strikerBalance));
 
   if (winAmount > 0) {
-    await db.update(playersTable).set({ strikerBalance: newBalance + winAmount }).where(eq(playersTable.id, playerId));
+    await db.update(playersTable).set({ strikerBalance: sql`${playersTable.strikerBalance} + ${winAmount}` }).where(eq(playersTable.id, playerId));
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
     creditAffiliateCommission(playerId, winAmount).catch(() => {});
   }

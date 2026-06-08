@@ -45,10 +45,16 @@ export function playPenalty(playerDirection: "left" | "center" | "right"): {
   multiplier: number;
 } {
   const directions = ["left", "center", "right"] as const;
-  const keeperDirection = directions[Math.floor(Math.random() * 3)];
   const houseEdge = getHouseEdge("penalty");
-  const multiplier = parseFloat(((1 / (1 / 3)) * (1 - houseEdge)).toFixed(4)); // ~1.92x with 4% edge
-  const win = playerDirection !== keeperDirection;
+  // Win probability is 50% (keeper blocks on a coin flip).
+  // Multiplier = 2 * (1 - houseEdge) = 1.92x at 4% edge → RTP = 96%
+  const multiplier = parseFloat((2 * (1 - houseEdge)).toFixed(4));
+  const keeperBlocksShot = Math.random() < 0.5;
+  const otherDirs = directions.filter(d => d !== playerDirection);
+  const keeperDirection = keeperBlocksShot
+    ? playerDirection
+    : otherDirs[Math.floor(Math.random() * otherDirs.length)];
+  const win = !keeperBlocksShot;
   return { keeperDirection, win, multiplier };
 }
 
@@ -93,10 +99,13 @@ export function minefieldMultiplier(
 
 // ─── FREE KICK (PLINKO) ───────────────────────────────────────────────────────
 
+// Slot values are pre-calibrated so that E[slot] = 1.0 given the actual
+// Plinko ball distribution (8 rows, start center, clamped to [0,8]).
+// RTP = E[slot] * (1 - houseEdge) ≈ 96% at 4% house edge.
 const FREEKICK_SLOTS = {
-  low: [0.5, 0.8, 1.0, 1.2, 1.5, 1.2, 1.0, 0.8, 0.5],
-  medium: [0.2, 0.5, 1.0, 2.0, 5.0, 2.0, 1.0, 0.5, 0.2],
-  high: [0.1, 0.3, 0.5, 2.0, 10.0, 2.0, 0.5, 0.3, 0.1],
+  low:    [0.49, 0.79, 0.98, 1.18, 1.47, 1.18, 0.98, 0.79, 0.49],
+  medium: [0.11, 0.26, 0.53, 1.05, 2.64, 1.05, 0.53, 0.26, 0.11],
+  high:   [0.03, 0.10, 0.17, 0.66, 3.32, 0.66, 0.17, 0.10, 0.03],
 };
 
 export function playFreekick(riskLevel: "low" | "medium" | "high"): {
@@ -106,7 +115,7 @@ export function playFreekick(riskLevel: "low" | "medium" | "high"): {
   const slots = FREEKICK_SLOTS[riskLevel];
   const houseEdge = getHouseEdge("freekick");
 
-  // Weighted random selection using Plinko-like distribution
+  // Plinko-like ball drop: 8 rows from center position
   const rows = 8;
   let position = Math.floor(slots.length / 2);
   for (let i = 0; i < rows; i++) {
@@ -114,9 +123,8 @@ export function playFreekick(riskLevel: "low" | "medium" | "high"): {
     position = Math.max(0, Math.min(slots.length - 1, position));
   }
 
-  const rawMultiplier = slots[position];
-  // Apply house edge to the multiplier
-  const multiplier = parseFloat((rawMultiplier * (1 - houseEdge)).toFixed(2));
+  // Slots already calibrated to E=1; house edge applied here gives ~96% RTP
+  const multiplier = parseFloat((slots[position] * (1 - houseEdge)).toFixed(2));
 
   return { slot: position, multiplier };
 }
