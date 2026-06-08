@@ -888,6 +888,70 @@ paths:
                 items:
                   $ref: "#/components/schemas/TournamentLeaderboardEntry"
 
+  # ── PUBLIC (no auth) ────────────────────────────────────────────────────────
+
+  /public/rate-event:
+    get:
+      operationId: getPublicRateEvent
+      tags: [public]
+      summary: Get active rate event status (public, no auth)
+      responses:
+        "200":
+          description: Rate event status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateEventStatus"
+
+  /public/match-event:
+    get:
+      operationId: getPublicMatchEvent
+      tags: [public]
+      summary: Get active match event status (public, no auth)
+      responses:
+        "200":
+          description: Match event status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchEventStatus"
+
+  # ── KYC ────────────────────────────────────────────────────────────────────
+
+  /players/me/kyc:
+    get:
+      operationId: getMyKycStatus
+      tags: [players]
+      summary: Get KYC verification status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycStatusResponse"
+    post:
+      operationId: submitKyc
+      tags: [players]
+      summary: Submit KYC verification request
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycSubmitInput"
+      responses:
+        "200":
+          description: KYC submission result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycStatusResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1662,3 +1726,63 @@ components:
           type: number
         newBootBalance:
           type: number
+
+    # ── PUBLIC / EVENTS ────────────────────────────────────────────────────────
+
+    RateEventStatus:
+      type: object
+      required: [active, depositRate]
+      properties:
+        active:
+          type: boolean
+        depositRate:
+          type: number
+        endsAt:
+          type: ["string", "null"]
+
+    MatchEventStatus:
+      type: object
+      required: [active, teamA, teamB, bonusMultiplier, label]
+      properties:
+        active:
+          type: boolean
+        teamA:
+          type: string
+        teamB:
+          type: string
+        bonusMultiplier:
+          type: number
+        endsAt:
+          type: ["string", "null"]
+        label:
+          type: string
+
+    # ── KYC ────────────────────────────────────────────────────────────────────
+
+    KycSubmitInput:
+      type: object
+      required: [fullName, country, docType]
+      properties:
+        fullName:
+          type: string
+        country:
+          type: string
+        docType:
+          type: string
+          enum: [passport, national_id, drivers_license]
+
+    KycStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [none, pending, verified, rejected]
+        submittedAt:
+          type: ["string", "null"]
+        reviewedAt:
+          type: ["string", "null"]
+        reviewNote:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]

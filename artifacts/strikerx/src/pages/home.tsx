@@ -1,10 +1,13 @@
 import { useAuth } from "@/lib/auth";
 import { useTelegramAuth, useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
 
 // Dev auth bypass — uses Telegram format in dev mode
 function useDevAuth() {
@@ -16,14 +19,12 @@ function useDevAuth() {
     if (tried.current || player || isLoading || localStorage.getItem("strikerx_token")) return;
     tried.current = true;
 
-    // Try real Telegram init data first
     const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
     const initData = tg?.WebApp?.initData;
 
     if (initData) {
       telegramAuth.mutate({ data: { initData } }, { onSuccess: d => setToken(d.token) });
     } else if (import.meta.env.DEV) {
-      // Dev bypass: format is "dev:telegramId:username"
       telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
     }
   }, [player, isLoading]);
@@ -36,7 +37,6 @@ const GAMES = [
   { href: "/games/freekick",  name: "Free Kick",  sub: "Plinko",   icon: Zap,        color: "#f59e0b", bg: "from-[#f59e0b]/10" },
 ];
 
-// Mock recent wins ticker (replace with WS feed when big-win events are implemented)
 const MOCK_WINS = [
   { user: "striker_99", amount: 2840, game: "The Shot", mult: "5.23x" },
   { user: "goalie_k",   amount: 920,  game: "Penalty",  mult: "1.92x" },
@@ -54,7 +54,15 @@ export function Home() {
     query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
   });
 
-  // Cycle wins ticker
+  const { data: matchEvent } = useQuery<MatchEvent>({
+    queryKey: ["match-event"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/match-event");
+      return res.json() as Promise<MatchEvent>;
+    },
+    refetchInterval: 60_000,
+  });
+
   useEffect(() => {
     const t = setInterval(() => setTickerIdx(i => (i + 1) % MOCK_WINS.length), 3500);
     return () => clearInterval(t);
@@ -65,6 +73,48 @@ export function Home() {
   return (
     <Layout>
       <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
+
+        {/* ── Match Event Banner ── */}
+        <AnimatePresence>
+          {matchEvent?.active && (
+            <motion.div
+              initial={{ opacity: 0, y: -12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="relative overflow-hidden rounded-2xl border border-[#3b82f6]/30 bg-gradient-to-br from-[#1e3a5f]/60 via-[#0d1117] to-[#1a2a0f]/40 p-4"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,#3b82f620,transparent_70%)]" />
+              <div className="relative">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Tv2 className="w-3.5 h-3.5 text-[#3b82f6]" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#3b82f6]">
+                    {matchEvent.label}
+                  </span>
+                  <span className="ml-auto text-[10px] font-mono bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30 rounded-full px-2 py-0.5 animate-pulse">
+                    LIVE
+                  </span>
+                </div>
+                <div className="flex items-center justify-center gap-6 py-2">
+                  <div className="text-center">
+                    <div className="font-mono font-black text-xl text-white">{matchEvent.teamA}</div>
+                    <div className="text-[9px] font-mono text-white/40 mt-0.5">HOME</div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="text-[10px] font-mono text-white/30">VS</div>
+                    <div className="bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-lg px-2 py-1">
+                      <span className="font-display font-black text-sm text-[#00ff88]">{matchEvent.bonusMultiplier}x</span>
+                      <span className="text-[9px] font-mono text-[#00ff88]/60 ml-1">BONUS</span>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-mono font-black text-xl text-white">{matchEvent.teamB}</div>
+                    <div className="text-[9px] font-mono text-white/40 mt-0.5">AWAY</div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Jackpot Banner ── */}
         <div className="relative overflow-hidden rounded-2xl border border-[#f59e0b]/20 bg-gradient-to-br from-[#f59e0b]/10 via-[#0d1117] to-[#0d1117] p-4">
@@ -90,7 +140,6 @@ export function Home() {
               {jackpot?.status ?? "building"}
             </div>
           </div>
-          {/* Progress bar */}
           <div className="mt-3 bg-black/30 rounded-full h-1.5 overflow-hidden">
             <motion.div className="h-full bg-gradient-to-r from-[#f59e0b] to-[#00ff88] rounded-full"
               style={{ width: `${Math.min(pct, 100)}%` }}
@@ -153,13 +202,13 @@ export function Home() {
                 className="absolute inset-0 flex items-center px-3 gap-2"
               >
                 <div className="w-6 h-6 rounded-full bg-[#00ff88]/15 border border-[#00ff88]/20 flex items-center justify-center text-[10px] font-mono font-bold text-[#00ff88]">
-                  {MOCK_WINS[tickerIdx].user[0].toUpperCase()}
+                  {MOCK_WINS[tickerIdx]!.user[0]!.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-xs text-white font-semibold">{MOCK_WINS[tickerIdx].user}</span>
+                  <span className="font-mono text-xs text-white font-semibold">{MOCK_WINS[tickerIdx]!.user}</span>
                   <span className="font-mono text-xs text-white/40"> won </span>
-                  <span className="font-mono text-xs text-[#00ff88] font-bold">{MOCK_WINS[tickerIdx].amount.toLocaleString()} STRIKER</span>
-                  <span className="font-mono text-[10px] text-white/25"> · {MOCK_WINS[tickerIdx].game} · {MOCK_WINS[tickerIdx].mult}</span>
+                  <span className="font-mono text-xs text-[#00ff88] font-bold">{MOCK_WINS[tickerIdx]!.amount.toLocaleString()} STRIKER</span>
+                  <span className="font-mono text-[10px] text-white/25"> · {MOCK_WINS[tickerIdx]!.game} · {MOCK_WINS[tickerIdx]!.mult}</span>
                 </div>
               </motion.div>
             </AnimatePresence>
@@ -170,4 +219,3 @@ export function Home() {
     </Layout>
   );
 }
-

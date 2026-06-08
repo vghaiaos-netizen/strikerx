@@ -6,3 +6,4 @@ export * from "./tournaments";
 export * from "./referrals";
 export * from "./config";
 export * from "./achievements";
+export * from "./affiliates";
