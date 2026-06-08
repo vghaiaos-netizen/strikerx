@@ -3,25 +3,55 @@ import { Link, useLocation } from "wouter";
 import { Home, Trophy, User, Wallet, Star } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
+import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
+import { motion } from "framer-motion";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { player } = useAuth();
 
+  const { data: jackpot } = useGetJackpot({
+    query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
+  });
+
+  const pct = jackpot?.percentFull ?? 0;
+  const isReady = jackpot?.status === "ready";
+
   return (
     <div className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-background flex flex-col relative overflow-hidden text-foreground">
-      <header className="sticky top-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <Link href="/">
-          <span className="font-mono font-bold text-xl text-primary tracking-tighter cursor-pointer">
-            STRIKER<span className="text-secondary">X</span>
-          </span>
-        </Link>
-        <div className="flex gap-2 items-center">
-          <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
-            {Math.round(player?.strikerBalance ?? 0).toLocaleString()} STRK
+      <header className="sticky top-0 z-50 bg-card border-b border-border flex flex-col">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <Link href="/">
+            <span className="font-mono font-bold text-xl text-primary tracking-tighter cursor-pointer">
+              STRIKER<span className="text-secondary">X</span>
+            </span>
+          </Link>
+          <div className="flex gap-2 items-center">
+            <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
+              {Math.round(player?.strikerBalance ?? 0).toLocaleString()} STRK
+            </div>
+            <NotificationBell />
           </div>
-          <NotificationBell />
         </div>
+
+        {/* Jackpot live progress bar — pulses gold when ready */}
+        {jackpot && (
+          <div
+            className={`h-[3px] w-full relative overflow-hidden ${isReady ? "bg-[#f59e0b]/20" : "bg-white/5"}`}
+            title={`Golden Boot Jackpot: ${Number(jackpot.currentAmountTon).toFixed(2)} TON`}
+          >
+            <motion.div
+              className={`h-full ${isReady ? "bg-[#f59e0b]" : "bg-gradient-to-r from-[#f59e0b] to-[#00ff88]"}`}
+              style={{ width: `${Math.min(pct, 100)}%` }}
+              animate={isReady
+                ? { opacity: [1, 0.4, 1] }
+                : { width: `${Math.min(pct, 100)}%` }}
+              transition={isReady
+                ? { duration: 0.9, repeat: Infinity }
+                : { duration: 0.5 }}
+            />
+          </div>
+        )}
       </header>
 
       <main className="flex-1 overflow-y-auto pb-20">

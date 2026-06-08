@@ -31,6 +31,9 @@ import { AdminBroadcast } from "./pages/admin/broadcast";
 import { AdminTournaments } from "./pages/admin/tournaments";
 import { AdminRateEvents } from "./pages/admin/rate-events";
 import { AdminFlagged } from "./pages/admin/flagged";
+import { AdminMatchEvents } from "./pages/admin/match-events";
+import { AdminKyc } from "./pages/admin/kyc";
+import { AdminAffiliates } from "./pages/admin/affiliates";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +66,9 @@ function Router() {
       <Route path="/admin/tournaments" component={AdminTournaments} />
       <Route path="/admin/rate-events" component={AdminRateEvents} />
       <Route path="/admin/flagged" component={AdminFlagged} />
+      <Route path="/admin/match-events" component={AdminMatchEvents} />
+      <Route path="/admin/kyc" component={AdminKyc} />
+      <Route path="/admin/affiliates" component={AdminAffiliates} />
 
       <Route component={NotFound} />
     </Switch>
@@ -70,7 +76,6 @@ function Router() {
 }
 
 function App() {
-  // Ensure dark mode is active
   if (typeof document !== 'undefined') {
     document.documentElement.classList.add('dark');
   }
