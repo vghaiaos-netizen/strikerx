@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, ExternalLink, Copy, Check, Clock } from "lucide-react";
+import { Wallet, ExternalLink, Copy, Check, Clock, Zap } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 type Currency = "TON" | "USDT" | "BNB" | "SOL";
@@ -17,18 +18,30 @@ const CURRENCIES: { id: Currency; label: string; color: string; rate: string }[]
 ];
 
 interface Invoice { payUrl: string; amount: string; currency: string; expiresAt?: string; }
+interface RateEvent { active: boolean; depositRate: number; endsAt: string | null; }
 
 export function Deposit() {
   const { toast } = useToast();
   const createDeposit = useCreateDeposit();
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
 
+  const { data: rateEvent } = useQuery<RateEvent>({
+    queryKey: ["rate-event"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/rate-event");
+      return res.json() as Promise<RateEvent>;
+    },
+    refetchInterval: 60_000,
+  });
+
   const [currency, setCurrency] = useState<Currency>("TON");
   const [amount, setAmount] = useState("1");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [rateEventCountdown, setRateEventCountdown] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const rateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (invoice?.expiresAt) {
@@ -42,6 +55,19 @@ export function Deposit() {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [invoice]);
+
+  useEffect(() => {
+    if (rateEvent?.active && rateEvent.endsAt) {
+      const end = new Date(rateEvent.endsAt).getTime();
+      if (rateTimerRef.current) clearInterval(rateTimerRef.current);
+      rateTimerRef.current = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+        setRateEventCountdown(remaining);
+        if (remaining === 0 && rateTimerRef.current) clearInterval(rateTimerRef.current);
+      }, 1000);
+    }
+    return () => { if (rateTimerRef.current) clearInterval(rateTimerRef.current); };
+  }, [rateEvent]);
 
   const handleGenerate = async () => {
     const amt = parseFloat(amount);
@@ -61,8 +87,19 @@ export function Deposit() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const effectiveRate = rateEvent?.active ? rateEvent.depositRate : 100;
   const selectedCurr = CURRENCIES.find(c => c.id === currency)!;
-  const strikerPreview = currency === "TON" ? (parseFloat(amount || "0") * 100).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "~";
+  const strikerPreview = currency === "TON"
+    ? (parseFloat(amount || "0") * effectiveRate).toLocaleString(undefined, { maximumFractionDigits: 0 })
+    : "~";
+
+  const formatRateCountdown = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m ${String(s).padStart(2, "0")}s`;
+  };
 
   return (
     <Layout>
@@ -76,6 +113,38 @@ export function Deposit() {
             </span>
           )}
         </div>
+
+        {/* Rate Event Banner */}
+        <AnimatePresence>
+          {rateEvent?.active && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.97 }}
+              className="relative overflow-hidden rounded-xl border border-[#fbbf24]/40 bg-gradient-to-r from-[#fbbf24]/15 via-[#f59e0b]/10 to-[#fbbf24]/15 px-4 py-3"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,#fbbf2420,transparent_60%)]" />
+              <div className="relative flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#fbbf24]/20 shrink-0">
+                  <Zap className="w-4 h-4 text-[#fbbf24]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display font-bold text-sm text-[#fbbf24] tracking-wider">BONUS RATE ACTIVE</span>
+                    <span className="text-[10px] font-mono font-bold bg-[#fbbf24] text-black rounded-full px-2 py-0.5">
+                      {effectiveRate} STRIKER / TON
+                    </span>
+                  </div>
+                  {rateEventCountdown > 0 && (
+                    <div className="text-[10px] font-mono text-[#fbbf24]/70 mt-0.5">
+                      Ends in {formatRateCountdown(rateEventCountdown)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {!invoice ? (
           <>
@@ -92,7 +161,11 @@ export function Deposit() {
 
             <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
               <div className="text-[10px] font-mono text-white/30 mb-0.5">Exchange Rate</div>
-              <div className="font-mono text-sm font-bold text-white">{selectedCurr.rate}</div>
+              <div className="font-mono text-sm font-bold text-white">
+                {rateEvent?.active && currency === "TON"
+                  ? <span className="text-[#fbbf24]">{effectiveRate} STRIKER / TON</span>
+                  : selectedCurr.rate}
+              </div>
             </div>
 
             {/* Amount */}
@@ -103,9 +176,9 @@ export function Deposit() {
             </div>
 
             {/* Preview */}
-            <div className="flex items-center justify-between bg-[#00ff88]/5 border border-[#00ff88]/15 rounded-xl px-4 py-3">
+            <div className={`flex items-center justify-between border rounded-xl px-4 py-3 transition-colors ${rateEvent?.active ? "bg-[#fbbf24]/5 border-[#fbbf24]/20" : "bg-[#00ff88]/5 border-[#00ff88]/15"}`}>
               <span className="text-xs font-mono text-white/40">You receive</span>
-              <span className="font-display font-bold text-lg text-[#00ff88]">{strikerPreview} STRIKER</span>
+              <span className={`font-display font-bold text-lg ${rateEvent?.active ? "text-[#fbbf24]" : "text-[#00ff88]"}`}>{strikerPreview} STRIKER</span>
             </div>
 
             <Button onClick={handleGenerate} disabled={createDeposit.isPending}
