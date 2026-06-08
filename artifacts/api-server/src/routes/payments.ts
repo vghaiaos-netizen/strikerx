@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHash, createHmac } from "crypto";
 import { db, playersTable, transactionsTable, withdrawalsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { strikerToTon, tonToStriker } from "../lib/gameEngine";
 import { broadcastWithdrawal } from "../lib/groupBot";
@@ -158,7 +158,7 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
     amountStriker: -amountStriker,
     amountTon: -amountTon,
     currency,
-    status: requiresReview ? "pending" : "completed",
+    status: "pending",
   });
 
   if (!requiresReview) {
@@ -288,7 +288,7 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
     if (player) {
       await db
         .update(playersTable)
-        .set({ strikerBalance: player.strikerBalance + strikerAmount })
+        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerAmount}` })
         .where(eq(playersTable.id, playerId));
 
       await db

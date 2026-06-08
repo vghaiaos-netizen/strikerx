@@ -1,7 +1,7 @@
 import { AdminLayout } from "@/components/admin-layout";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Trophy, Zap, RotateCcw, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,12 +42,14 @@ export function AdminJackpot() {
     queryFn: () => API("/admin/jackpot", adminToken ?? ""),
     refetchInterval: 10_000,
     enabled: !!adminToken,
-    onSuccess: (d) => {
-      if (!minimumTrigger) setMinimumTrigger(String(d.minimumTrigger));
-      if (!seedAmount) setSeedAmount(String(d.seedAmount));
-      if (!houseCutPct) setHouseCutPct(String(d.houseCutPct));
-    },
-  } as Parameters<typeof useQuery>[0]);
+  });
+
+  useEffect(() => {
+    if (!jackpot) return;
+    if (!minimumTrigger) setMinimumTrigger(String(jackpot.minimumTrigger));
+    if (!seedAmount) setSeedAmount(String(jackpot.seedAmount));
+    if (!houseCutPct) setHouseCutPct(String(jackpot.houseCutPct));
+  }, [jackpot]);
 
   const configMutation = useMutation({
     mutationFn: () => API("/admin/jackpot/config", adminToken ?? "", {

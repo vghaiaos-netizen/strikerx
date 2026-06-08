@@ -76,31 +76,36 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
       score: p.streakDays,
     }));
   } else if (type === "referrals") {
-    // Top players by referral count (count players who have referredBy matching this player's referralCode)
-    const allPlayers = await db.select({
-      id: playersTable.id,
-      username: playersTable.username,
-      vipTier: playersTable.vipTier,
-      referralCode: playersTable.referralCode,
-    }).from(playersTable);
+    // Top players by referral count — single SQL GROUP BY query
+    const referrers = await db
+      .select({
+        referralCode: playersTable.referralCode,
+        referralCount: sql<number>`COUNT(*)`,
+      })
+      .from(playersTable)
+      .where(sql`${playersTable.referredBy} IS NOT NULL`)
+      .groupBy(playersTable.referredBy)
+      .orderBy(desc(sql<number>`COUNT(*)`))
+      .limit(limit);
 
-    const referralCounts: Array<{ playerId: number; username: string; vipTier: string; count: number }> = [];
-
-    for (const p of allPlayers) {
-      const [rc] = await db.select({ count: sql<number>`COUNT(*)` }).from(playersTable).where(eq(playersTable.referredBy, p.referralCode));
-      if (Number(rc?.count ?? 0) > 0) {
-        referralCounts.push({ playerId: p.id, username: p.username, vipTier: p.vipTier, count: Number(rc?.count ?? 0) });
-      }
-    }
-
-    referralCounts.sort((a, b) => b.count - a.count);
-    entries = referralCounts.slice(0, limit).map((r, i) => ({
-      rank: i + 1,
-      playerId: r.playerId,
-      username: r.username,
-      vipTier: r.vipTier,
-      score: r.count,
-    }));
+    entries = (
+      await Promise.all(
+        referrers.map(async (r, i) => {
+          const [owner] = await db
+            .select({ id: playersTable.id, username: playersTable.username, vipTier: playersTable.vipTier })
+            .from(playersTable)
+            .where(eq(playersTable.referralCode, r.referralCode));
+          if (!owner) return null;
+          return {
+            rank: i + 1,
+            playerId: owner.id,
+            username: owner.username,
+            vipTier: owner.vipTier,
+            score: Number(r.referralCount),
+          };
+        })
+      )
+    ).filter((e): e is NonNullable<typeof e> => e !== null);
   } else {
     // Legacy: daily/weekly/alltime by best multiplier
     let sinceDate = new Date();

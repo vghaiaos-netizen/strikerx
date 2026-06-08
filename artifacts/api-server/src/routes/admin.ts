@@ -308,7 +308,7 @@ router.put("/admin/config/:key", requireAdmin, async (req, res): Promise<void> =
   res.json({ ok: true, key, updated: true });
 });
 
-router.put("/admin/config", requireAdmin, async (req, res): Promise<void> => {
+async function handleBulkConfigUpdate(req: import("express").Request, res: import("express").Response): Promise<void> {
   const updates = req.body as Record<string, string>;
   for (const [key, value] of Object.entries(updates)) {
     if (value === "••••••••") continue;
@@ -316,7 +316,10 @@ router.put("/admin/config", requireAdmin, async (req, res): Promise<void> => {
   }
   await db.insert(auditLogTable).values({ adminAction: "bulk_config_update", targetPlayerId: null, newValue: JSON.stringify(Object.keys(updates)), performedBy: "admin" });
   res.json({ ok: true, updated: Object.keys(updates).length });
-});
+}
+
+router.put("/admin/config", requireAdmin, handleBulkConfigUpdate);
+router.patch("/admin/config", requireAdmin, handleBulkConfigUpdate);
 
 // ── ANALYTICS ────────────────────────────────────────────────────────────────
 

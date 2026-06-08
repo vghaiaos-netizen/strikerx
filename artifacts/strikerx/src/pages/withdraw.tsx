@@ -17,7 +17,8 @@ export function Withdraw() {
   const [submitted, setSubmitted] = useState(false);
 
   const WITHDRAW_RATE = 110;
-  const tonPreview = strikerAmount ? (parseFloat(strikerAmount) / WITHDRAW_RATE).toFixed(4) : "0";
+  const parsedAmount = parseFloat(strikerAmount);
+  const tonPreview = strikerAmount && !isNaN(parsedAmount) ? (parsedAmount / WITHDRAW_RATE).toFixed(4) : "0";
 
   const p = me as Record<string, unknown> | undefined;
   const balance = Number(p?.strikerBalance ?? 0);

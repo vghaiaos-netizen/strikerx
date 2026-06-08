@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, affiliatesTable } from "@workspace/db";
+import { db, playersTable, affiliatesTable, transactionsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { signToken, validateTelegramInitData } from "../lib/auth";
 import { generateReferralCode } from "../lib/referralCode";
@@ -104,6 +104,16 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
       .returning();
     player = inserted[0];
     req.log.info({ telegramId, username, affiliateCode: affiliateCodeApplied }, "New player registered");
+
+    // Record welcome bonus in transaction history
+    if (welcomeBonus > 0) {
+      await db.insert(transactionsTable).values({
+        playerId: player.id,
+        type: "win",
+        amountStriker: welcomeBonus,
+        status: "completed",
+      });
+    }
   } else {
     await db
       .update(playersTable)

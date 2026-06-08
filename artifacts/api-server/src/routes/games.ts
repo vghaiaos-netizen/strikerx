@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable } from "@workspace/db";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import {
   playPenalty,
@@ -41,8 +41,8 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
     lastWinnerUsername: username,
   }).where(eq(jackpotTable.id, jackpot.id));
 
+  await db.update(playersTable).set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}` }).where(eq(playersTable.id, playerId));
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
-  await db.update(playersTable).set({ strikerBalance: db.select().from(playersTable).where(eq(playersTable.id, playerId)) as unknown as number }).where(eq(playersTable.id, playerId));
 
   broadcastJackpot(username, winnerAmount).catch((err) => logger.error({ err }, "Failed to broadcast jackpot"));
   return { triggered: true, amountTon: winnerAmount, strikerWin };
@@ -189,6 +189,11 @@ router.post("/games/minefield/start", requireAuth, async (req, res): Promise<voi
   const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
   if (!player) { res.status(404).json({ error: "Player not found" }); return; }
   if (player.strikerBalance < betStriker) { res.status(400).json({ error: "Insufficient balance" }); return; }
+
+  // Expire any lingering active session (player abandoned without cashing out)
+  await db.update(minefieldSessionsTable)
+    .set({ status: "lost" })
+    .where(eq(minefieldSessionsTable.playerId, playerId));
 
   const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
   const betTon = betStriker / depositRate;
