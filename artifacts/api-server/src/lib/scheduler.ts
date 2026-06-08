@@ -1,13 +1,52 @@
-import { db, tournamentsTable, tournamentEntriesTable, playersTable, transactionsTable } from "@workspace/db";
-import { eq, lt, and, desc } from "drizzle-orm";
+import {
+  db,
+  tournamentsTable,
+  tournamentEntriesTable,
+  playersTable,
+  transactionsTable,
+  vipCashbackTable,
+} from "@workspace/db";
+import { eq, lt, and, desc, gte, lte } from "drizzle-orm";
 import { logger } from "./logger";
 import { broadcastToAll } from "./wsServer";
 
 const PRIZE_DISTRIBUTION = [0.5, 0.25, 0.15, 0.07, 0.03];
 
+const VIP_CASHBACK_RATES: Record<string, number> = {
+  sunday_league: 0,
+  championship: 0.02,
+  premier_league: 0.03,
+  champions_league: 0.05,
+  world_cup: 0.08,
+};
+
+function getISOWeek(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+function getWeekBounds(period: string): { start: Date; end: Date } {
+  const [yearStr, weekStr] = period.split("-W");
+  const year = parseInt(yearStr ?? "2024", 10);
+  const week = parseInt(weekStr ?? "1", 10);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const startOfWeek1 = new Date(jan4);
+  startOfWeek1.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() || 7) - 1));
+  const start = new Date(startOfWeek1);
+  start.setUTCDate(startOfWeek1.getUTCDate() + (week - 1) * 7);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 7);
+  return { start, end };
+}
+
+// ── Tournament auto-end ────────────────────────────────────────────────────────
+
 async function processTournamentEnds() {
   const now = new Date();
-
   const expired = await db
     .select()
     .from(tournamentsTable)
@@ -23,15 +62,12 @@ async function processTournamentEnds() {
         .where(eq(tournamentEntriesTable.tournamentId, tournament.id))
         .orderBy(desc(tournamentEntriesTable.bestMultiplier));
 
-      // Mark tournament ended first to prevent double-processing
       await db.update(tournamentsTable).set({ status: "ended" }).where(eq(tournamentsTable.id, tournament.id));
 
-      // Pay prizes to top finishers
       for (let i = 0; i < Math.min(entries.length, PRIZE_DISTRIBUTION.length); i++) {
         const entry = entries[i]!;
-        const prizeTon    = tournament.prizePoolTon * (PRIZE_DISTRIBUTION[i] ?? 0);
+        const prizeTon = tournament.prizePoolTon * (PRIZE_DISTRIBUTION[i] ?? 0);
         const prizeStriker = Math.floor(prizeTon * depositRate);
-
         if (prizeStriker <= 0) continue;
 
         const [player] = await db.select().from(playersTable).where(eq(playersTable.id, entry.playerId));
@@ -43,18 +79,18 @@ async function processTournamentEnds() {
 
         await db.insert(transactionsTable).values({
           playerId: entry.playerId,
-          type:     "bonus",
+          type: "bonus",
           amountStriker: prizeStriker,
-          status:   "completed",
+          status: "completed",
         });
       }
 
       broadcastToAll("tournament_ended", {
-        tournamentId:  tournament.id,
-        type:          tournament.type,
-        prizePoolTon:  tournament.prizePoolTon,
-        winnerId:      entries[0]?.playerId ?? null,
-        at:            Date.now(),
+        tournamentId: tournament.id,
+        type: tournament.type,
+        prizePoolTon: tournament.prizePoolTon,
+        winnerId: entries[0]?.playerId ?? null,
+        at: Date.now(),
       });
 
       logger.info({ tournamentId: tournament.id, entrants: entries.length }, "Tournament auto-ended and prizes paid");
@@ -64,9 +100,162 @@ async function processTournamentEnds() {
   }
 }
 
+// ── Tournament live leaderboard broadcast ──────────────────────────────────────
+
+async function broadcastTournamentLeaderboards() {
+  const now = new Date();
+  const active = await db
+    .select()
+    .from(tournamentsTable)
+    .where(eq(tournamentsTable.status, "active"));
+
+  for (const tournament of active) {
+    try {
+      const entries = await db
+        .select({
+          playerId: tournamentEntriesTable.playerId,
+          username: playersTable.username,
+          vipTier: playersTable.vipTier,
+          score: tournamentEntriesTable.bestMultiplier,
+        })
+        .from(tournamentEntriesTable)
+        .leftJoin(playersTable, eq(tournamentEntriesTable.playerId, playersTable.id))
+        .where(eq(tournamentEntriesTable.tournamentId, tournament.id))
+        .orderBy(desc(tournamentEntriesTable.bestMultiplier))
+        .limit(10);
+
+      const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+      const leaderboard = entries.map((e, i) => ({
+        rank: i + 1,
+        playerId: e.playerId,
+        username: e.username ?? "Unknown",
+        score: e.score,
+        prize: Math.floor(tournament.prizePoolTon * (PRIZE_DISTRIBUTION[i] ?? 0) * depositRate),
+      }));
+
+      broadcastToAll("tournament_leaderboard", {
+        tournamentId: tournament.id,
+        type: tournament.type,
+        endsAt: tournament.endTime.toISOString(),
+        leaderboard,
+        at: Date.now(),
+      });
+    } catch (err) {
+      logger.error({ err, tournamentId: tournament.id }, "Failed to broadcast tournament leaderboard");
+    }
+  }
+}
+
+// ── Weekly cashback auto-payout ────────────────────────────────────────────────
+
+async function processWeeklyCashback() {
+  logger.info("Running weekly cashback auto-payout");
+  const now = new Date();
+  const period = getISOWeek(now);
+  const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+
+  const eligible = await db
+    .select()
+    .from(playersTable)
+    .where(and(
+      // Only tiers that earn cashback
+      // sunday_league gets 0 so skip
+    ));
+
+  for (const player of eligible) {
+    const rate = VIP_CASHBACK_RATES[player.vipTier] ?? 0;
+    if (rate === 0) continue;
+
+    try {
+      const [existing] = await db
+        .select()
+        .from(vipCashbackTable)
+        .where(and(eq(vipCashbackTable.playerId, player.id), eq(vipCashbackTable.period, period)));
+
+      if (existing?.paidAt) continue;
+
+      const { start, end } = getWeekBounds(period);
+
+      const txs = await db
+        .select()
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.playerId, player.id),
+            gte(transactionsTable.createdAt, start),
+            lte(transactionsTable.createdAt, end),
+          ),
+        );
+
+      const totalBet = txs.filter(t => t.type === "bet").reduce((s, t) => s + Math.abs(t.amountStriker), 0);
+      const totalWon = txs.filter(t => t.type === "win").reduce((s, t) => s + t.amountStriker, 0);
+      const netLossStriker = Math.max(0, totalBet - totalWon);
+      const pendingStriker = Math.floor(netLossStriker * rate);
+      const lossesTon = netLossStriker / depositRate;
+
+      if (pendingStriker < 1) continue;
+
+      if (existing) {
+        await db.update(vipCashbackTable)
+          .set({ paidAt: now, cashbackStriker: pendingStriker, lossesTon })
+          .where(eq(vipCashbackTable.id, existing.id));
+      } else {
+        await db.insert(vipCashbackTable).values({
+          playerId: player.id,
+          period,
+          lossesTon,
+          cashbackStriker: pendingStriker,
+          paidAt: now,
+        });
+      }
+
+      await db.update(playersTable)
+        .set({ strikerBalance: player.strikerBalance + pendingStriker })
+        .where(eq(playersTable.id, player.id));
+
+      await db.insert(transactionsTable).values({
+        playerId: player.id,
+        type: "cashback",
+        amountStriker: pendingStriker,
+        status: "completed",
+      });
+
+      logger.info({ playerId: player.id, username: player.username, pendingStriker }, "Auto cashback paid");
+    } catch (err) {
+      logger.error({ err, playerId: player.id }, "Failed to auto-pay cashback for player");
+    }
+  }
+
+  logger.info("Weekly cashback auto-payout complete");
+}
+
+// ── Scheduler entrypoint ───────────────────────────────────────────────────────
+
 export function startScheduler() {
   logger.info("Scheduler started");
-  // Run once immediately, then every 60 seconds
+
+  // Tournament ends — every 60 seconds
   processTournamentEnds().catch(() => {});
   setInterval(() => { processTournamentEnds().catch(() => {}); }, 60_000);
+
+  // Tournament live leaderboard — every 30 seconds
+  setInterval(() => { broadcastTournamentLeaderboards().catch(() => {}); }, 30_000);
+
+  // Weekly cashback auto-payout — every Sunday at 00:05 UTC
+  const scheduleWeeklyCashback = () => {
+    const now = new Date();
+    const nextSunday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const daysUntilSunday = (7 - nextSunday.getUTCDay()) % 7 || 7;
+    nextSunday.setUTCDate(nextSunday.getUTCDate() + daysUntilSunday);
+    nextSunday.setUTCHours(0, 5, 0, 0);
+    const msUntil = nextSunday.getTime() - Date.now();
+    setTimeout(() => {
+      processWeeklyCashback().catch((err) => logger.error({ err }, "Weekly cashback failed"));
+      setInterval(() => {
+        processWeeklyCashback().catch((err) => logger.error({ err }, "Weekly cashback failed"));
+      }, 7 * 24 * 60 * 60 * 1000);
+    }, msUntil);
+    logger.info({ nextRun: nextSunday.toISOString() }, "Weekly cashback scheduled");
+  };
+  scheduleWeeklyCashback();
 }

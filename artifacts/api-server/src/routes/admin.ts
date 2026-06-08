@@ -4,7 +4,7 @@ import { eq, desc, ilike, and, sql, gte, lt } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth";
 import { broadcastMessage } from "../lib/groupBot";
 import { logger } from "../lib/logger";
-import { getAllConfig, setConfig, getConfigFloat } from "../lib/configService";
+import { getAllConfig, setConfig, getConfig, getConfigFloat } from "../lib/configService";
 
 const router: IRouter = Router();
 
@@ -523,6 +523,171 @@ router.post("/admin/players/:id/flag", requireAdmin, async (req, res): Promise<v
   await db.update(playersTable).set({ isFlagged: flag }).where(eq(playersTable.id, id));
   await db.insert(auditLogTable).values({ adminAction: flag ? "flag_player" : "unflag_player", targetPlayerId: id, newValue: reason ?? "", performedBy: "admin" });
   res.json({ ok: true, id, isFlagged: flag });
+});
+
+// ── MATCH EVENTS ──────────────────────────────────────────────────────────────
+
+router.get("/admin/match-events/status", requireAdmin, async (_req, res): Promise<void> => {
+  const active = await getConfig("match_event_active").catch(() => "false");
+  const teamA = await getConfig("match_event_team_a").catch(() => "");
+  const teamB = await getConfig("match_event_team_b").catch(() => "");
+  const bonusMultiplier = await getConfig("match_event_bonus_multiplier").catch(() => "1.0");
+  const endsAt = await getConfig("match_event_ends_at").catch(() => "");
+  const label = await getConfig("match_event_label").catch(() => "Match Day");
+  const now = Date.now();
+  const isExpired = endsAt ? new Date(endsAt).getTime() < now : false;
+  res.json({
+    active: active === "true" && !isExpired,
+    teamA,
+    teamB,
+    bonusMultiplier: parseFloat(bonusMultiplier),
+    endsAt: endsAt || null,
+    label,
+    expired: isExpired,
+  });
+});
+
+router.post("/admin/match-events/start", requireAdmin, async (req, res): Promise<void> => {
+  const { teamA, teamB, bonusMultiplier = 1.5, durationMinutes = 120, label = "Match Day" } = req.body as {
+    teamA: string;
+    teamB: string;
+    bonusMultiplier?: number;
+    durationMinutes?: number;
+    label?: string;
+  };
+  if (!teamA || !teamB) {
+    res.status(400).json({ error: "teamA and teamB are required" });
+    return;
+  }
+  const endsAt = new Date(Date.now() + durationMinutes * 60_000).toISOString();
+  await setConfig("match_event_active", "true");
+  await setConfig("match_event_team_a", teamA);
+  await setConfig("match_event_team_b", teamB);
+  await setConfig("match_event_bonus_multiplier", String(bonusMultiplier));
+  await setConfig("match_event_ends_at", endsAt);
+  await setConfig("match_event_label", label);
+  await db.insert(auditLogTable).values({
+    adminAction: "match_event_start",
+    targetPlayerId: null,
+    newValue: JSON.stringify({ teamA, teamB, bonusMultiplier, durationMinutes }),
+    performedBy: "admin",
+  });
+  logger.info({ teamA, teamB, endsAt }, "Match event started");
+  res.json({ ok: true, teamA, teamB, bonusMultiplier, endsAt });
+});
+
+router.post("/admin/match-events/end", requireAdmin, async (_req, res): Promise<void> => {
+  await setConfig("match_event_active", "false");
+  await db.insert(auditLogTable).values({ adminAction: "match_event_end", targetPlayerId: null, newValue: "manual_end", performedBy: "admin" });
+  res.json({ ok: true });
+});
+
+// ── PLAYER INBOX (Admin DM via GameBot) ───────────────────────────────────────
+
+router.post("/admin/players/:id/inbox", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const { message } = req.body as { message: string };
+  if (!message || message.trim().length === 0) {
+    res.status(400).json({ error: "message is required" });
+    return;
+  }
+
+  const [player] = await db.select().from(playersTable).where(eq(playersTable.id, id));
+  if (!player) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
+  try {
+    const { getGameBot } = await import("../lib/gameBot");
+    const bot = getGameBot();
+    if (!bot) {
+      res.status(503).json({ error: "GameBot not initialized" });
+      return;
+    }
+    await bot.telegram.sendMessage(
+      player.telegramId,
+      `📬 *Message from StrikerX Team*\n\n${message}`,
+      { parse_mode: "Markdown" },
+    );
+    await db.insert(auditLogTable).values({
+      adminAction: "player_inbox_message",
+      targetPlayerId: id,
+      newValue: message.slice(0, 200),
+      performedBy: "admin",
+    });
+    logger.info({ playerId: id, username: player.username }, "Admin inbox DM sent");
+    res.json({ ok: true, deliveredTo: player.username });
+  } catch (err) {
+    logger.error({ err, playerId: id }, "Failed to send inbox DM");
+    res.status(502).json({ error: "Failed to deliver message — player may have blocked the bot" });
+  }
+});
+
+// ── ANALYTICS EXPORT (CSV) ────────────────────────────────────────────────────
+
+router.get("/admin/analytics/export", requireAdmin, async (req, res): Promise<void> => {
+  const { type = "players", days = "30" } = req.query as { type?: string; days?: string };
+  const since = new Date(Date.now() - parseInt(days, 10) * 86400000);
+
+  try {
+    if (type === "players") {
+      const rows = await db
+        .select({
+          id: playersTable.id,
+          telegramId: playersTable.telegramId,
+          username: playersTable.username,
+          vipTier: playersTable.vipTier,
+          strikerBalance: playersTable.strikerBalance,
+          tonWageredLifetime: playersTable.tonWageredLifetime,
+          kycStatus: playersTable.kycStatus,
+          isBanned: playersTable.isBanned,
+          isFlagged: playersTable.isFlagged,
+          referralCode: playersTable.referralCode,
+          createdAt: playersTable.createdAt,
+        })
+        .from(playersTable)
+        .where(gte(playersTable.createdAt, since))
+        .orderBy(desc(playersTable.createdAt))
+        .limit(10000);
+
+      const headers = "id,telegramId,username,vipTier,strikerBalance,tonWageredLifetime,kycStatus,isBanned,isFlagged,referralCode,createdAt";
+      const csv = [
+        headers,
+        ...rows.map(r =>
+          [r.id, r.telegramId, `"${r.username}"`, r.vipTier, r.strikerBalance, r.tonWageredLifetime, r.kycStatus, r.isBanned, r.isFlagged, r.referralCode, r.createdAt?.toISOString()].join(","),
+        ),
+      ].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="strikerx_players_${days}d.csv"`);
+      res.send(csv);
+    } else if (type === "transactions") {
+      const rows = await db
+        .select()
+        .from(transactionsTable)
+        .where(gte(transactionsTable.createdAt, since))
+        .orderBy(desc(transactionsTable.createdAt))
+        .limit(50000);
+
+      const headers = "id,playerId,type,amountStriker,amountTon,currency,status,createdAt";
+      const csv = [
+        headers,
+        ...rows.map(r =>
+          [r.id, r.playerId, r.type, r.amountStriker, r.amountTon ?? "", r.currency ?? "", r.status, r.createdAt?.toISOString()].join(","),
+        ),
+      ].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="strikerx_transactions_${days}d.csv"`);
+      res.send(csv);
+    } else {
+      res.status(400).json({ error: "type must be players or transactions" });
+    }
+  } catch (err) {
+    logger.error({ err }, "Analytics export failed");
+    res.status(500).json({ error: "Export failed" });
+  }
 });
 
 export default router;

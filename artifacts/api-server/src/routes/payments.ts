@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createHash, createHmac } from "crypto";
 import { db, playersTable, transactionsTable, withdrawalsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
@@ -25,7 +26,6 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  // Map internal currency to CryptoBot asset
   const assetMap: Record<string, string> = {
     TON: "TON",
     USDT_TON: "USDT",
@@ -48,13 +48,17 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
         amount: minDepositTon.toString(),
         description: `StrikerX deposit — Player #${playerId}`,
         payload: JSON.stringify({ playerId, currency }),
-        expires_in: 3600, // 1 hour
+        expires_in: 3600,
         paid_btn_name: "openBot",
         paid_btn_url: `https://${process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX"}`,
       }),
     });
 
-    const data = (await response.json()) as { ok: boolean; result?: { invoice_id: string; bot_invoice_url: string; pay_url: string; expiration_date: string }; error?: unknown };
+    const data = (await response.json()) as {
+      ok: boolean;
+      result?: { invoice_id: string; bot_invoice_url: string; pay_url: string; expiration_date: string };
+      error?: unknown;
+    };
 
     if (!data.ok || !data.result) {
       req.log.error({ error: data.error }, "CryptoBot invoice creation failed");
@@ -64,11 +68,10 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
 
     const expiresAt = data.result.expiration_date ?? new Date(Date.now() + 3600000).toISOString();
 
-    // Record pending transaction
     await db.insert(transactionsTable).values({
       playerId,
       type: "deposit",
-      amountStriker: 0, // Will be updated on webhook
+      amountStriker: 0,
       currency,
       status: "pending",
       externalId: data.result.invoice_id,
@@ -112,12 +115,22 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
+  // KYC gate for large withdrawals
+  const kycThresholdTon = parseFloat(process.env.KYC_THRESHOLD_TON ?? "100");
+  const amountTonCheck = strikerToTon(amountStriker);
+  if (amountTonCheck >= kycThresholdTon && player.kycStatus !== "verified") {
+    res.status(403).json({
+      error: `Withdrawals over ${kycThresholdTon} TON require identity verification (KYC). Submit your verification in the Profile page.`,
+      requiresKyc: true,
+    });
+    return;
+  }
+
   if (player.strikerBalance < amountStriker) {
     res.status(400).json({ error: "Insufficient balance" });
     return;
   }
 
-  // Check wager requirement for bonus funds
   const wagerRequired = parseFloat(process.env.WELCOME_BONUS_STRIKER ?? "500") * parseFloat(process.env.WAGER_REQUIREMENT_MULTIPLIER ?? "10");
   if (player.strikerWageredSinceBonus < wagerRequired) {
     const remaining = wagerRequired - player.strikerWageredSinceBonus;
@@ -126,13 +139,9 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
   }
 
   const amountTon = strikerToTon(amountStriker);
-
-  // Check if this needs manual review (new account)
-  const reviewThreshold = parseFloat(process.env.NEW_ACCOUNT_REVIEW_THRESHOLD ?? "1");
   const requiresReview = !player.firstWithdrawalReviewed;
   const status = requiresReview ? "under_review" : "pending";
 
-  // Deduct balance immediately
   await db
     .update(playersTable)
     .set({ strikerBalance: player.strikerBalance - amountStriker })
@@ -140,14 +149,7 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
 
   const [withdrawal] = await db
     .insert(withdrawalsTable)
-    .values({
-      playerId,
-      amountStriker,
-      amountTon,
-      destinationAddress,
-      currency,
-      status,
-    })
+    .values({ playerId, amountStriker, amountTon, destinationAddress, currency, status })
     .returning();
 
   await db.insert(transactionsTable).values({
@@ -160,22 +162,25 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
   });
 
   if (!requiresReview) {
-    // Auto-process via CryptoBot
-    processCryptoBotTransfer(withdrawal.id, playerId, amountTon, destinationAddress, player.username).catch((err) =>
-      logger.error({ err }, "Failed to process withdrawal transfer")
-    );
+    processCryptoBotTransfer(
+      withdrawal.id,
+      parseInt(player.telegramId, 10),
+      amountTon,
+      destinationAddress,
+      player.username,
+    ).catch((err) => logger.error({ err }, "Failed to process withdrawal transfer"));
   }
 
-  res.json({
-    id: withdrawal.id,
-    status: withdrawal.status,
-    amountStriker,
-    amountTon,
-    requiresReview,
-  });
+  res.json({ id: withdrawal.id, status: withdrawal.status, amountStriker, amountTon, requiresReview });
 });
 
-async function processCryptoBotTransfer(withdrawalId: number, playerId: number, amountTon: number, address: string, username: string) {
+async function processCryptoBotTransfer(
+  withdrawalId: number,
+  telegramUserId: number,
+  amountTon: number,
+  address: string,
+  username: string,
+) {
   const cryptobotToken = process.env.CRYPTOBOT_TOKEN;
   if (!cryptobotToken) return;
 
@@ -187,7 +192,7 @@ async function processCryptoBotTransfer(withdrawalId: number, playerId: number, 
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        user_id: playerId,
+        user_id: telegramUserId,
         asset: "TON",
         amount: amountTon.toString(),
         spend_id: `withdrawal_${withdrawalId}`,
@@ -214,6 +219,21 @@ async function processCryptoBotTransfer(withdrawalId: number, playerId: number, 
 
 // POST /payments/webhook/cryptobot
 router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
+  const cryptobotToken = process.env.CRYPTOBOT_TOKEN ?? "";
+
+  // Verify CryptoBot HMAC-SHA256 signature
+  const incomingSignature = req.headers["crypto-pay-api-signature"];
+  if (cryptobotToken && incomingSignature) {
+    const secret = createHash("sha256").update(cryptobotToken).digest();
+    const rawBody = (req as typeof req & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body));
+    const expectedSignature = createHmac("sha256", secret).update(rawBody).digest("hex");
+    if (expectedSignature !== incomingSignature) {
+      logger.warn("CryptoBot webhook signature mismatch");
+      res.status(401).json({ error: "Invalid signature" });
+      return;
+    }
+  }
+
   const payload = req.body as {
     update_type?: string;
     payload?: {
@@ -241,28 +261,36 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
     const amount = parseFloat(payload.payload?.amount ?? "0");
     const asset = payload.payload?.asset ?? "TON";
 
-    // Convert to TON equivalent (simplified — 1:1 for TON, approximate for others)
     const tonRates: Record<string, number> = {
       TON: 1,
-      USDT: 0.2, // Approximate: 1 USDT ≈ 0.2 TON (adjust based on real rates)
+      USDT: 0.2,
       BNB: 20,
       SOL: 5,
     };
     const tonEquivalent = amount * (tonRates[asset] ?? 1);
-    const strikerAmount = tonToStriker(tonEquivalent);
 
-    // Credit player
+    // Apply rate event bonus if active
+    let depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+    try {
+      const { getConfig } = await import("../lib/configService");
+      const rateEventActive = await getConfig("rate_event_active").catch(() => "false");
+      const rateEventEndsAt = await getConfig("rate_event_ends_at").catch(() => "");
+      const isExpired = rateEventEndsAt ? new Date(rateEventEndsAt).getTime() < Date.now() : false;
+      if (rateEventActive === "true" && !isExpired) {
+        const eventRate = parseFloat(await getConfig("rate_event_deposit_rate").catch(() => String(depositRate)));
+        if (eventRate > depositRate) depositRate = eventRate;
+      }
+    } catch { /* use default */ }
+
+    const strikerAmount = Math.floor(tonEquivalent * depositRate);
+
     const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
     if (player) {
       await db
         .update(playersTable)
-        .set({
-          strikerBalance: player.strikerBalance + strikerAmount,
-          strikerWageredSinceBonus: 0, // Reset wager progress on new deposit
-        })
+        .set({ strikerBalance: player.strikerBalance + strikerAmount })
         .where(eq(playersTable.id, playerId));
 
-      // Update pending transaction
       await db
         .update(transactionsTable)
         .set({
@@ -273,7 +301,7 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
         })
         .where(eq(transactionsTable.externalId, payload.payload?.invoice_id ?? ""));
 
-      logger.info({ playerId, strikerAmount, currency }, "Deposit credited");
+      logger.info({ playerId, strikerAmount, currency, depositRate }, "Deposit credited");
     }
   } catch (err) {
     logger.error({ err }, "Failed to process CryptoBot webhook");

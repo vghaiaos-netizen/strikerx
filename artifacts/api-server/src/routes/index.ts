@@ -8,6 +8,9 @@ import jackpotRouter from "./jackpot";
 import leaderboardRouter from "./leaderboard";
 import adminRouter from "./admin";
 import botsRouter from "./bots";
+import affiliatesRouter from "./affiliates";
+import kycRouter from "./kyc";
+import publicRouter from "./public";
 
 const router: IRouter = Router();
 
@@ -20,5 +23,8 @@ router.use(jackpotRouter);
 router.use(leaderboardRouter);
 router.use(adminRouter);
 router.use(botsRouter);
+router.use(affiliatesRouter);
+router.use(kycRouter);
+router.use(publicRouter);
 
 export default router;
