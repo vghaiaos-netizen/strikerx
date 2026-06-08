@@ -12,6 +12,8 @@ import {
   getVipTier,
   calculateBootEarned,
 } from "./gameEngine";
+import { getMatchEventBonus } from "./matchEventBonus";
+import { creditAffiliateCommission } from "./affiliateCommission";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -274,7 +276,8 @@ class CrashEngine {
     if (bet.cashedOut) return { success: false, error: "Already cashed out" };
 
     const cashoutMult = multiplier ?? this.currentRound.multiplier;
-    const winAmount = parseFloat((bet.betStriker * cashoutMult).toFixed(2));
+    const matchBonus = await getMatchEventBonus();
+    const winAmount = parseFloat((bet.betStriker * cashoutMult * matchBonus).toFixed(2));
 
     bet.cashedOut = true;
     bet.cashoutMultiplier = cashoutMult;
@@ -287,6 +290,7 @@ class CrashEngine {
     }
 
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
+    creditAffiliateCommission(playerId, winAmount).catch(() => {});
     await db.insert(gamesTable).values({
       playerId,
       gameType: "shot",

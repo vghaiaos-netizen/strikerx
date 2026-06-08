@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, playersTable, affiliatesTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { signToken, validateTelegramInitData } from "../lib/auth";
 import { generateReferralCode } from "../lib/referralCode";
 import { logger } from "../lib/logger";
@@ -9,9 +9,10 @@ const router: IRouter = Router();
 
 // POST /auth/telegram
 router.post("/auth/telegram", async (req, res): Promise<void> => {
-  const { initData, referralCode, deviceFingerprint } = req.body as {
+  const { initData, referralCode, affiliateCode, deviceFingerprint } = req.body as {
     initData?: string;
     referralCode?: string;
+    affiliateCode?: string;
     deviceFingerprint?: string;
   };
 
@@ -22,11 +23,9 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
 
   const gamebotToken = process.env.GAMEBOT_TOKEN ?? "";
 
-  // In dev mode, allow test initData
   let userData: Record<string, string> | null = null;
 
   if (process.env.NODE_ENV === "development" && initData.startsWith("dev:")) {
-    // Dev bypass: "dev:123456:testuser"
     const parts = initData.split(":");
     userData = {
       user: JSON.stringify({ id: parseInt(parts[1] ?? "123456"), username: parts[2] ?? "testuser", first_name: "Test" }),
@@ -51,26 +50,41 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
   const telegramId = String(tgUser.id);
   const username = tgUser.username ?? tgUser.first_name ?? `user${telegramId}`;
 
-  // Upsert player
   let [player] = await db
     .select()
     .from(playersTable)
     .where(eq(playersTable.telegramId, telegramId));
 
   if (!player) {
-    // New player — welcome bonus
     const welcomeBonus = parseFloat(process.env.WELCOME_BONUS_STRIKER ?? "500");
     const newCode = generateReferralCode();
 
-    // Find referrer if code provided
+    // Resolve referral code (player-to-player)
     let referredByCode: string | undefined;
     if (referralCode) {
       const [referrer] = await db
         .select()
         .from(playersTable)
         .where(eq(playersTable.referralCode, referralCode));
-      if (referrer) {
-        referredByCode = referralCode;
+      if (referrer) referredByCode = referralCode;
+    }
+
+    // Resolve affiliate/influencer code
+    let affiliateCodeApplied: string | undefined;
+    if (affiliateCode) {
+      const upperCode = affiliateCode.toUpperCase().replace(/[^A-Z0-9_]/g, "");
+      if (upperCode) {
+        const [aff] = await db
+          .select({ id: affiliatesTable.id, totalReferred: affiliatesTable.totalReferred })
+          .from(affiliatesTable)
+          .where(and(eq(affiliatesTable.code, upperCode), eq(affiliatesTable.isActive, true)));
+        if (aff) {
+          affiliateCodeApplied = upperCode;
+          await db
+            .update(affiliatesTable)
+            .set({ totalReferred: aff.totalReferred + 1 })
+            .where(eq(affiliatesTable.id, aff.id));
+        }
       }
     }
 
@@ -84,13 +98,13 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
         strikerBalance: welcomeBonus,
         referralCode: newCode,
         referredBy: referredByCode,
+        affiliateCode: affiliateCodeApplied,
         deviceFingerprint: deviceFingerprint ?? null,
       })
       .returning();
     player = inserted[0];
-    req.log.info({ telegramId, username }, "New player registered");
+    req.log.info({ telegramId, username, affiliateCode: affiliateCodeApplied }, "New player registered");
   } else {
-    // Update last active
     await db
       .update(playersTable)
       .set({ lastActive: new Date(), username })
@@ -117,6 +131,7 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
       streakDays: player.streakDays,
       tonWageredLifetime: player.tonWageredLifetime,
       referralCode: player.referralCode,
+      kycStatus: player.kycStatus,
       isBanned: player.isBanned,
       isFlagged: player.isFlagged,
       wagerProgress: Math.min(100, (player.strikerWageredSinceBonus / (parseFloat(process.env.WAGER_REQUIREMENT_MULTIPLIER ?? "10") * 500)) * 100),
@@ -158,6 +173,7 @@ router.post("/auth/admin/login", async (req, res): Promise<void> => {
       streakDays: 0,
       tonWageredLifetime: 0,
       referralCode: "ADMIN",
+      kycStatus: "verified",
       isBanned: false,
       isFlagged: false,
       wagerProgress: 0,

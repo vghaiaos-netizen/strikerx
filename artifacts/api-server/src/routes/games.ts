@@ -17,6 +17,8 @@ import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
 import { checkAndAward } from "../lib/achievementsService";
+import { getMatchEventBonus } from "../lib/matchEventBonus";
+import { creditAffiliateCommission } from "../lib/affiliateCommission";
 
 const router: IRouter = Router();
 
@@ -132,13 +134,15 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
   const { keeperDirection, win, multiplier } = playPenalty(direction);
-  const winAmount = win ? parseFloat((betStriker * multiplier).toFixed(2)) : 0;
+  const matchBonus = await getMatchEventBonus();
+  const winAmount = win ? parseFloat((betStriker * multiplier * matchBonus).toFixed(2)) : 0;
   const outcome = win ? "win" : "loss";
   const newBalance = player.strikerBalance - betStriker;
 
   if (win) {
     await db.update(playersTable).set({ strikerBalance: newBalance + winAmount }).where(eq(playersTable.id, playerId));
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
+    creditAffiliateCommission(playerId, winAmount).catch(() => {});
   }
 
   const [game] = await db.insert(gamesTable).values({
@@ -256,12 +260,14 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
     res.status(400).json({ error: "Pick at least one square first" }); return;
   }
 
-  const winAmount = parseFloat((session.betStriker * session.currentMultiplier).toFixed(2));
+  const matchBonus = await getMatchEventBonus();
+  const winAmount = parseFloat((session.betStriker * session.currentMultiplier * matchBonus).toFixed(2));
   await db.update(minefieldSessionsTable).set({ status: "won" }).where(eq(minefieldSessionsTable.id, sessionId));
 
   const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
   await db.update(playersTable).set({ strikerBalance: (player?.strikerBalance ?? 0) + winAmount }).where(eq(playersTable.id, playerId));
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
+  creditAffiliateCommission(playerId, winAmount).catch(() => {});
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player");
@@ -323,13 +329,15 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
   await db.insert(transactionsTable).values({ playerId, type: "bet", amountStriker: -betStriker, amountTon: -betTon, status: "completed" });
 
   const { slot, multiplier } = playFreekick(riskLevel);
-  const winAmount = parseFloat((betStriker * multiplier).toFixed(2));
+  const matchBonus = await getMatchEventBonus();
+  const winAmount = parseFloat((betStriker * multiplier * matchBonus).toFixed(2));
   const outcome = multiplier >= 1 ? "win" : "loss";
   const newBalance = player.strikerBalance - betStriker;
 
   if (winAmount > 0) {
     await db.update(playersTable).set({ strikerBalance: newBalance + winAmount }).where(eq(playersTable.id, playerId));
     await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
+    creditAffiliateCommission(playerId, winAmount).catch(() => {});
   }
 
   const [game] = await db.insert(gamesTable).values({ playerId, gameType: "freekick", betStriker, resultMultiplier: multiplier, winAmount, outcome, gameData: { slot, riskLevel } }).returning();

@@ -624,6 +624,38 @@ router.post("/admin/players/:id/inbox", requireAdmin, async (req, res): Promise<
   }
 });
 
+// ── INBOX LOG ─────────────────────────────────────────────────────────────────
+
+router.get("/admin/inbox", requireAdmin, async (req, res): Promise<void> => {
+  const limit = Math.min(200, parseInt(String(req.query.limit ?? 100), 10));
+
+  const entries = await db
+    .select({
+      id: auditLogTable.id,
+      targetPlayerId: auditLogTable.targetPlayerId,
+      newValue: auditLogTable.newValue,
+      performedBy: auditLogTable.performedBy,
+      createdAt: auditLogTable.createdAt,
+      username: playersTable.username,
+    })
+    .from(auditLogTable)
+    .leftJoin(playersTable, eq(auditLogTable.targetPlayerId, playersTable.id))
+    .where(eq(auditLogTable.adminAction, "player_inbox_message"))
+    .orderBy(desc(auditLogTable.createdAt))
+    .limit(limit);
+
+  res.json(
+    entries.map(e => ({
+      id: e.id,
+      playerId: e.targetPlayerId,
+      username: e.username ?? null,
+      message: e.newValue ?? null,
+      sentBy: e.performedBy ?? null,
+      sentAt: e.createdAt?.toISOString() ?? null,
+    })),
+  );
+});
+
 // ── ANALYTICS EXPORT (CSV) ────────────────────────────────────────────────────
 
 router.get("/admin/analytics/export", requireAdmin, async (req, res): Promise<void> => {

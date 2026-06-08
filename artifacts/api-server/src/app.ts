@@ -31,17 +31,21 @@ app.use(
   pinoHttp({
     logger,
     serializers: {
-      req(req) {
-        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
-      },
-      res(res) {
-        return { statusCode: res.statusCode };
-      },
+      req(req) { return { id: req.id, method: req.method, url: req.url?.split("?")[0] }; },
+      res(res) { return { statusCode: res.statusCode }; },
     },
   }),
 );
 
-app.use(cors());
+// CORS — allow configured origins; defaults to all in dev, locked to domain in prod
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(
+  cors(
+    corsOrigin
+      ? { origin: corsOrigin.split(",").map(o => o.trim()), credentials: true }
+      : { origin: true, credentials: true },
+  ),
+);
 
 // Capture raw body for CryptoBot webhook HMAC verification
 app.use(
@@ -55,7 +59,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
-// Initialize config, bots and jackpot in background
+// Initialize config, bots, jackpot, and auto-register webhooks
 (async () => {
   await initConfig().catch((err) => logger.error({ err }, "Config service init failed"));
 
@@ -70,10 +74,39 @@ app.use("/api", router);
     logger.error({ err }, "Failed to initialize jackpot");
   }
 
-  Promise.all([
+  await Promise.all([
     initGameBot().catch((err) => logger.error({ err }, "GameBot init failed")),
     initGroupBotScheduler().catch((err) => logger.error({ err }, "GroupBot init failed")),
   ]);
+
+  // Auto-register Telegram webhooks when WEBHOOK_DOMAIN env var is set
+  const webhookDomain = process.env.WEBHOOK_DOMAIN;
+  if (webhookDomain) {
+    const registerWebhook = async (token: string, path: string, name: string) => {
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: `https://${webhookDomain}/api${path}`,
+            allowed_updates: ["message", "callback_query"],
+          }),
+        });
+        const d = await r.json() as { ok: boolean };
+        if (d.ok) logger.info({ name, url: `https://${webhookDomain}/api${path}` }, "Webhook registered");
+        else logger.warn({ name, result: d }, "Webhook registration returned not-ok");
+      } catch (err) {
+        logger.error({ err, name }, "Failed to register webhook");
+      }
+    };
+
+    if (process.env.GAMEBOT_TOKEN) {
+      await registerWebhook(process.env.GAMEBOT_TOKEN, "/bots/gamebot/webhook", "GameBot");
+    }
+    if (process.env.GROUPBOT_TOKEN) {
+      await registerWebhook(process.env.GROUPBOT_TOKEN, "/bots/groupbot/webhook", "GroupBot");
+    }
+  }
 })();
 
 export default app;
