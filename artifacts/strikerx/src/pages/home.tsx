@@ -4,27 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
+import { useGetMyReferral } from "@workspace/api-client-react";
 
 interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
-interface WinEntry { user: string; amount: number; game: string; mult: string; }
+interface RecentWin { id: number; username: string; game: string; bet: number; win: number; mult: number; playedAt: string | null; }
 
-// Dev auth bypass — uses Telegram format in dev mode
 function useDevAuth() {
   const { player, isLoading, setToken } = useAuth();
   const telegramAuth = useTelegramAuth();
   const tried = useRef(false);
-
   useEffect(() => {
     if (tried.current || player || isLoading || localStorage.getItem("strikerx_token")) return;
     tried.current = true;
-
     const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
     const initData = tg?.WebApp?.initData;
-
     if (initData) {
       telegramAuth.mutate({ data: { initData } }, { onSuccess: d => setToken(d.token) });
     } else if (import.meta.env.DEV) {
@@ -34,55 +31,69 @@ function useDevAuth() {
 }
 
 const GAMES = [
-  { href: "/games/shot",      name: "The Shot",   sub: "Crash",    icon: TrendingUp, color: "#00ff88", bg: "from-[#00ff88]/10" },
-  { href: "/games/penalty",   name: "Penalty",    sub: "1.92x",    icon: Target,     color: "#3b82f6", bg: "from-[#3b82f6]/10" },
-  { href: "/games/minefield", name: "Minefield",  sub: "Compound", icon: Bomb,       color: "#ef4444", bg: "from-[#ef4444]/10" },
-  { href: "/games/freekick",  name: "Free Kick",  sub: "Plinko",   icon: Zap,        color: "#f59e0b", bg: "from-[#f59e0b]/10" },
+  { href: "/games/shot",      name: "The Shot",  sub: "Crash",    icon: TrendingUp, color: "#00ff88", bg: "from-[#00ff88]/10" },
+  { href: "/games/penalty",   name: "Penalty",   sub: "1.92x",    icon: Target,     color: "#3b82f6", bg: "from-[#3b82f6]/10" },
+  { href: "/games/minefield", name: "Minefield", sub: "Compound", icon: Bomb,       color: "#ef4444", bg: "from-[#ef4444]/10" },
+  { href: "/games/freekick",  name: "Free Kick", sub: "Plinko",   icon: Zap,        color: "#f59e0b", bg: "from-[#f59e0b]/10" },
 ];
 
-// Seed wins shown before any real WS data arrives
-const SEED_WINS: WinEntry[] = [
-  { user: "striker_99", amount: 2840, game: "The Shot",  mult: "5.23x"  },
-  { user: "goalie_k",   amount: 920,  game: "Penalty",   mult: "1.92x"  },
-  { user: "mfield_pro", amount: 4500, game: "Minefield", mult: "9.10x"  },
-  { user: "fk_beast",   amount: 1200, game: "Free Kick", mult: "12.00x" },
+const GAME_LABELS: Record<string, string> = {
+  penalty: "Penalty", shot: "The Shot", crash: "The Shot",
+  minefield: "Minefield", freekick: "Free Kick", free_kick: "Free Kick",
+};
+
+const SEED_WINS: RecentWin[] = [
+  { id: 1, username: "striker_99", game: "shot",      bet: 500,  win: 2840, mult: 5.23, playedAt: null },
+  { id: 2, username: "goalie_k",   game: "penalty",   bet: 200,  win: 384,  mult: 1.92, playedAt: null },
+  { id: 3, username: "mfield_pro", game: "minefield", bet: 300,  win: 4500, mult: 9.10, playedAt: null },
+  { id: 4, username: "fk_beast",   game: "freekick",  bet: 400,  win: 1200, mult: 3.00, playedAt: null },
+  { id: 5, username: "captain_x",  game: "shot",      bet: 1000, win: 6800, mult: 6.80, playedAt: null },
 ];
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return "just now";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 export function Home() {
   useDevAuth();
-
   const { player } = useAuth();
   const { notifications } = useNotifications();
-  const [tickerIdx, setTickerIdx] = useState(0);
   const [wcCountdownSecs, setWcCountdownSecs] = useState(0);
   const wcTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: jackpot } = useGetJackpot({
     query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
   });
-
   const { data: matchEvent } = useQuery<MatchEvent>({
     queryKey: ["match-event"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/match-event");
-      return res.json() as Promise<MatchEvent>;
-    },
+    queryFn: async () => { const r = await fetch("/api/public/match-event"); return r.json() as Promise<MatchEvent>; },
     refetchInterval: 60_000,
   });
-
   const { data: wcTheme } = useQuery<WcTheme>({
     queryKey: ["wc-theme"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/wc-theme");
-      return res.json() as Promise<WcTheme>;
-    },
+    queryFn: async () => { const r = await fetch("/api/public/wc-theme"); return r.json() as Promise<WcTheme>; },
     refetchInterval: 300_000,
+    staleTime: 60_000,
   });
+  const { data: dbWins } = useQuery<RecentWin[]>({
+    queryKey: ["recent-wins"],
+    queryFn: async () => { const r = await fetch("/api/public/recent-wins"); return r.json() as Promise<RecentWin[]>; },
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+  const { data: referral } = useGetMyReferral();
 
   useEffect(() => {
     if (wcTheme?.countdown && wcTheme.kickOff) {
       const end = new Date(wcTheme.kickOff).getTime();
-      // Set immediately so it doesn't flash 00:00:00
       setWcCountdownSecs(Math.max(0, Math.floor((end - Date.now()) / 1000)));
       if (wcTimerRef.current) clearInterval(wcTimerRef.current);
       wcTimerRef.current = setInterval(() => {
@@ -94,30 +105,23 @@ export function Home() {
     return () => { if (wcTimerRef.current) clearInterval(wcTimerRef.current); };
   }, [wcTheme]);
 
-  // Build live wins from real WS big_win events; fall back to seed data if none yet
-  const liveWins: WinEntry[] = notifications
+  // Merge live WS wins + DB wins, deduplicate, take top 8
+  const wsWins: RecentWin[] = notifications
     .filter(n => n.type === "big_win")
-    .slice(0, 10)
-    .map(n => ({
-      user:   n.username,
-      amount: parseInt(n.detail.replace(/[^\d]/g, ""), 10) || 0,
-      game:   n.detail.split(" on ")[1] ?? n.message,
-      mult:   n.message.split(" hit ")[1] ?? "x",
+    .slice(0, 5)
+    .map((n, i) => ({
+      id: -i - 1,
+      username: n.username,
+      game: n.detail.split(" on ")[1] ?? "shot",
+      bet: 0,
+      win: parseInt(n.detail.replace(/[^\d]/g, ""), 10) || 0,
+      mult: parseFloat(n.message.split(" hit ")[1] ?? "1") || 1,
+      playedAt: new Date(n.at).toISOString(),
     }));
 
-  const wins = liveWins.length >= 2 ? liveWins : SEED_WINS;
+  const allWins: RecentWin[] = [...wsWins, ...(dbWins ?? [])].slice(0, 8);
+  const wins = allWins.length >= 3 ? allWins : SEED_WINS;
 
-  useEffect(() => {
-    setTickerIdx(0);
-  }, [wins.length]);
-
-  useEffect(() => {
-    const t = setInterval(() => setTickerIdx(i => (i + 1) % wins.length), 3500);
-    return () => clearInterval(t);
-  }, [wins.length]);
-
-  const safeIdx = tickerIdx % wins.length;
-  const currentWin = wins[safeIdx]!;
   const pct = jackpot?.percentFull ?? 0;
 
   const formatWcCountdown = (secs: number) => {
@@ -125,10 +129,17 @@ export function Home() {
     const h = Math.floor((secs % 86400) / 3600);
     const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
-    if (d > 0) return { d, h, m, s };
-    return { d: 0, h, m, s };
+    return { d, h, m, s };
   };
   const wct = formatWcCountdown(wcCountdownSecs);
+
+  const copyCode = () => {
+    const code = referral?.code ?? "";
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
 
   return (
     <Layout>
@@ -138,9 +149,7 @@ export function Home() {
         <AnimatePresence>
           {wcTheme?.active && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
               className="relative overflow-hidden rounded-2xl border border-[#e63946]/30 bg-gradient-to-br from-[#1d3557]/70 via-[#0d1117] to-[#1a0a0a]/60 p-4"
             >
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,#e6394620,transparent_55%)]" />
@@ -148,42 +157,24 @@ export function Home() {
               <div className="relative">
                 <div className="flex items-center gap-2 mb-3">
                   <Globe className="w-3.5 h-3.5 text-[#e63946]" />
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#e63946]">
-                    World Cup 2026
-                  </span>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#e63946]">World Cup 2026</span>
                   {wcTheme.live ? (
-                    <span className="ml-auto text-[10px] font-mono bg-[#e63946]/20 text-[#e63946] border border-[#e63946]/30 rounded-full px-2 py-0.5 animate-pulse">
-                      LIVE
-                    </span>
+                    <span className="ml-auto text-[10px] font-mono bg-[#e63946]/20 text-[#e63946] border border-[#e63946]/30 rounded-full px-2 py-0.5 animate-pulse">LIVE</span>
                   ) : (
-                    <span className="ml-auto text-[10px] font-mono bg-white/5 text-white/40 border border-white/10 rounded-full px-2 py-0.5">
-                      COMING SOON
-                    </span>
+                    <span className="ml-auto text-[10px] font-mono bg-white/5 text-white/40 border border-white/10 rounded-full px-2 py-0.5">COMING SOON</span>
                   )}
                 </div>
-
                 {wcTheme.live ? (
                   <div className="text-center py-1">
-                    <div className="font-display font-black text-xl text-white tracking-wide">
-                      THE TOURNAMENT IS LIVE
-                    </div>
-                    <div className="text-[11px] font-mono text-white/40 mt-1">
-                      Play all games for a chance to win the ultimate jackpot
-                    </div>
+                    <div className="font-display font-black text-xl text-white tracking-wide">THE TOURNAMENT IS LIVE</div>
+                    <div className="text-[11px] font-mono text-white/40 mt-1">Play all games for a chance at the ultimate jackpot</div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-3 py-1">
-                    {[
-                      { val: wct.d, label: "DAYS" },
-                      { val: wct.h, label: "HRS" },
-                      { val: wct.m, label: "MIN" },
-                      { val: wct.s, label: "SEC" },
-                    ].map(({ val, label }) => (
+                    {[{ val: wct.d, label: "DAYS" },{ val: wct.h, label: "HRS" },{ val: wct.m, label: "MIN" },{ val: wct.s, label: "SEC" }].map(({ val, label }) => (
                       <div key={label} className="flex flex-col items-center">
                         <div className="bg-white/8 border border-white/10 rounded-lg w-12 h-10 flex items-center justify-center">
-                          <span className="font-display font-black text-lg text-white">
-                            {String(val).padStart(2, "0")}
-                          </span>
+                          <span className="font-display font-black text-lg text-white">{String(val).padStart(2, "0")}</span>
                         </div>
                         <span className="text-[8px] font-mono text-white/30 mt-1 tracking-widest">{label}</span>
                       </div>
@@ -199,21 +190,15 @@ export function Home() {
         <AnimatePresence>
           {matchEvent?.active && (
             <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
+              initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
               className="relative overflow-hidden rounded-2xl border border-[#3b82f6]/30 bg-gradient-to-br from-[#1e3a5f]/60 via-[#0d1117] to-[#1a2a0f]/40 p-4"
             >
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,#3b82f620,transparent_70%)]" />
               <div className="relative">
                 <div className="flex items-center gap-1.5 mb-3">
                   <Tv2 className="w-3.5 h-3.5 text-[#3b82f6]" />
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#3b82f6]">
-                    {matchEvent.label}
-                  </span>
-                  <span className="ml-auto text-[10px] font-mono bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30 rounded-full px-2 py-0.5 animate-pulse">
-                    LIVE
-                  </span>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#3b82f6]">{matchEvent.label}</span>
+                  <span className="ml-auto text-[10px] font-mono bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30 rounded-full px-2 py-0.5 animate-pulse">LIVE</span>
                 </div>
                 <div className="flex items-center justify-center gap-6 py-2">
                   <div className="text-center">
@@ -246,15 +231,13 @@ export function Home() {
                 <Trophy className="w-3.5 h-3.5 text-[#f59e0b]" />
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]">Golden Boot</span>
               </div>
-              <motion.div
-                className="font-display font-black text-3xl text-white"
-                animate={{ opacity: [1, 0.7, 1] }} transition={{ duration: 2, repeat: Infinity }}
-              >
+              <motion.div className="font-display font-black text-3xl text-white"
+                animate={{ opacity: [1, 0.7, 1] }} transition={{ duration: 2, repeat: Infinity }}>
                 {Number(jackpot?.currentAmountTon ?? 0).toFixed(2)}
                 <span className="text-[#f59e0b] ml-1 text-2xl">TON</span>
               </motion.div>
               <div className="text-[10px] font-mono text-white/30 mt-0.5">
-                {jackpot?.status === "ready" ? "READY TO TRIGGER" : `Building to ${jackpot?.minimumTrigger ?? 100} TON`}
+                {jackpot?.status === "ready" ? "READY TO TRIGGER" : `Building to ${jackpot?.minimumTrigger ?? 50} TON`}
               </div>
             </div>
             <div className={`px-2 py-1 rounded-md text-[9px] font-mono font-bold uppercase ${jackpot?.status === "ready" ? "bg-[#f59e0b]/20 text-[#f59e0b]" : "bg-white/5 text-white/30"}`}>
@@ -293,9 +276,7 @@ export function Home() {
               {wcTheme?.active ? "WC ORIGINALS" : "ORIGINALS"}
             </div>
             {wcTheme?.active && (
-              <span className="text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">
-                2026
-              </span>
+              <span className="text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">2026</span>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -303,7 +284,6 @@ export function Home() {
               <Link key={href} href={href}>
                 <motion.div whileTap={{ scale: 0.95 }}
                   className={`relative rounded-xl border border-white/8 bg-gradient-to-br ${bg} to-transparent p-4 flex flex-col gap-3 overflow-hidden cursor-pointer`}
-                  style={{ boxShadow: `0 0 0 0 ${color}` }}
                   whileHover={{ boxShadow: `0 0 16px ${color}22`, borderColor: `${color}40` }}>
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-black/30 border border-white/5">
                     <Icon className="w-4 h-4" style={{ color }} />
@@ -319,33 +299,65 @@ export function Home() {
           </div>
         </div>
 
-        {/* ── Live Wins Ticker ── */}
+        {/* ── Referral CTA ── */}
+        <div className="relative overflow-hidden rounded-xl border border-[#00ff88]/20 bg-[#00ff88]/5 p-4">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-[#00ff88]/8 rounded-full blur-2xl" />
+          <div className="relative flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00ff88]/15 border border-[#00ff88]/25 flex items-center justify-center flex-shrink-0">
+              <Gift className="w-4 h-4 text-[#00ff88]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-display font-bold text-sm text-white">Earn with your Squad</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">Get 10% of friends' wins forever</div>
+              {referral?.code && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="font-mono text-[11px] text-[#00ff88] font-bold tracking-widest">{referral.code}</span>
+                  <button onClick={copyCode} className="p-0.5">
+                    {codeCopied ? <Check className="w-3 h-3 text-[#00ff88]" /> : <Copy className="w-3 h-3 text-white/30" />}
+                  </button>
+                </div>
+              )}
+            </div>
+            <Link href="/loyalty">
+              <div className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-[#00ff88]/70 hover:text-[#00ff88] transition-colors cursor-pointer">
+                View <ChevronRight className="w-3 h-3" />
+              </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* ── Recent Winners ── */}
         <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
-          <div className="px-3 pt-2.5 pb-0 flex items-center gap-1.5">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/25">Live Wins</span>
-            {liveWins.length > 0 && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse ml-auto mr-1" />
+          <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">Recent Winners</span>
+            {wsWins.length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse ml-auto" />
             )}
           </div>
-          <div className="relative h-11 overflow-hidden">
-            <AnimatePresence mode="wait">
-              <motion.div key={safeIdx}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.4 }}
-                className="absolute inset-0 flex items-center px-3 gap-2"
-              >
-                <div className="w-6 h-6 rounded-full bg-[#00ff88]/15 border border-[#00ff88]/20 flex items-center justify-center text-[10px] font-mono font-bold text-[#00ff88]">
-                  {(currentWin.user[0] ?? "?").toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="font-mono text-xs text-white font-semibold">{currentWin.user}</span>
-                  <span className="font-mono text-xs text-white/40"> won </span>
-                  <span className="font-mono text-xs text-[#00ff88] font-bold">{currentWin.amount.toLocaleString()} STRIKER</span>
-                  <span className="font-mono text-[10px] text-white/25"> · {currentWin.game} · {currentWin.mult}</span>
-                </div>
-              </motion.div>
+          <div className="flex flex-col divide-y divide-white/4">
+            <AnimatePresence initial={false}>
+              {wins.slice(0, 6).map((w, i) => (
+                <motion.div key={w.id}
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05, duration: 0.3 }}
+                  className="flex items-center gap-3 px-4 py-2.5"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#00ff88]/15 border border-[#00ff88]/20 flex items-center justify-center text-[10px] font-mono font-bold text-[#00ff88] flex-shrink-0">
+                    {(w.username[0] ?? "?").toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] text-white font-semibold truncate">{w.username}</span>
+                      <span className="text-[10px] font-mono text-white/25 flex-shrink-0">{GAME_LABELS[w.game.toLowerCase()] ?? w.game}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono text-[11px] text-[#00ff88] font-bold">{w.win.toLocaleString(undefined, { maximumFractionDigits: 0 })} STRK</span>
+                      <span className="text-[9px] font-mono text-white/25">{w.mult.toFixed(2)}x · {timeAgo(w.playedAt)}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </AnimatePresence>
           </div>
         </div>
