@@ -76,7 +76,7 @@ async function processTournamentEnds() {
         if (!player) continue;
 
         await db.update(playersTable)
-          .set({ strikerBalance: player.strikerBalance + prizeStriker })
+          .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${prizeStriker}` })
           .where(eq(playersTable.id, entry.playerId));
 
         await db.insert(transactionsTable).values({
@@ -159,10 +159,10 @@ async function processWeeklyCashback() {
   const eligible = await db
     .select()
     .from(playersTable)
-    .where(and(
-      // Only tiers that earn cashback
-      // sunday_league gets 0 so skip
-    ));
+    .where(
+      // Skip sunday_league — they earn 0% cashback; filter in DB to avoid loading every player
+      sql`${playersTable.vipTier} != 'sunday_league'`
+    );
 
   for (const player of eligible) {
     const rate = VIP_CASHBACK_RATES[player.vipTier] ?? 0;
@@ -212,7 +212,7 @@ async function processWeeklyCashback() {
       }
 
       await db.update(playersTable)
-        .set({ strikerBalance: player.strikerBalance + pendingStriker })
+        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${pendingStriker}` })
         .where(eq(playersTable.id, player.id));
 
       await db.insert(transactionsTable).values({
