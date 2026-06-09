@@ -64,7 +64,8 @@ export function TheShot() {
 
   const [betAmount, setBetAmount] = useState("100");
   const [autoCashout, setAutoCashout] = useState("");
-  const [waitCountdown, setWaitCountdown] = useState(5);
+  const [waitCountdown, setWaitCountdown] = useState(8);
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [crashHistory, setCrashHistory] = useState<number[]>([]);
   const [justCrashed, setJustCrashed] = useState(false);
 
@@ -98,7 +99,7 @@ export function TheShot() {
 
       if (rs.status === "waiting") {
         setMyBet(null);
-        setWaitCountdown(5);
+        setWaitCountdown(8);
         if (countdownRef.current) clearInterval(countdownRef.current);
         countdownRef.current = setInterval(() => setWaitCountdown(p => Math.max(0, p - 1)), 1000);
       } else if (rs.status === "running") {
@@ -146,6 +147,11 @@ export function TheShot() {
       const { winAmount, multiplier } = d as { winAmount: number; multiplier: number };
       setMyBet({ placed: true, cashedOut: true, winAmount, multiplier });
       toast({ title: `Cashed out at ${multiplier.toFixed(2)}x`, description: `+${winAmount.toFixed(0)} STRIKER` });
+    }
+
+    if (event === "balance_update") {
+      const { strikerBalance } = d as { strikerBalance: number | string };
+      setLiveBalance(parseFloat(String(strikerBalance)));
     }
 
     if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
@@ -235,7 +241,8 @@ export function TheShot() {
   const betArr = Array.from(bets.values());
   const cashedOutBets = betArr.filter(b => b.cashoutMultiplier);
   const activeBets = betArr.filter(b => !b.cashoutMultiplier);
-  const playerBalance = Number((player as Record<string, unknown>)?.strikerBalance ?? 0);
+  // Use live balance from WS balance_update events; fall back to auth context value
+  const playerBalance = liveBalance ?? Number((player as Record<string, unknown>)?.strikerBalance ?? 0);
 
   return (
     <Layout>
