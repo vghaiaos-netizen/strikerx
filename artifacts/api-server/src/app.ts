@@ -55,13 +55,11 @@ if (isProd && !corsOrigin && !replitDomains) {
 
 const allowedOrigins: string[] = corsOrigin
   ? corsOrigin.split(",").map(o => o.trim())
-  : replitDomains
-    ? replitDomains.split(",").map(d => `https://${d.trim()}`)
-    : [
-        ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
-        "http://localhost:5000",
-        "http://localhost:3000",
-      ];
+  : [
+      ...(replitDomains ? replitDomains.split(",").map(d => `https://${d.trim()}`) : []),
+      ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
+      ...(!isProd ? ["http://localhost:5000", "http://localhost:3000", "http://localhost:8000"] : []),
+    ];
 
 app.use(
   cors({
