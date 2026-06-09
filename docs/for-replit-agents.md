@@ -15,7 +15,9 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
                                                                (~3 min, permanent URL)
 ```
 
-- The Railway URL (`*.up.railway.app`) is permanent — BotFather and CryptoBot are wired to it
+- **Production URL:** `https://strikerx-production.up.railway.app`
+- **Bot:** `@StrykkerXBot` — Mini App at `t.me/StrykkerXBot/StrikerX`
+- The Railway URL is permanent — BotFather and CryptoBot are wired to it
 - Do NOT attempt to use Replit Publish for production — Railway is the production host
 - After every coding session, run `node scripts/github-push.mjs` from a bash shell
 - Railway auto-deploys on every push to `main` — no manual trigger needed
@@ -42,8 +44,6 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
 |---|---|---|
 | `API Server` | Build + start API (production-like) | 8000 |
 | `Start application` | Vite dev server with HMR | 5000 |
-| `artifacts/api-server: API Server` | Dev API (same as above, different workflow name) | 8081 |
-| `artifacts/mockup-sandbox: Component Preview Server` | Mockup sandbox | 8082 |
 
 **After any server-side change:** restart the `API Server` workflow (it runs `pnpm build` before starting).  
 **After any frontend change:** Vite HMR reloads automatically — no restart needed.
@@ -68,13 +68,12 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
 ### Bot webhook registration is centralised
 - Webhooks are registered ONLY in `app.ts` IIFE on startup
 - Never add `setWebhook` calls to `gameBot.ts` or `groupBot.ts` — causes Telegram 429 errors
-- GroupBot uses token from `GROUPBOT_TOKEN`; GameBot uses `GAMEBOT_TOKEN`
+- `setChatMenuButton` and `setMyCommands` ARE registered in `gameBot.ts` `initGameBot()` — that's correct
 
 ### Schema changes — never run on Railway with live data
 - Dev DB: `pnpm --filter @workspace/db run push` (safe — dev only)
-- Production DB: write a manual `ALTER TABLE` SQL and run it via the Railway database tool
-  - Connection string: available in Railway → PostgreSQL service → Connect tab
-  - Always test the SQL on dev first
+- Production DB: write a manual `ALTER TABLE` SQL and run it via psql against the Railway connection string
+- Always test the SQL on dev first
 
 ### match_event_active is never `null` — it is `""`
 - `getConfig()` returns `""` when a key is unset (not `null`, not `undefined`, not `false`)
@@ -83,23 +82,25 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
 ### GitHub push is the only way to deploy
 - `git push` is blocked in Replit
 - Run `node scripts/github-push.mjs` from a bash shell (NOT from code_execution sandbox — PAT unavailable there)
-- The script pushes all 266 files atomically via GitHub Contents API
+- The script pushes all files atomically via GitHub Contents API
 - If it fails with 422, it fetches the current SHA and retries automatically
 
 ---
 
-## Secrets (all already set in Replit — do not re-ask the user)
+## Secrets (all set in Replit and Railway — do not re-ask the user)
 
-| Secret | Purpose |
+| Secret name | Purpose |
 |---|---|
 | `JWT_SECRET` | Signs player + admin JWTs. Server crashes on startup if missing. |
-| `ADMIN_USERNAME` | Admin dashboard login |
+| `ADMIN_USERNAME` | Admin dashboard login username (value: `Blize`) |
 | `ADMIN_PASSWORD` | Admin dashboard password |
-| `GAMEBOT_TOKEN` | @StrykkerXBot — player DMs, /start, /balance |
+| `GAMEBOT_TOKEN` | @StrykkerXBot — player DMs, /start, /balance, menu button |
 | `GROUPBOT_TOKEN` | Community channel — big win broadcasts |
-| `CRYPTOBOT_API_TOKEN` | CryptoPay deposits/withdrawals (verified working, app_id=592023) |
+| `CRYPTOBOT_TOKEN` | CryptoPay deposits/withdrawals (app_id=592023, name="StrikerX") |
 | `DATABASE_URL` | Replit-managed PostgreSQL (dev only) |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub push script |
+
+**Critical:** The secret is `CRYPTOBOT_TOKEN` — NOT `CRYPTOBOT_API_TOKEN`. Three files reference it: `configService.ts`, `cryptobotService.ts`, `app.ts`. All three are correct.
 
 `viewEnvVars()` in the code_execution sandbox does NOT show user-set secrets. It only shows Replit-managed runtime vars (`DATABASE_URL`, `REPL_ID`, `REPLIT_DOMAINS`, etc.). The secrets above ARE set and working — verify by checking startup logs.
 
@@ -125,7 +126,7 @@ Server resolves its public URL in this priority order (implemented in `app.ts`):
 WEBHOOK_DOMAIN  →  REPLIT_DOMAINS  →  RAILWAY_PUBLIC_DOMAIN  →  REPLIT_DEV_DOMAIN
 ```
 
-- On Railway: `RAILWAY_PUBLIC_DOMAIN` is auto-injected
+- On Railway: `RAILWAY_PUBLIC_DOMAIN` is auto-injected → resolves to `strikerx-production.up.railway.app`
 - On Replit Publish: `REPLIT_DOMAINS` is auto-injected
 - In Replit dev: `REPLIT_DEV_DOMAIN` is the rotating URL (bot webhooks break on restart)
 - Override: set `WEBHOOK_DOMAIN` manually (custom domain only)
@@ -136,6 +137,11 @@ Do NOT manually set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN`.
 
 ## Database
 
+### Railway connection string (for manual SQL only)
+```
+postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway
+```
+
 ### Tables (16 total)
 
 | Table | Purpose |
@@ -145,13 +151,13 @@ Do NOT manually set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN`.
 | `transactions` | All financial movements — deposit, withdrawal, bet, win, cashback, referral, jackpot |
 | `crash_rounds` | One row per Shot round — serverSeed, crashPoint, status |
 | `minefield_sessions` | Active/completed Minefield sessions — mine positions, reveals, multiplier |
-| `jackpot` | Single-row jackpot pool — `SELECT LIMIT 1`, always |
+| `jackpot` | Single-row jackpot pool — always `SELECT LIMIT 1` then upsert |
 | `withdrawals` | Withdrawal requests — status: pending / under_review / approved / rejected |
 | `tournaments` | Tournament records |
-| `kyc_verifications` | KYC submissions (not `kyc_submissions` — actual table name is `kyc_verifications`) |
+| `kyc_verifications` | KYC submissions — actual table name is `kyc_verifications` (not `kyc_submissions`) |
 | `affiliates` | Affiliate codes — commissionRate, totalEarned, totalReferred |
 | `audit_log` | Admin action history |
-| `app_config` | DB-backed key/value config store |
+| `app_config` | DB-backed key/value config store (31 rows on Railway) |
 | `player_achievements` | Which player unlocked which achievement key |
 | `referrals` | Referral tracking records |
 | `tournament_entries` | Tournament participation |
@@ -159,11 +165,12 @@ Do NOT manually set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN`.
 
 **Note:** There is NO separate `achievements` definitions table. Achievement definitions live in code at `artifacts/api-server/src/lib/achievementsService.ts`. Only `player_achievements` is in the DB.
 
-### Railway DB connection (for manual SQL only)
-```
-postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway
-```
-Use `psql` from bash for manual SQL. Use `pnpm --filter @workspace/db run push` for dev schema sync.
+### Railway DB — current state (as of 2026-06-09)
+- 1 real player (Dangwhizz, telegram_id 7385327404)
+- 2500+ crash rounds, 36 games, 61 transactions
+- Jackpot at ~10.36 TON, building toward 50 TON threshold
+- All 31 config rows populated including secrets
+- `admin_username` = `"Blize"` (capital B — case-sensitive comparison)
 
 ---
 
@@ -202,10 +209,6 @@ The WS requires a 3-step handshake before the player can bet:
 
 If the player tries to `place_bet` before step 3 completes, the server returns `{ "event": "error", "data": { "message": "Not authenticated" } }`.
 
-**Known bug that was fixed:** The reconnect logic in `shot.tsx` previously created a bare `new WebSocket()` without attaching event handlers, so auth was never re-sent after a disconnect. Fixed by using a `connect()` function that attaches all handlers on every reconnect.
-
-**React hook ordering gotcha fixed:** `handleEvent` was listed in the `useEffect` deps array but declared after it (temporal dead zone). Fixed by removing it from the deps array — it captures only `toast` which is stable.
-
 ### WebSocket events (server → client)
 
 | Event | Payload |
@@ -231,10 +234,35 @@ If the player tries to `place_bet` before step 3 completes, the server returns `
 
 ---
 
+## Payment flows
+
+### Deposit (player perspective)
+1. Player taps Deposit in the app → selects currency → `POST /api/payments/deposit` creates a CryptoBot invoice
+2. Player receives a `payLink` → opens it in CryptoPay → pays
+3. CryptoPay fires webhook to `POST /api/payments/webhook/cryptobot`
+4. Server verifies HMAC-SHA256 signature using `CRYPTOBOT_TOKEN`
+5. Player's `strikerBalance` credited: `Math.floor(tonEquivalent × depositRate)`
+6. Operator receives the crypto in their CryptoBot app balance
+
+### USDT exchange rate
+USDT is converted at a **hardcoded rate**: `1 USDT = 0.2 TON` (in `payments.ts` line ~243).  
+With TON at ~$3.50, real rate ≈ 0.28 TON/USDT. The 0.2 rate is conservative (house protection).  
+Adjust `tonRates.USDT` in `payments.ts` if TON price moves significantly.
+
+### Withdrawal (player perspective)
+1. Player requests withdrawal → `POST /api/payments/withdraw`
+2. Balance deducted immediately; `withdrawals` record created with `status: "under_review"`
+3. Admin approves at `/admin/withdrawals` → `POST /api/admin/withdrawals/:id/approve`
+4. Server calls CryptoPay Transfer API → funds land in player's CryptoPay balance instantly
+5. If rejected: balance refunded automatically
+
+---
+
 ## Admin panel
 
 URL: `/admin` (login required)  
 Auth: `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD`  
+Credentials: username `Blize`, password set via `ADMIN_PASSWORD` env var  
 Token stored in `localStorage` as `strikerx_admin_token`
 
 | Page | URL | Notes |
@@ -247,7 +275,7 @@ Token stored in `localStorage` as `strikerx_admin_token`
 | Tournaments | `/admin/tournaments` | Create/manage |
 | Jackpot | `/admin/jackpot` | Live stats, configure threshold, manual trigger/reset |
 | Rate Events | `/admin/rate-events` | Time-limited deposit bonus events |
-| Match Events | `/admin/match-events` | Live match multiplier events |
+| Match Events | `/admin/match-events` | Live match multiplier events (use before WC kickoff) |
 | KYC | `/admin/kyc` | Review submissions — approve/reject |
 | Affiliates | `/admin/affiliates` | Manage codes, track commissions |
 | Inbox | `/admin/inbox` | Log of all DMs sent to players |
@@ -255,6 +283,24 @@ Token stored in `localStorage` as `strikerx_admin_token`
 | Broadcast | `/admin/broadcast` | Mass Telegram message to all players |
 | Config | `/admin/config` | Edit live DB config values |
 | Audit Log | `/admin/audit-log` | Full admin action history |
+
+---
+
+## Affiliate codes (live in Railway DB)
+
+Created 2026-06-09. Managed at `/admin/affiliates`.  
+Signup link format: `t.me/StrykkerXBot/StrikerX?startapp=CODE`
+
+| Code | Commission | Purpose |
+|---|---|---|
+| `STRIKER10` | 10% | General influencers |
+| `WORLDCUP26` | 10% | WC2026 content creators |
+| `TONBET` | 10% | TON/crypto Telegram channels |
+| `CRYPTOGOAL` | 10% | Crypto betting communities |
+| `FREEKICK` | 10% | Viral/community seeding |
+| `BOOTCAMP` | 8% | High-volume bulk senders |
+| `GOLDENCAP` | 12% | Premium channel partners |
+| `TOPSTRIKER` | 12% | Top-tier partners |
 
 ---
 
@@ -280,7 +326,7 @@ Token stored in `localStorage` as `strikerx_admin_token`
 | `welcome_bonus_striker` | 500 | STRIKER given to new players |
 | `wager_requirement_multiplier` | 10 | Wager req = multiplier × welcome bonus |
 | `big_win_announce_threshold` | 50 | Min STRIKER win to broadcast to group |
-| `match_event_active` | (unset → "") | Set to `"true"` when match event is live |
+| `match_event_active` | (unset → `""`) | Set to `"true"` when match event is live |
 | `match_event_ends_at` | (unset) | ISO timestamp when match event ends |
 | `match_event_bonus_multiplier` | (unset) | e.g. `"1.5"` for 1.5× payout boost |
 | `match_event_team_a` | (unset) | Label for home team |
@@ -289,6 +335,11 @@ Token stored in `localStorage` as `strikerx_admin_token`
 | `rate_event_active` | (unset) | `"true"` when rate event is live |
 | `rate_event_ends_at` | (unset) | ISO timestamp |
 | `rate_event_multiplier` | (unset) | e.g. `"1.5"` for deposit bonus |
+| `maintenance_mode` | `false` | Set to `"true"` to take app offline |
+| `min_bet_striker` | 10 | Minimum bet in STRIKER |
+| `max_bet_striker` | 10000 | Maximum bet in STRIKER |
+| `min_deposit_ton` | 0.5 | Minimum deposit in TON |
+| `min_withdraw_striker` | 1000 | Minimum withdrawal in STRIKER |
 
 Use `configService.getConfig(key)`, `getConfigFloat(key, default)`, `setConfig(key, value)`.
 
@@ -323,12 +374,11 @@ These are intentional or accepted limitations — do not try to "fix" them witho
 |---|---|---|
 | KYC | No file upload — text fields only | MVP scope; real doc verification requires a third-party service |
 | CryptoBot webhook | Cannot be set programmatically — must be done manually via @CryptoBot | CryptoPay API returns 405 for `/setWebhook` |
-| Health check | Returns `{status:"ok"}` only — no DB/WS connectivity check | Sufficient for Railway health probe |
+| USDT rate | Hardcoded at 0.2 TON/USDT in `payments.ts` | Conservative house protection; update manually if TON price shifts |
+| Health check | Returns `{status:"ok"}` only | Sufficient for Railway health probe |
 | Withdrawals | First withdrawal always goes to `under_review` | Fraud prevention — manual admin review |
-| GroupBot broadcasts | Only sends if the bot is an admin in the group | Telegram requirement |
-| `achievements` table | Does not exist — definitions are code-only in `achievementsService.ts` | Simpler than a DB-managed definitions table |
-| KYC table name | `kyc_verifications` (not `kyc_submissions` as older docs say) | Drizzle schema is the source of truth |
-| Deprecation warnings | `punycode` and `url.parse` warnings in logs | From Telegraf library — harmless, not our code |
+| GroupBot broadcasts | Only sends if the bot is an admin in the group | Telegram requirement (already configured) |
+| `achievements` table | Does not exist — definitions are code-only | Simpler than a DB-managed definitions table |
 
 ---
 
@@ -342,24 +392,30 @@ These are intentional or accepted limitations — do not try to "fix" them witho
 - **Referral code vs affiliate code** — `player.referralCode` is the player's own invite code; `player.affiliateCode` is the influencer code used at signup. Separate systems.
 - **Withdrawals send to CryptoPay balance** — `processCryptoBotTransfer` uses `user_id: telegramUserId`, not an external wallet. Players withdraw from CryptoPay separately.
 - **Dev auth only works in `NODE_ENV=development`** — the `dev:ID:username` initData prefix is rejected in production.
-- **WS client count** — `getConnectedClients()` in `lib/wsServer.ts` returns actual connected count. Used by admin overview. Previously was `Math.random()`.
-- **React hook ordering** — `useCallback` or `useMemo` that is referenced in an earlier `useEffect` deps array will throw a temporal dead zone error. Always declare callbacks before the effects that use them, or omit them from deps if they're stable.
+- **WS client count** — `getConnectedClients()` in `lib/wsServer.ts` returns actual connected count. Used by admin overview.
+- **setChatMenuButton / setMyCommands** — called inside `initGameBot()` in `gameBot.ts`. These are non-fatal (errors are caught and warned). They set the persistent "Open StrikerX" button and the command list for ALL users globally.
+- **railway.toml** — present in repo but intentionally emptied. Railway uses `railway.json` (Dockerfile builder). The toml previously had a dangerous `pnpm db push` in its build command — it has been removed.
 
 ---
 
 ## Debugging one-liners
 
 ```bash
-# Test dev auth bypass
+# Test dev auth bypass (dev only)
 curl -s -X POST http://localhost:8000/api/auth/telegram \
   -H "Content-Type: application/json" \
   -d '{"initData":"dev:123456:player_dev"}' | jq .
 
-# Check jackpot
-curl -s http://localhost:8000/api/jackpot | jq .
+# Test prod health
+curl -s https://strikerx-production.up.railway.app/api/healthz
 
-# Check health
-curl -s http://localhost:8000/api/healthz
+# Test prod admin login
+curl -s -X POST https://strikerx-production.up.railway.app/api/auth/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"Blize","password":"YOUR_PASSWORD"}'
+
+# Check jackpot (prod)
+curl -s https://strikerx-production.up.railway.app/api/jackpot
 
 # Full typecheck
 pnpm run typecheck
@@ -373,7 +429,7 @@ pnpm --filter @workspace/api-spec run codegen
 # Build API server (required after server-side changes)
 pnpm --filter @workspace/api-server run build
 
-# Build frontend (required before Railway deploy picks up changes)
+# Build frontend
 pnpm --filter @workspace/strikerx run build
 
 # Push everything to GitHub → triggers Railway redeploy
@@ -388,14 +444,18 @@ node scripts/github-push.mjs
 # Connect to Railway PostgreSQL from Replit bash
 psql "postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway"
 
-# Quick row count check across all tables
+# Quick row count check
 psql "<connection_string>" -c "
-SELECT 
+SELECT
   (SELECT COUNT(*) FROM players) as players,
   (SELECT COUNT(*) FROM games) as games,
   (SELECT COUNT(*) FROM transactions) as transactions,
-  (SELECT COUNT(*) FROM crash_rounds) as crash_rounds
+  (SELECT COUNT(*) FROM crash_rounds) as crash_rounds,
+  (SELECT COUNT(*) FROM app_config) as app_config
 "
+
+# Fix a config value directly
+psql "<connection_string>" -c "UPDATE app_config SET value='newvalue', updated_at=NOW() WHERE key='some_key';"
 
 # Applying a schema change to Railway (example)
 psql "<connection_string>" -c "ALTER TABLE players ADD COLUMN new_field text;"
@@ -405,20 +465,25 @@ psql "<connection_string>" -c "ALTER TABLE players ADD COLUMN new_field text;"
 
 ---
 
-## What's working on Railway right now (as of last session)
+## Production status (verified 2026-06-09)
 
-- Crash engine cycling (rounds every ~10 seconds)
-- All 4 games fully playable (The Shot WS auth fixed)
+Everything below is confirmed working on Railway:
+
+- Crash engine cycling (rounds every ~10 seconds, 2500+ completed)
+- All 4 games fully playable
 - Player auth via real Telegram initData
-- Deposits via CryptoBot (CryptoBot webhook must be set manually via @CryptoBot)
-- Withdrawals (first withdrawal goes to under_review for admin approval)
+- Admin login at `/admin` (username: Blize)
+- Deposits via CryptoBot (webhook set at `strikerx-production.up.railway.app/api/payments/webhook/cryptobot`)
+- Withdrawals (first withdrawal → `under_review` for admin approval; subsequent go straight through)
 - Achievements unlocking
-- Admin panel
-- GameBot DMs to players
-- GroupBot broadcasts (requires bot to be admin in the Telegram group)
+- GameBot commands + persistent "Open StrikerX" menu button (always visible, no typing needed)
+- GroupBot broadcasts (bot is admin in group)
 - Leaderboard, profile, KYC form, deposit/withdraw UI
+- Jackpot at 10.36 TON building toward 50 TON
+- 8 affiliate codes live (see Affiliate codes section above)
+- CryptoBot webhook: manually set via @CryptoBot — complete
+- GroupBot group admin: configured — complete
 
-## Manual steps still required (user must do in Telegram)
+## Manual steps remaining
 
-1. **CryptoBot webhook** — message @CryptoBot → `/myapps` → select StrikerX → `/setwebhook` → paste Railway URL + `/api/payments/webhook/cryptobot`
-2. **GroupBot admin** — in the Telegram group, add GroupBot as admin with "Post Messages" permission
+None. All production setup is complete as of 2026-06-09.
