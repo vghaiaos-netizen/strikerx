@@ -63,7 +63,6 @@ router.get("/public/wc-theme", async (_req, res): Promise<void> => {
     const kickOffMs = new Date(kickOff || "2026-06-11T16:00:00.000Z").getTime();
     const endMs = new Date(wcEnd || "2026-07-20T00:00:00.000Z").getTime();
 
-    // active if within WC window OR admin override is "true"
     const dateActive = now >= kickOffMs && now <= endMs;
     const active = override === "true" || dateActive;
     const countdown = now < kickOffMs;
@@ -79,6 +78,44 @@ router.get("/public/wc-theme", async (_req, res): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "Failed to get WC theme status");
     res.json({ active: false, live: false, countdown: false, kickOff: null, endsAt: null });
+  }
+});
+
+// GET /public/recent-wins — last 20 big wins for the live winners feed (no auth)
+router.get("/public/recent-wins", async (_req, res): Promise<void> => {
+  try {
+    const { db } = await import("@workspace/db");
+    const { games, players } = await import("@workspace/db");
+    const { desc, eq, gt } = await import("drizzle-orm");
+
+    const wins = await db
+      .select({
+        id:         games.id,
+        username:   players.username,
+        gameType:   games.gameType,
+        betStriker: games.betStriker,
+        winAmount:  games.winAmount,
+        multiplier: games.multiplier,
+        playedAt:   games.playedAt,
+      })
+      .from(games)
+      .innerJoin(players, eq(games.playerId, players.id))
+      .where(eq(games.outcome, "win"))
+      .orderBy(desc(games.playedAt))
+      .limit(20);
+
+    res.json(wins.map(w => ({
+      id:        w.id,
+      username:  w.username,
+      game:      w.gameType,
+      bet:       parseFloat(String(w.betStriker)),
+      win:       parseFloat(String(w.winAmount)),
+      mult:      parseFloat(String(w.multiplier ?? 1)),
+      playedAt:  w.playedAt,
+    })));
+  } catch (err) {
+    logger.error({ err }, "Failed to get recent wins");
+    res.json([]);
   }
 });
 
