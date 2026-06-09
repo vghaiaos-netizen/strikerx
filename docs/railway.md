@@ -50,7 +50,7 @@ In the Railway service → **Variables** tab, add all of the following:
 | `ADMIN_PASSWORD` | *(your admin password)* |
 | `GAMEBOT_TOKEN` | *(GameBot token from @BotFather)* |
 | `GROUPBOT_TOKEN` | *(GroupBot token from @BotFather)* |
-| `CRYPTOBOT_API_TOKEN` | *(from @CryptoBot → /myapps → API)* |
+| `CRYPTOBOT_TOKEN` | *(from @CryptoBot → /myapps → API)* |
 | `TELEGRAM_GROUP_ID` | `-5141022548` |
 | `MINI_APP_LINK` | `t.me/StrykkerXBot/StrikerX` |
 | `OPERATOR_TON_WALLET` | `UQAokp-Xaa6wS1hxk33LMAjHaOjLsP5iQuAtAnv4K0PKdVPx` |
@@ -63,18 +63,23 @@ In the Railway service → **Variables** tab, add all of the following:
 
 ### 4. Apply the database schema (one-time)
 
-After the first successful deploy, run this from your local machine or
-Replit shell using Railway's connection string:
+**IMPORTANT: Do NOT run `pnpm db push` against a Railway DB with live data — it drops and recreates tables.**
+
+After the first successful deploy (before any real players/data), you can use:
 
 ```bash
-# Get DATABASE_URL from Railway dashboard → PostgreSQL service → Connect tab
-DATABASE_URL="postgresql://..." pnpm --filter @workspace/db run push
+# From Replit bash shell, using the Railway connection string
+psql "postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway" \
+  -f <(DATABASE_URL="postgresql://..." node -e "require('./lib/db/src/schema')")
 ```
 
-Or use the Railway CLI:
+The safest approach for a fresh Railway PostgreSQL (no data yet):
 ```bash
-railway run pnpm --filter @workspace/db run push
+# Only safe on a brand-new empty database
+DATABASE_URL="postgresql://postgres:PASSWORD@HOST:PORT/railway" pnpm --filter @workspace/db run push
 ```
+
+For any schema change after launch, write and run manual `ALTER TABLE` SQL against the Railway connection string. The schema files are in `lib/db/src/schema/`.
 
 ### 5. Note your permanent Railway URL
 
