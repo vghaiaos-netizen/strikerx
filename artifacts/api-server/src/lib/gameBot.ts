@@ -4,6 +4,20 @@ import { logger } from "./logger";
 let gameBot: Telegraf | null = null;
 const MINI_APP_LINK = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
 
+/**
+ * Returns the direct HTTPS URL of the Mini App web app.
+ * Telegram webApp inline-keyboard buttons require a real HTTPS URL —
+ * t.me short-links only work for Menu Buttons and share links, NOT webApp buttons.
+ */
+function getAppUrl(): string {
+  const domain =
+    process.env.WEBHOOK_DOMAIN ??
+    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  if (domain) return `https://${domain}`;
+  // Last-resort fallback (dev without REPLIT_DOMAINS)
+  return getAppUrl();
+}
+
 export function getGameBot(): Telegraf | null {
   if (!gameBot && process.env.GAMEBOT_TOKEN) {
     gameBot = new Telegraf(process.env.GAMEBOT_TOKEN);
@@ -23,7 +37,7 @@ export async function initGameBot(): Promise<void> {
     const username = ctx.from?.username ?? ctx.from?.first_name ?? "Player";
     const startParam = (ctx.message as { text: string }).text?.split(" ")[1]; // referral code if any
 
-    let miniAppUrl = `https://${MINI_APP_LINK}`;
+    let miniAppUrl = getAppUrl();
     if (startParam) {
       miniAppUrl += `?startapp=${startParam}`;
     }
@@ -52,7 +66,7 @@ export async function initGameBot(): Promise<void> {
 
       await ctx.reply(
         `Your Balance:\n\nSTRIKER: ${player.strikerBalance.toFixed(2)}\nBOOT: ${player.bootBalance.toFixed(0)}\nCAPTAIN: ${player.captainBalance.toFixed(0)}\n\nVIP Tier: ${player.vipTier.replace(/_/g, " ").toUpperCase()}`,
-        Markup.inlineKeyboard([[Markup.button.webApp("Open StrikerX", `https://${MINI_APP_LINK}`)]])
+        Markup.inlineKeyboard([[Markup.button.webApp("Open StrikerX", getAppUrl())]])
       );
     } catch (err) {
       logger.error({ err }, "Balance command error");
@@ -64,7 +78,7 @@ export async function initGameBot(): Promise<void> {
   bot.command("deposit", async (ctx) => {
     await ctx.reply(
       "Deposit funds directly in the Mini App. We accept TON, USDT, BNB, and SOL.",
-      Markup.inlineKeyboard([[Markup.button.webApp("Deposit Now", `https://${MINI_APP_LINK}`)]])
+      Markup.inlineKeyboard([[Markup.button.webApp("Deposit Now", getAppUrl())]])
     );
   });
 
@@ -72,7 +86,7 @@ export async function initGameBot(): Promise<void> {
   bot.command("withdraw", async (ctx) => {
     await ctx.reply(
       "Withdraw your winnings directly in the Mini App.",
-      Markup.inlineKeyboard([[Markup.button.webApp("Withdraw Now", `https://${MINI_APP_LINK}`)]])
+      Markup.inlineKeyboard([[Markup.button.webApp("Withdraw Now", getAppUrl())]])
     );
   });
 
@@ -119,7 +133,7 @@ export async function initGameBot(): Promise<void> {
       const nextMilestone = milestones.find((m) => m > player.streakDays) ?? 30;
       await ctx.reply(
         `Your Streak: ${player.streakDays} days\nNext milestone: Day ${nextMilestone}\n\nClaim your daily reward in the Mini App!`,
-        Markup.inlineKeyboard([[Markup.button.webApp("Claim Streak", `https://${MINI_APP_LINK}`)]])
+        Markup.inlineKeyboard([[Markup.button.webApp("Claim Streak", getAppUrl())]])
       );
     } catch (err) {
       logger.error({ err }, "Streak command error");
@@ -185,7 +199,7 @@ export async function initGameBot(): Promise<void> {
   bot.command("leaderboard", async (ctx) => {
     await ctx.reply(
       "View the full leaderboard in the Mini App.",
-      Markup.inlineKeyboard([[Markup.button.webApp("View Leaderboard", `https://${MINI_APP_LINK}`)]])
+      Markup.inlineKeyboard([[Markup.button.webApp("View Leaderboard", getAppUrl())]])
     );
   });
 
