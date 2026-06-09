@@ -9,35 +9,45 @@ A football-themed Telegram Mini App casino platform with four original games, th
 
 ---
 
-## DEPLOYMENT HANDOFF — READ THIS FIRST
+## FOR AGENTS — READ THIS FIRST
 
-> This section is for the agent doing the production deployment. Everything below is already done. Do not re-configure what is already set.
-
-### Status: Ready to publish
-
-All secrets are set, all configs are wired, the deployment target and commands are configured. The single remaining action is to click **Publish** in the Replit UI.
+> Full Replit dev guide: `docs/for-replit-agents.md`
+> Full Railway setup guide: `docs/railway.md`
+> Railway one-shot agent prompt: `docs/railway-agent-prompt.md`
 
 ---
 
-### Secrets already set in Replit Secrets panel
+## Production = Railway. Replit = Development only.
 
-These are confirmed working. Do not ask the user to re-enter them.
+**The Replit dev URL changes every restart — it cannot host bots reliably.**
+Railway is the permanent production host. The workflow is:
+
+```
+Edit on Replit  →  node scripts/github-push.mjs  →  Railway auto-deploys  (~3 min)
+```
+
+The Railway URL (`*.up.railway.app`) is permanent. BotFather and CryptoBot webhook are wired to it once and never change.
+
+---
+
+## Replit dev secrets (already set — do not re-ask the user)
 
 | Secret | Status | Notes |
 |---|---|---|
-| `JWT_SECRET` | SET | Strong random value — server will crash on startup if missing or default |
+| `JWT_SECRET` | SET | Strong random value — server crashes on startup if missing or default |
 | `ADMIN_USERNAME` | SET | Admin dashboard login |
-| `ADMIN_PASSWORD` | SET | Not "admin123" — confirmed strong |
+| `ADMIN_PASSWORD` | SET | Not "admin123" — strong value confirmed |
 | `GAMEBOT_TOKEN` | SET | @StrykkerXBot — GameBot (player DMs, /start, /balance) |
 | `GROUPBOT_TOKEN` | SET | GroupBot (community channel broadcasts) |
-| `CRYPTOBOT_API_TOKEN` | SET | Verified: returns app_id=592023, name="StrikerX" from CryptoPay API |
-| `DATABASE_URL` | SET | Replit-managed PostgreSQL — do not touch |
+| `CRYPTOBOT_API_TOKEN` | SET | Verified working — app_id=592023, name="StrikerX" |
+| `DATABASE_URL` | SET | Replit-managed PostgreSQL (dev only) |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | SET | Used by `node scripts/github-push.mjs` |
 
-> **Note for agents:** `viewEnvVars()` in the code_execution sandbox only surfaces Replit-managed runtime secrets (DATABASE_URL, REPL_ID, etc.). It will NOT list user-added secrets like JWT_SECRET or bot tokens. This is expected — they ARE set and working (confirmed by server startup logs showing webhook registration and bot init).
+> `viewEnvVars()` in the code_execution sandbox only shows Replit-managed vars (DATABASE_URL, REPL_ID, etc.). User-set secrets above are invisible to that tool but ARE present and working. Verify via API Server startup logs.
 
 ---
 
-### Non-sensitive env vars (already set as shared env vars — persist across sessions)
+## Shared env vars (already set — persist across sessions)
 
 | Variable | Value |
 |---|---|
@@ -49,60 +59,44 @@ These are confirmed working. Do not ask the user to re-enter them.
 
 ---
 
-### What auto-configures on deploy — no manual action needed
+## Domain detection (auto — no manual config needed)
 
-- `WEBHOOK_DOMAIN` — code reads `process.env.REPLIT_DOMAINS` (auto-set by Replit to `*.replit.app`). Do NOT set this manually unless overriding with a custom domain.
-- `CORS_ORIGIN` — same fallback. Do NOT set manually.
-- Telegram bot webhooks — auto-registered on server startup using the detected domain.
+The server detects its public URL automatically in this priority order:
 
----
+```
+WEBHOOK_DOMAIN  →  REPLIT_DOMAINS  →  RAILWAY_PUBLIC_DOMAIN  →  REPLIT_DEV_DOMAIN
+```
 
-### Deployment configuration (already set in .replit)
+- **Railway:** `RAILWAY_PUBLIC_DOMAIN` auto-injected
+- **Replit Publish:** `REPLIT_DOMAINS` auto-injected
+- **Replit dev:** `REPLIT_DEV_DOMAIN` is the rotating URL (bots will break on restart)
+- **Override:** set `WEBHOOK_DOMAIN` for a custom domain
 
-| Setting | Value |
-|---|---|
-| Target | **`vm`** (always-on — NEVER change to `autoscale`, WebSocket crash game requires persistent state) |
-| Build | `pnpm install --frozen-lockfile && pnpm --filter @workspace/strikerx run build && pnpm --filter @workspace/api-server run build` |
-| Run | `NODE_ENV=production PORT=5000 node --enable-source-maps artifacts/api-server/dist/index.mjs` |
-
----
-
-### Step-by-step deployment
-
-1. **Click Publish** in the Replit UI. The build runs automatically.
-2. **Wait** for the build to complete (2–3 minutes). Both Telegram bot webhooks register automatically on first startup.
-3. **Register CryptoBot payment webhook** (manual — CryptoPay has no API for this):
-   - Open Telegram → `@CryptoBot` → `/myapps`
-   - Select **StrikerX** → **Webhooks** → set URL to:
-     `https://YOUR-APP.replit.app/api/payments/webhook/cryptobot`
-   - The exact URL is logged on startup: look for `"CryptoBot webhook URL"` in deployment logs.
-4. **Configure BotFather Mini App URL**:
-   - Open `@BotFather` → `/myapps` → select your GameBot app
-   - Set the Web App URL to `https://YOUR-APP.replit.app`
-   - This makes `/start` open the casino UI inside Telegram.
+Do NOT manually set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN` — they auto-detect.
 
 ---
 
-### Production architecture (single port)
+## Production architecture (single port — same on Railway and Replit Publish)
 
-In production, a single Node.js process on port 5000 serves everything:
-- `GET /api/*` — Express API
+One Node.js process serves everything:
+- `GET /api/*` — Express REST API
 - `GET /ws` — WebSocket (crash game, real-time events)
 - `POST /api/bots/gamebot/webhook` — GameBot Telegram webhook
 - `POST /api/bots/groupbot/webhook` — GroupBot Telegram webhook
 - `POST /api/payments/webhook/cryptobot` — CryptoBot payment confirmation
-- `GET /*` — React SPA (served from `artifacts/strikerx/dist/public`)
+- `GET /*` — React SPA (from `artifacts/strikerx/dist/public`)
 
-In dev, API runs on port 8000 and the Vite frontend on port 5000 (which proxies `/api` and `/ws` to 8000).
+In dev: API on port 8000, Vite on port 5000 (proxies `/api` and `/ws` to 8000).
 
 ---
 
-### DO NOT do these things
+## DO NOT do these things
 
-- Do not change `deploymentTarget` from `vm` to `autoscale` — WebSockets require always-on.
-- Do not set `WEBHOOK_DOMAIN` or `CORS_ORIGIN` as secrets/env vars — they auto-detect from `REPLIT_DOMAINS`.
-- Do not run `pnpm --filter @workspace/db run push` in production — apply DDL manually via the database tool with `environment: "production"`.
+- Do not set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN` manually — auto-detected.
+- Do not run `pnpm --filter @workspace/db run push` against Railway/production DB — use manual `ALTER TABLE` SQL.
 - Do not edit generated files in `lib/api-client-react/src/generated/` or `lib/api-zod/src/generated/` — regenerate via `pnpm --filter @workspace/api-spec run codegen`.
+- Do not add `setWebhook` calls to `gameBot.ts` or `groupBot.ts` — webhook registration is centralised in `app.ts` only.
+- Do not use `console.log` in server code — use `req.log` (in route handlers) or `logger` (everywhere else).
 
 ---
 

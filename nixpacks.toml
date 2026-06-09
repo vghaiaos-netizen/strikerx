@@ -1,5 +1,5 @@
-[phases.setup]
-nixPkgs = ["nodejs_22", "pnpm"]
-
+# Railway Nixpacks config — pins Node and enables corepack so pnpm is available.
+# NODE_VERSION is read natively by Nixpacks; no need to list node in nixPkgs.
 [variables]
 NODE_VERSION = "22"
+ENABLE_COREPACK = "1"
