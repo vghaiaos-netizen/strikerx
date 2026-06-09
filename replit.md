@@ -9,19 +9,119 @@ A football-themed Telegram Mini App casino platform with four original games, th
 
 ---
 
+## DEPLOYMENT HANDOFF — READ THIS FIRST
+
+> This section is for the agent doing the production deployment. Everything below is already done. Do not re-configure what is already set.
+
+### Status: Ready to publish
+
+All secrets are set, all configs are wired, the deployment target and commands are configured. The single remaining action is to click **Publish** in the Replit UI.
+
+---
+
+### Secrets already set in Replit Secrets panel
+
+These are confirmed working. Do not ask the user to re-enter them.
+
+| Secret | Status | Notes |
+|---|---|---|
+| `JWT_SECRET` | SET | Strong random value — server will crash on startup if missing or default |
+| `ADMIN_USERNAME` | SET | Admin dashboard login |
+| `ADMIN_PASSWORD` | SET | Not "admin123" — confirmed strong |
+| `GAMEBOT_TOKEN` | SET | @StrykkerXBot — GameBot (player DMs, /start, /balance) |
+| `GROUPBOT_TOKEN` | SET | GroupBot (community channel broadcasts) |
+| `CRYPTOBOT_API_TOKEN` | SET | Verified: returns app_id=592023, name="StrikerX" from CryptoPay API |
+| `DATABASE_URL` | SET | Replit-managed PostgreSQL — do not touch |
+
+> **Note for agents:** `viewEnvVars()` in the code_execution sandbox only surfaces Replit-managed runtime secrets (DATABASE_URL, REPL_ID, etc.). It will NOT list user-added secrets like JWT_SECRET or bot tokens. This is expected — they ARE set and working (confirmed by server startup logs showing webhook registration and bot init).
+
+---
+
+### Non-sensitive env vars (already set as shared env vars — persist across sessions)
+
+| Variable | Value |
+|---|---|
+| `TELEGRAM_GROUP_ID` | `-5141022548` |
+| `MINI_APP_LINK` | `t.me/StrykkerXBot/StrikerX` |
+| `OPERATOR_TON_WALLET` | `UQAokp-Xaa6wS1hxk33LMAjHaOjLsP5iQuAtAnv4K0PKdVPx` |
+| `OPERATOR_USDT_TON_WALLET` | `UQAokp-Xaa6wS1hxk33LMAjHaOjLsP5iQuAtAnv4K0PKdVPx` |
+| `OPERATOR_USDT_TRC20_WALLET` | `TRf9993cfY4zH4k6Q8eSUoK8cc4HzPA8cg` |
+
+---
+
+### What auto-configures on deploy — no manual action needed
+
+- `WEBHOOK_DOMAIN` — code reads `process.env.REPLIT_DOMAINS` (auto-set by Replit to `*.replit.app`). Do NOT set this manually unless overriding with a custom domain.
+- `CORS_ORIGIN` — same fallback. Do NOT set manually.
+- Telegram bot webhooks — auto-registered on server startup using the detected domain.
+
+---
+
+### Deployment configuration (already set in .replit)
+
+| Setting | Value |
+|---|---|
+| Target | **`vm`** (always-on — NEVER change to `autoscale`, WebSocket crash game requires persistent state) |
+| Build | `pnpm install --frozen-lockfile && pnpm --filter @workspace/strikerx run build && pnpm --filter @workspace/api-server run build` |
+| Run | `NODE_ENV=production PORT=5000 node --enable-source-maps artifacts/api-server/dist/index.mjs` |
+
+---
+
+### Step-by-step deployment
+
+1. **Click Publish** in the Replit UI. The build runs automatically.
+2. **Wait** for the build to complete (2–3 minutes). Both Telegram bot webhooks register automatically on first startup.
+3. **Register CryptoBot payment webhook** (manual — CryptoPay has no API for this):
+   - Open Telegram → `@CryptoBot` → `/myapps`
+   - Select **StrikerX** → **Webhooks** → set URL to:
+     `https://YOUR-APP.replit.app/api/payments/webhook/cryptobot`
+   - The exact URL is logged on startup: look for `"CryptoBot webhook URL"` in deployment logs.
+4. **Configure BotFather Mini App URL**:
+   - Open `@BotFather` → `/myapps` → select your GameBot app
+   - Set the Web App URL to `https://YOUR-APP.replit.app`
+   - This makes `/start` open the casino UI inside Telegram.
+
+---
+
+### Production architecture (single port)
+
+In production, a single Node.js process on port 5000 serves everything:
+- `GET /api/*` — Express API
+- `GET /ws` — WebSocket (crash game, real-time events)
+- `POST /api/bots/gamebot/webhook` — GameBot Telegram webhook
+- `POST /api/bots/groupbot/webhook` — GroupBot Telegram webhook
+- `POST /api/payments/webhook/cryptobot` — CryptoBot payment confirmation
+- `GET /*` — React SPA (served from `artifacts/strikerx/dist/public`)
+
+In dev, API runs on port 8000 and the Vite frontend on port 5000 (which proxies `/api` and `/ws` to 8000).
+
+---
+
+### DO NOT do these things
+
+- Do not change `deploymentTarget` from `vm` to `autoscale` — WebSockets require always-on.
+- Do not set `WEBHOOK_DOMAIN` or `CORS_ORIGIN` as secrets/env vars — they auto-detect from `REPLIT_DOMAINS`.
+- Do not run `pnpm --filter @workspace/db run push` in production — apply DDL manually via the database tool with `environment: "production"`.
+- Do not edit generated files in `lib/api-client-react/src/generated/` or `lib/api-zod/src/generated/` — regenerate via `pnpm --filter @workspace/api-spec run codegen`.
+
+---
+
 ## Run & Operate
 
 | Command | What it does |
 |---|---|
-| `pnpm --filter @workspace/api-server run dev` | Run the API server (port 8081 in dev) |
-| `pnpm --filter @workspace/strikerx run dev` | Run the React Mini App frontend (port 8080 in dev) |
+| `pnpm --filter @workspace/api-server run dev` | Run API server in dev (port 8081 per package script) |
+| `pnpm --filter @workspace/strikerx run dev` | Run React Mini App frontend (port 5000 in dev) |
+| `pnpm --filter @workspace/api-server run build` | Build API server to `artifacts/api-server/dist/index.mjs` |
+| `pnpm --filter @workspace/strikerx run build` | Build frontend to `artifacts/strikerx/dist/public` |
 | `pnpm run typecheck` | Full typecheck across all packages |
-| `pnpm run build` | Typecheck + build all packages |
 | `pnpm --filter @workspace/api-spec run codegen` | Regenerate React Query hooks and Zod schemas from the OpenAPI spec |
 | `pnpm --filter @workspace/db run push` | Push Drizzle schema to DB (dev only — never on prod) |
 | `node scripts/github-push.mjs` | Push all files to GitHub via Contents API (git push is blocked in Replit) |
 
 **Dev auth bypass:** `POST /api/auth/telegram` with `{ "initData": "dev:123456:player_dev" }` — only works when `NODE_ENV=development`.
+
+**Dev workflow:** The `API Server` workflow runs `pnpm --filter @workspace/api-server run build` then starts the built artifact on port 8000. After any server-side code change, you must rebuild before changes take effect.
 
 ---
 
@@ -35,7 +135,7 @@ A football-themed Telegram Mini App casino platform with four original games, th
 - **Build:** esbuild (bundles to `dist/index.mjs`)
 - **Frontend:** React + Vite + TailwindCSS + shadcn/ui + Framer Motion
 - **Bots:** Telegraf v4 — GameBot (private DM) + GroupBot (community channel)
-- **Payments:** CryptoBot API (TON/USDT/BNB/SOL deposits; withdrawal managed manually)
+- **Payments:** CryptoBot API (TON/USDT/BNB/SOL deposits; withdrawal goes to player's CryptoPay balance)
 - **Real-time:** Native WebSocket server at `/ws` on the same HTTP server
 
 ---
@@ -56,11 +156,11 @@ artifacts/
       admin.ts                   — All /admin/* endpoints (players, withdrawals, kyc, etc.)
       affiliates.ts              — Affiliate program CRUD
       auth.ts                    — Telegram auth + admin login
-      bots.ts                    — Telegram webhook endpoints
+      bots.ts                    — Telegram webhook endpoints (/api/bots/gamebot/webhook, /api/bots/groupbot/webhook)
       games.ts                   — Penalty, Minefield, Free Kick game logic
       jackpot.ts                 — Public jackpot endpoint + admin jackpot management
       kyc.ts                     — Player KYC submit/status endpoints
-      payments.ts                — CryptoBot invoice creation + webhook handler
+      payments.ts                — CryptoBot invoice creation + webhook handler (/api/payments/webhook/cryptobot)
       players.ts                 — Player profile, stats, referral, streak, cashback
       public.ts                  — Public endpoints (match event, rate event status)
     lib/
@@ -132,7 +232,7 @@ scripts/github-push.mjs          — GitHub file push script (use instead of git
 | Minefield | `POST /api/games/minefield/start` + pick + cashout | Compound multiplier per safe pick |
 | Free Kick | `POST /api/games/freekick` | Plinko-style slot payout |
 
-All game wins are multiplied by the active **match event bonus** (`getMatchEventBonus()` — reads `match_event_active` config).  
+All game wins are multiplied by the active **match event bonus** (`getMatchEventBonus()` — reads `match_event_active` config).
 All game wins **credit affiliate commission** to the affiliate owner if the player signed up via an affiliate code.
 
 ---
@@ -165,8 +265,8 @@ Use `configService.getConfig(key)`, `getConfigFloat(key, default)`, `setConfig(k
 
 ## Admin panel pages
 
-All admin routes require `Authorization: Bearer <adminToken>` with `isAdmin: true` in JWT payload.  
-Login at `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (default: admin/admin123).
+All admin routes require `Authorization: Bearer <adminToken>` with `isAdmin: true` in JWT payload.
+Login at `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars.
 
 | URL | Description |
 |---|---|
@@ -222,28 +322,6 @@ Login at `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD` e
 
 ---
 
-## Deployment checklist
-
-Set these environment variables before going live:
-
-| Env var | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | Postgres connection string |
-| `JWT_SECRET` | Yes | Random 256-bit secret for signing tokens |
-| `GAMEBOT_TOKEN` | Yes | Telegram bot token for GameBot (player DMs) |
-| `GROUPBOT_TOKEN` | Yes | Telegram bot token for GroupBot (community channel) |
-| `TELEGRAM_GROUP_ID` | Yes | Telegram group/channel ID for announcements |
-| `CRYPTOBOT_API_TOKEN` | Yes | CryptoBot API token for payment invoices |
-| `WEBHOOK_DOMAIN` | Yes | Production domain (e.g. `strikerx.replit.app`) — auto-registers Telegram webhooks on startup |
-| `CORS_ORIGIN` | Yes | Allowed origins (comma-separated), e.g. `https://strikerx.replit.app` |
-| `ADMIN_USERNAME` | Yes | Admin login username |
-| `ADMIN_PASSWORD` | Yes | Admin login password |
-| `STRIKER_DEPOSIT_RATE` | No | Default 100 — overrides DB config |
-| `JACKPOT_SEED_AMOUNT` | No | Default 10 TON |
-| `JACKPOT_MIN_POOL` | No | Default 50 TON |
-
----
-
 ## Gotchas & non-obvious decisions
 
 - **Drizzle numeric returns strings** — always wrap with `parseFloat(String(value))` or `Number(value)`. This applies to `commissionRate`, `totalEarned`, `currentAmountTon`, etc.
@@ -251,10 +329,14 @@ Set these environment variables before going live:
 - **Bots are no-ops without tokens** — they log a WARN but don't crash. Safe for dev.
 - **Jackpot is a single-row table** — always `SELECT LIMIT 1` then upsert.
 - **`match_event_active`** is never pre-seeded in app_config — `getConfig()` returns `""` when unset; always compare to `=== "true"`, not truthy.
-- **GitHub push** — `git push` is blocked in Replit. Use `node scripts/github-push.mjs`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` env var (set in Replit secrets). Run from bash shell, not from `code_execution` sandbox (PAT not available there).
+- **GitHub push** — `git push` is blocked in Replit. Use `node scripts/github-push.mjs`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN` secret. Run from bash shell, not from `code_execution` sandbox (PAT not available there).
 - **Rate event deposit bonus** is applied in `payments.ts` webhook handler (on successful deposit), not in game logic.
 - **Match event bonus** is applied in `games.ts` and `crashEngine.ts` via `getMatchEventBonus()` on every game win.
 - **First withdrawal** for any player always goes to `under_review` status for manual admin approval.
+- **Withdrawals send to CryptoPay balance** — `processCryptoBotTransfer` uses `user_id: telegramUserId`, not an external wallet address. Players receive funds in their CryptoPay balance, then withdraw from CryptoPay themselves. The `destinationAddress` field is stored for admin reference only.
 - **Referral code vs affiliate code** — `player.referralCode` is their own code for the 2-tier player referral system; `player.affiliateCode` is the influencer code they used when signing up (separate system).
 - **Codegen** — after editing `lib/api-spec/openapi.yaml`, run `pnpm --filter @workspace/api-spec run codegen`. The generated files live in `lib/api-client-react/src/generated/` and `lib/api-zod/src/generated/`. Never edit generated files directly.
 - **Schema changes** — after editing `lib/db/src/schema/*.ts`, run `cd lib/db && pnpm run push` to apply to the dev database. For production DB, apply the same DDL manually via the database tool with `environment: "production"`.
+- **Bot webhook registration** — handled centrally in `app.ts` IIFE after both bots are initialized. Do not add webhook registration logic in `gameBot.ts` or `groupBot.ts` — it causes duplicate registration and Telegram 429 errors.
+- **CryptoBot webhook** — CryptoPay has no API to set the webhook programmatically. It must be set manually via @CryptoBot in Telegram. The server logs the correct URL on startup.
+- **`viewEnvVars()` does not show user-set secrets** — only Replit runtime-managed vars (DATABASE_URL, REPL_ID, etc.) appear. JWT_SECRET, bot tokens, etc. are present but invisible to this tool. Verify they work by checking server startup logs instead.

@@ -6,7 +6,7 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 // GroupBot webhook endpoint
-router.post("/bots/groupbot", async (req, res): Promise<void> => {
+router.post("/bots/groupbot/webhook", async (req, res): Promise<void> => {
   const bot = getGroupBot();
   if (!bot) {
     res.status(503).json({ error: "GroupBot not configured" });
@@ -22,7 +22,7 @@ router.post("/bots/groupbot", async (req, res): Promise<void> => {
 });
 
 // GameBot webhook endpoint
-router.post("/bots/gamebot", async (req, res): Promise<void> => {
+router.post("/bots/gamebot/webhook", async (req, res): Promise<void> => {
   const bot = getGameBot();
   if (!bot) {
     res.status(503).json({ error: "GameBot not configured" });
