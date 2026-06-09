@@ -84,24 +84,23 @@ router.get("/public/wc-theme", async (_req, res): Promise<void> => {
 // GET /public/recent-wins — last 20 big wins for the live winners feed (no auth)
 router.get("/public/recent-wins", async (_req, res): Promise<void> => {
   try {
-    const { db } = await import("@workspace/db");
-    const { games, players } = await import("@workspace/db");
-    const { desc, eq, gt } = await import("drizzle-orm");
+    const { db, gamesTable, playersTable } = await import("@workspace/db");
+    const { desc, eq } = await import("drizzle-orm");
 
     const wins = await db
       .select({
-        id:         games.id,
-        username:   players.username,
-        gameType:   games.gameType,
-        betStriker: games.betStriker,
-        winAmount:  games.winAmount,
-        multiplier: games.multiplier,
-        playedAt:   games.playedAt,
+        id:         gamesTable.id,
+        username:   playersTable.username,
+        gameType:   gamesTable.gameType,
+        betStriker: gamesTable.betStriker,
+        winAmount:  gamesTable.winAmount,
+        multiplier: gamesTable.multiplier,
+        playedAt:   gamesTable.playedAt,
       })
-      .from(games)
-      .innerJoin(players, eq(games.playerId, players.id))
-      .where(eq(games.outcome, "win"))
-      .orderBy(desc(games.playedAt))
+      .from(gamesTable)
+      .innerJoin(playersTable, eq(gamesTable.playerId, playersTable.id))
+      .where(eq(gamesTable.outcome, "win"))
+      .orderBy(desc(gamesTable.playedAt))
       .limit(20);
 
     res.json(wins.map(w => ({
