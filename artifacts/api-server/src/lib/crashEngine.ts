@@ -35,6 +35,7 @@ export interface RoundState {
   multiplier: number;
   crashPoint: number;
   startedAt: Date | null;
+  waitingStartedAt: Date | null;
   bets: Map<number, CrashBet>; // playerId → bet
   serverSeed: string;
 }
@@ -69,6 +70,7 @@ class CrashEngine {
       multiplier: this.currentRound.multiplier,
       crashPoint: this.currentRound.status === "crashed" ? this.currentRound.crashPoint : null,
       startedAt: this.currentRound.startedAt?.toISOString() ?? null,
+      waitingStartedAt: this.currentRound.waitingStartedAt?.toISOString() ?? null,
       activePlayers: this.currentRound.bets.size,
     };
   }
@@ -83,12 +85,14 @@ class CrashEngine {
       .values({ serverSeed, crashPoint, status: "waiting" })
       .returning();
 
+    const waitingStartedAt = new Date();
     this.currentRound = {
       id: dbRound.id,
       status: "waiting",
       multiplier: 1.0,
       crashPoint,
       startedAt: null,
+      waitingStartedAt,
       bets: new Map(),
       serverSeed,
     };
@@ -108,6 +112,7 @@ class CrashEngine {
 
     this.currentRound.status = "running";
     this.currentRound.startedAt = new Date();
+    this.currentRound.waitingStartedAt = null;
     this.broadcast("round_state", this.getPublicState());
 
     // Update DB
@@ -124,10 +129,10 @@ class CrashEngine {
       if (!this.currentRound || this.currentRound.status !== "running") return;
 
       elapsed += 100;
-      // Exponential growth: multiplier = e^(0.0003 * elapsed_ms)
-      // At 0.0003: 1.5x≈1.4s, 2x≈2.3s, 5x≈5.4s, 10x≈7.7s — gives players time to react and cash out.
-      // (Old rate 0.0006 reached 1.5x in 0.7s — too fast to see.)
-      const raw = Math.exp(0.0003 * elapsed);
+      // Exponential growth: multiplier = e^(0.0002 * elapsed_ms)
+      // At 0.0002: 1.5x≈2.0s, 2x≈3.5s, 5x≈8.0s, 10x≈11.5s — genuine tension window.
+      // Minimum crash is 1.5x so even short rounds give players ~2s to decide.
+      const raw = Math.exp(0.0002 * elapsed);
       this.currentRound.multiplier = parseFloat(raw.toFixed(2));
 
       // Check auto-cashouts
