@@ -15,6 +15,7 @@ interface RoundState {
   multiplier: number;
   crashPoint: number | null;
   startedAt: string | null;
+  waitingStartedAt: string | null;
   activePlayers: number;
 }
 
@@ -99,8 +100,14 @@ export function TheShot() {
 
       if (rs.status === "waiting") {
         setMyBet(null);
-        setWaitCountdown(8);
         if (countdownRef.current) clearInterval(countdownRef.current);
+        // Sync countdown to server — if player joins mid-wait, show remaining time not full 8s
+        const WAIT_DURATION = 8;
+        const elapsed = rs.waitingStartedAt
+          ? (Date.now() - new Date(rs.waitingStartedAt).getTime()) / 1000
+          : 0;
+        const remaining = Math.max(1, Math.ceil(WAIT_DURATION - elapsed));
+        setWaitCountdown(remaining);
         countdownRef.current = setInterval(() => setWaitCountdown(p => Math.max(0, p - 1)), 1000);
       } else if (rs.status === "running") {
         if (countdownRef.current) clearInterval(countdownRef.current);
