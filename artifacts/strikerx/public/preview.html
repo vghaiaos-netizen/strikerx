@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StrikerX — Telegram Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 24px 16px;
+      gap: 16px;
+    }
+
+    .label {
+      color: #64748b;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .phone {
+      width: 393px;
+      height: 852px;
+      background: #17212b;
+      border-radius: 48px;
+      border: 2px solid #2a3a4a;
+      box-shadow:
+        0 0 0 1px #0d1117,
+        0 32px 80px rgba(0,0,0,0.8),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Dynamic island notch */
+    .notch {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 34px;
+      background: #0d1117;
+      border-radius: 20px;
+      z-index: 10;
+    }
+
+    /* Telegram header bar */
+    .tg-header {
+      background: #17212b;
+      padding: 58px 16px 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #1e2c3a;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .tg-back {
+      color: #5288c1;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .tg-bot-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .tg-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .tg-bot-name {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .tg-bot-sub {
+      color: #5288c1;
+      font-size: 12px;
+    }
+
+    .tg-menu {
+      color: #5288c1;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* App iframe */
+    .app-frame {
+      flex: 1;
+      border: none;
+      display: block;
+      width: 100%;
+      background: #0a0e1a;
+    }
+
+    /* Bottom home indicator */
+    .home-bar {
+      height: 34px;
+      background: #17212b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .home-indicator {
+      width: 120px;
+      height: 5px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+
+    .info {
+      color: #475569;
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.6;
+      max-width: 393px;
+    }
+
+    .info a {
+      color: #5288c1;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <p class="label">Telegram Mini App Preview</p>
+
+  <div class="phone">
+    <div class="notch"></div>
+
+    <div class="tg-header">
+      <div class="tg-back">‹</div>
+      <div class="tg-bot-info">
+        <div class="tg-avatar">⚽</div>
+        <div>
+          <div class="tg-bot-name">StrikerX</div>
+          <div class="tg-bot-sub">@StrykkerXBot</div>
+        </div>
+      </div>
+      <div class="tg-menu">⋮</div>
+    </div>
+
+    <iframe
+      class="app-frame"
+      src="/"
+      title="StrikerX App"
+      allow="clipboard-write"
+    ></iframe>
+
+    <div class="home-bar">
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <p class="info">
+    This is exactly how the app looks inside Telegram.<br/>
+    To test on a real device: update your bot's Mini App URL in<br/>
+    <a href="https://t.me/BotFather" target="_blank">@BotFather</a> → /myapps → Web App URL
+  </p>
+</body>
+</html>
