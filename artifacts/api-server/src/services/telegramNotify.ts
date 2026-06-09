@@ -43,6 +43,18 @@ export function sendAchievementUnlocked(telegramId: string, achievementTitle: st
   ).catch((err) => logger.warn({ err, telegramId }, "sendAchievementUnlocked failed"));
 }
 
+export function sendLowBalanceReminder(telegramId: string, balanceStriker: number): void {
+  const appUrl = process.env.MINI_APP_LINK ?? "https://t.me/StrykkerXBot/StrikerX";
+  const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+  const balanceTon = (balanceStriker / depositRate).toFixed(2);
+  const msg = balanceStriker <= 0
+    ? `You've run out of STRIKER. Deposit TON to keep playing — every goal counts!\n\n<a href="${appUrl}">Deposit now</a>`
+    : `Your balance is down to <b>${balanceStriker.toFixed(0)} STRIKER</b> (~${balanceTon} TON). Top up to stay in the game!\n\n<a href="${appUrl}">Deposit now</a>`;
+  sendMessage(telegramId, msg).catch((err) =>
+    logger.warn({ err, telegramId }, "sendLowBalanceReminder failed"),
+  );
+}
+
 export function sendReactivationDM(telegramId: string, daysSince: number): void {
   const lines =
     daysSince >= 14

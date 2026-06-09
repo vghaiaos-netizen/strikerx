@@ -17,7 +17,7 @@ import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
 import { checkAndAward, ACHIEVEMENT_MAP } from "../lib/achievementsService";
-import { sendJackpotWin, sendAchievementUnlocked } from "../services/telegramNotify";
+import { sendJackpotWin, sendAchievementUnlocked, sendLowBalanceReminder } from "../services/telegramNotify";
 import { getMatchEventBonus } from "../lib/matchEventBonus";
 import { creditAffiliateCommission } from "../lib/affiliateCommission";
 
@@ -122,7 +122,7 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
     strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
     tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
-    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 1000 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 500 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 200 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'championship' ELSE 'sunday_league' END`,
     bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
     lastActive: new Date(),
   }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
@@ -186,10 +186,15 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     }
   })().catch(() => {});
 
+  const finalBalancePenalty = win ? newBalance + winAmount : newBalance;
+  if (finalBalancePenalty < 200 && player.telegramId) {
+    sendLowBalanceReminder(player.telegramId, finalBalancePenalty);
+  }
+
   res.json({
     gameId: game.id, gameType: "penalty", betStriker, outcome,
     multiplier: win ? multiplier : 0, winAmount,
-    newBalance: win ? newBalance + winAmount : newBalance,
+    newBalance: finalBalancePenalty,
     jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null,
   });
 });
@@ -217,7 +222,7 @@ router.post("/games/minefield/start", requireAuth, async (req, res): Promise<voi
     strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
     strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
     tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
-    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 1000 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 500 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 200 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'championship' ELSE 'sunday_league' END`,
     bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
   }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
 
@@ -261,6 +266,12 @@ router.post("/games/minefield/:id/pick", requireAuth, async (req, res): Promise<
   if (hitMine) {
     await db.update(minefieldSessionsTable).set({ status: "lost", revealedPositions: newRevealed }).where(eq(minefieldSessionsTable.id, sessionId));
     await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: 0, winAmount: 0, outcome: "loss", gameData: { gridSize: session.gridSize, mineCount: session.mineCount } });
+    // Fire low-balance reminder if they hit a mine and balance is low
+    const [minePlayer] = await db.select({ strikerBalance: playersTable.strikerBalance, telegramId: playersTable.telegramId }).from(playersTable).where(eq(playersTable.id, playerId));
+    const mineBalance = parseFloat(String(minePlayer?.strikerBalance ?? 0));
+    if (mineBalance < 200 && minePlayer?.telegramId) {
+      sendLowBalanceReminder(minePlayer.telegramId, mineBalance);
+    }
     res.json({ id: session.id, gridSize: session.gridSize, mineCount: session.mineCount, revealedPositions: newRevealed, minePositions: session.minePositions, status: "lost", currentMultiplier: 0, betStriker: session.betStriker, winAmount: 0 });
     return;
   }
@@ -323,7 +334,12 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
     }
   })().catch(() => {});
 
-  res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: (player?.strikerBalance ?? 0) + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
+  const mineCashoutBalance = (player?.strikerBalance ?? 0) + winAmount;
+  if (mineCashoutBalance < 200 && player?.telegramId) {
+    sendLowBalanceReminder(player.telegramId, mineCashoutBalance);
+  }
+
+  res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: mineCashoutBalance, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
 
 // ─── FREE KICK (PLINKO) ───────────────────────────────────────────────────────
@@ -347,7 +363,7 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
     strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
     tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
-    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+    vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 1000 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 500 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 200 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'championship' ELSE 'sunday_league' END`,
     bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
     lastActive: new Date(),
   }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
@@ -407,7 +423,12 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     }
   })().catch(() => {});
 
-  res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: newBalance + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
+  const finalBalanceFK = newBalance + winAmount;
+  if (finalBalanceFK < 200 && player.telegramId) {
+    sendLowBalanceReminder(player.telegramId, finalBalanceFK);
+  }
+
+  res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: finalBalanceFK, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
 
 // ─── PROVABLY FAIR — round lookup ────────────────────────────────────────────

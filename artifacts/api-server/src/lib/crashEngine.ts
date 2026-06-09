@@ -224,7 +224,7 @@ class CrashEngine {
       strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
       strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
       tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
-      vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+      vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 1000 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 500 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 200 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'championship' ELSE 'sunday_league' END`,
       bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
       lastActive: new Date(),
     }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
