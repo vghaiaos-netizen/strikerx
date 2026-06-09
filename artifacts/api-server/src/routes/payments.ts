@@ -4,7 +4,6 @@ import { db, playersTable, transactionsTable, withdrawalsTable } from "@workspac
 import { eq, sql, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { strikerToTon, tonToStriker } from "../lib/gameEngine";
-import { broadcastWithdrawal } from "../lib/groupBot";
 import { logger } from "../lib/logger";
 import { processCryptoBotTransfer } from "../lib/cryptobotService";
 

@@ -106,6 +106,15 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     player = inserted[0];
     req.log.info({ telegramId, username, affiliateCode: affiliateCodeApplied }, "New player registered");
 
+    // Announce new player to the group channel
+    import("../lib/groupBot").then(({ broadcastWelcome }) => {
+      import("@workspace/db").then(({ db, jackpotTable }) => {
+        db.select().from(jackpotTable).limit(1).then(([jackpot]) => {
+          broadcastWelcome(username, jackpot?.currentAmountTon ?? 0).catch(() => {});
+        }).catch(() => {});
+      }).catch(() => {});
+    }).catch(() => {});
+
     // Record welcome bonus in transaction history
     if (welcomeBonus > 0) {
       await db.insert(transactionsTable).values({

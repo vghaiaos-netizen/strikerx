@@ -2,6 +2,7 @@ import { Telegraf } from "telegraf";
 import { logger } from "./logger";
 
 let groupBot: Telegraf | null = null;
+let schedulerInitialized = false; // guard against double-init
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID ?? process.env.GROUP_CHAT_ID;
 
 function getAppUrl(): string {
@@ -12,6 +13,14 @@ function getAppUrl(): string {
     process.env.REPLIT_DEV_DOMAIN;
   if (domain) return `https://${domain}`;
   return `https://t.me/StrykkerXBot/StrikerX`;
+}
+
+/** Escape special HTML chars so Telegraf parse_mode:"HTML" never throws a Bad Request error. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 export function getGroupBot(): Telegraf | null {
@@ -36,33 +45,37 @@ async function sendToGroup(text: string, inlineButton?: { text: string; url: str
 }
 
 export async function broadcastWelcome(username: string, jackpotAmount: number): Promise<void> {
-  const text = `Welcome to StrikerX @${username}!\nThe stadium is LIVE. Golden Boot: <b>${jackpotAmount.toFixed(2)} TON</b>\nYour 500 STRIKER welcome bonus is waiting.`;
+  const safe = escapeHtml(username);
+  const text = `Welcome to StrikerX @${safe}!\nThe stadium is LIVE. Golden Boot: <b>${jackpotAmount.toFixed(2)} TON</b>\nYour 500 STRIKER welcome bonus is waiting.`;
   await sendToGroup(text, { text: "Claim & Play", url: getAppUrl() });
 }
 
 export async function broadcastBigWin(username: string, betStriker: number, winStriker: number, game: string): Promise<void> {
+  const safe = escapeHtml(username);
+  const safeGame = escapeHtml(game);
   const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
   const betTon = (betStriker / depositRate).toFixed(2);
   const winTon = (winStriker / depositRate).toFixed(2);
   const multiplier = (winStriker / betStriker).toFixed(2);
-  const text = `GOOOAL!\n@${username} just turned <b>${betTon} TON</b> into <b>${winTon} TON</b>\non <b>${game}</b> at ${multiplier}x!\nCan you beat it?`;
+  const text = `GOOOAL!\n@${safe} just turned <b>${betTon} TON</b> into <b>${winTon} TON</b>\non <b>${safeGame}</b> at ${multiplier}x!\nCan you beat it?`;
   await sendToGroup(text, { text: "Play Now", url: getAppUrl() });
 }
 
 export async function broadcastJackpot(username: string, amountTon: number): Promise<void> {
+  const safe = escapeHtml(username);
   const seedAmount = parseFloat(process.env.JACKPOT_SEED_AMOUNT ?? "10");
-  const text = `GOLDEN BOOT CLAIMED!\n@${username} just won <b>${amountTon.toFixed(2)} TON</b>!\nNew Golden Boot starting at ${seedAmount} TON now.`;
+  const text = `GOLDEN BOOT CLAIMED!\n@${safe} just won <b>${amountTon.toFixed(2)} TON</b>!\nNew Golden Boot starting at ${seedAmount} TON now.`;
   await sendToGroup(text, { text: "Play Now", url: getAppUrl() });
 }
 
 export async function broadcastWithdrawal(username: string, amountTon: number): Promise<void> {
-  const text = `@${username} just cashed out <b>${amountTon.toFixed(2)} TON</b>.\nReal money. Real fast.`;
+  const safe = escapeHtml(username);
+  const text = `@${safe} just cashed out <b>${amountTon.toFixed(2)} TON</b>.\nReal money. Real fast.`;
   await sendToGroup(text, { text: "Open Casino", url: getAppUrl() });
 }
 
 export async function broadcastJackpotUpdate(): Promise<void> {
   try {
-    // Import here to avoid circular deps
     const { db, jackpotTable } = await import("@workspace/db");
     const [jackpot] = await db.select().from(jackpotTable).limit(1);
     if (!jackpot) return;
@@ -86,14 +99,8 @@ export async function broadcastMessage(message: string, buttonText?: string, but
 export async function broadcastMorningMessage(): Promise<void> {
   try {
     const { db, jackpotTable, gamesTable, playersTable } = await import("@workspace/db");
-    const { desc, eq } = await import("drizzle-orm");
+    const { eq } = await import("drizzle-orm");
     const [jackpot] = await db.select().from(jackpotTable).limit(1);
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
 
     const yesterdayGames = await db.select().from(gamesTable).limit(500);
     const bestGame = yesterdayGames.sort((a, b) => b.resultMultiplier - a.resultMultiplier)[0];
@@ -101,7 +108,7 @@ export async function broadcastMorningMessage(): Promise<void> {
     if (bestGame) {
       const [player] = await db.select().from(playersTable).where(eq(playersTable.id, bestGame.playerId));
       if (player) {
-        topScorerLine = `\nYesterday's top scorer: @${player.username} (${bestGame.resultMultiplier.toFixed(2)}x)`;
+        topScorerLine = `\nYesterday's top scorer: @${escapeHtml(player.username)} (${bestGame.resultMultiplier.toFixed(2)}x)`;
       }
     }
 
@@ -113,20 +120,27 @@ export async function broadcastMorningMessage(): Promise<void> {
 }
 
 export async function initGroupBotScheduler(): Promise<void> {
+  if (schedulerInitialized) {
+    logger.warn("GroupBot scheduler already initialized — skipping duplicate call");
+    return;
+  }
+
   const bot = getGroupBot();
   if (!bot) {
     logger.warn("GROUPBOT_TOKEN not set — GroupBot disabled");
     return;
   }
 
-  // Set up bot commands for admin
+  schedulerInitialized = true;
+
+  // Admin commands available inside the group
   bot.command("stats", async (ctx) => {
     try {
       const { db, playersTable } = await import("@workspace/db");
       const { sql } = await import("drizzle-orm");
       const [count] = await db.select({ count: sql`COUNT(*)` }).from(playersTable);
       ctx.reply(`Players: ${count?.count ?? 0}`);
-    } catch (err) {
+    } catch {
       ctx.reply("Error fetching stats");
     }
   });
@@ -146,14 +160,13 @@ export async function initGroupBotScheduler(): Promise<void> {
 
   // Webhook registration is handled centrally in app.ts after all bots are initialized.
   await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
-  logger.info("GroupBot scheduler initialized");
 
-  // Schedule jackpot broadcasts every 30 minutes
+  // Jackpot update broadcast every 4 hours (not every 30 min — that's 48 messages/day)
   setInterval(() => {
     broadcastJackpotUpdate().catch((err) => logger.error({ err }, "Scheduled jackpot broadcast failed"));
-  }, 30 * 60 * 1000);
+  }, 4 * 60 * 60 * 1000);
 
-  // Schedule morning message at 9am UTC
+  // Morning message at 9am UTC daily
   const scheduleDaily = () => {
     const now = new Date();
     const next9am = new Date();
