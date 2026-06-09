@@ -4,6 +4,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import path from "path";
+import { existsSync } from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { initGameBot } from "./lib/gameBot";
@@ -40,24 +42,26 @@ app.use(
   }),
 );
 
-// CORS — strictly controlled
-// In production, CORS_ORIGIN must be set. In dev, auto-allow the Replit dev domain if available.
-const corsOrigin = process.env.CORS_ORIGIN;
+// ── CORS ───────────────────────────────────────────────────────────────────────
+// Priority: CORS_ORIGIN env → REPLIT_DOMAINS (auto-set by Replit on deploy) → dev fallback
 const isProd = process.env.NODE_ENV === "production";
+const corsOrigin = process.env.CORS_ORIGIN;
+const replitDomains = process.env.REPLIT_DOMAINS;
 
-if (!corsOrigin && isProd) {
-  logger.error("CORS_ORIGIN is not set in production — refusing to start with open CORS.");
+if (isProd && !corsOrigin && !replitDomains) {
+  logger.error("CORS_ORIGIN and REPLIT_DOMAINS are both unset in production — refusing to start with open CORS.");
   process.exit(1);
 }
 
 const allowedOrigins: string[] = corsOrigin
   ? corsOrigin.split(",").map(o => o.trim())
-  : [
-      // Dev: auto-allow the Replit proxy domain and localhost
-      ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
-      "http://localhost:5000",
-      "http://localhost:3000",
-    ];
+  : replitDomains
+    ? replitDomains.split(",").map(d => `https://${d.trim()}`)
+    : [
+        ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
+        "http://localhost:5000",
+        "http://localhost:3000",
+      ];
 
 app.use(
   cors({
@@ -85,16 +89,33 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// ── Static frontend serving (production) ──────────────────────────────────────
+// In production the Vite frontend is pre-built; serve it from the same Express process.
+// This lets a single port (5000) handle both the API and the Mini App UI.
+if (isProd) {
+  const distPath = path.resolve("artifacts/strikerx/dist/public");
+  if (existsSync(distPath)) {
+    app.use(express.static(distPath, { maxAge: "1d", etag: true }));
+    // SPA fallback — everything that isn't /api gets index.html
+    app.get(/^(?!\/api).*$/, (_req: Request, res: Response) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+    logger.info({ distPath }, "Serving built frontend");
+  } else {
+    logger.warn({ distPath }, "Frontend dist not found — run the build before deploying");
+  }
+}
+
 // Global error handler — must have 4 params so Express recognises it as error middleware
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.error({ err }, "Unhandled error");
   const status = (err as Error & { status?: number; statusCode?: number }).status
     ?? (err as Error & { status?: number; statusCode?: number }).statusCode
     ?? 500;
-  res.status(status).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  res.status(status).json({ error: isProd ? "Internal server error" : err.message });
 });
 
-// Initialize config, bots, jackpot, and auto-register webhooks
+// ── Startup: config, jackpot, bots, webhooks ──────────────────────────────────
 (async () => {
   await initConfig().catch((err) => logger.error({ err }, "Config service init failed"));
 
@@ -114,33 +135,58 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     initGroupBotScheduler().catch((err) => logger.error({ err }, "GroupBot init failed")),
   ]);
 
-  // Auto-register Telegram webhooks when WEBHOOK_DOMAIN env var is set
-  const webhookDomain = process.env.WEBHOOK_DOMAIN;
-  if (webhookDomain) {
-    const registerWebhook = async (token: string, path: string, name: string) => {
+  // Resolve the effective domain: explicit WEBHOOK_DOMAIN overrides REPLIT_DOMAINS
+  const effectiveDomain = process.env.WEBHOOK_DOMAIN ?? replitDomains?.split(",")[0]?.trim();
+
+  if (effectiveDomain) {
+    // Register Telegram bot webhooks
+    const registerTgWebhook = async (token: string, urlPath: string, name: string) => {
       try {
         const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            url: `https://${webhookDomain}/api${path}`,
+            url: `https://${effectiveDomain}/api${urlPath}`,
             allowed_updates: ["message", "callback_query"],
+            drop_pending_updates: true,
           }),
         });
-        const d = await r.json() as { ok: boolean };
-        if (d.ok) logger.info({ name, url: `https://${webhookDomain}/api${path}` }, "Webhook registered");
-        else logger.warn({ name, result: d }, "Webhook registration returned not-ok");
+        const d = await r.json() as { ok: boolean; description?: string };
+        if (d.ok) logger.info({ name, url: `https://${effectiveDomain}/api${urlPath}` }, "Telegram webhook registered");
+        else logger.warn({ name, result: d }, "Telegram webhook registration returned not-ok");
       } catch (err) {
-        logger.error({ err, name }, "Failed to register webhook");
+        logger.error({ err, name }, "Failed to register Telegram webhook");
       }
     };
 
     if (process.env.GAMEBOT_TOKEN) {
-      await registerWebhook(process.env.GAMEBOT_TOKEN, "/bots/gamebot/webhook", "GameBot");
+      await registerTgWebhook(process.env.GAMEBOT_TOKEN, "/bots/gamebot/webhook", "GameBot");
     }
     if (process.env.GROUPBOT_TOKEN) {
-      await registerWebhook(process.env.GROUPBOT_TOKEN, "/bots/groupbot/webhook", "GroupBot");
+      await registerTgWebhook(process.env.GROUPBOT_TOKEN, "/bots/groupbot/webhook", "GroupBot");
     }
+
+    // Register CryptoBot payment webhook
+    if (process.env.CRYPTOBOT_API_TOKEN) {
+      const cryptobotWebhookUrl = `https://${effectiveDomain}/api/payments/webhook/cryptobot`;
+      try {
+        const r = await fetch("https://pay.crypt.bot/api/setWebhook", {
+          method: "POST",
+          headers: {
+            "Crypto-Pay-API-Token": process.env.CRYPTOBOT_API_TOKEN,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: cryptobotWebhookUrl }),
+        });
+        const d = await r.json() as { ok: boolean; result?: unknown };
+        if (d.ok) logger.info({ url: cryptobotWebhookUrl }, "CryptoBot webhook registered");
+        else logger.warn({ result: d }, "CryptoBot webhook registration returned not-ok");
+      } catch (err) {
+        logger.error({ err }, "Failed to register CryptoBot webhook");
+      }
+    }
+  } else {
+    logger.warn("No WEBHOOK_DOMAIN or REPLIT_DOMAINS set — Telegram and CryptoBot webhooks not registered");
   }
 })();
 

@@ -8,26 +8,35 @@ import { startScheduler } from "./lib/scheduler";
 // ── Production secret validation ─────────────────────────────────────────────
 const isProd = process.env.NODE_ENV === "production";
 
-const REQUIRED_IN_PROD = [
-  "JWT_SECRET", "GAMEBOT_TOKEN", "GROUPBOT_TOKEN",
-  "TELEGRAM_GROUP_ID", "CRYPTOBOT_API_TOKEN",
-  "WEBHOOK_DOMAIN", "CORS_ORIGIN",
-  "ADMIN_USERNAME", "ADMIN_PASSWORD",
-] as const;
-
 if (isProd) {
-  const missing = REQUIRED_IN_PROD.filter(k => !process.env[k]);
+  // Hard-required: these have no safe fallback
+  const HARD_REQUIRED = [
+    "JWT_SECRET", "GAMEBOT_TOKEN", "GROUPBOT_TOKEN",
+    "CRYPTOBOT_API_TOKEN", "ADMIN_USERNAME", "ADMIN_PASSWORD",
+  ] as const;
+
+  const missing = HARD_REQUIRED.filter(k => !process.env[k]);
   if (missing.length > 0) {
-    logger.error({ missing }, "FATAL: Required production env vars are not set. Refusing to start.");
+    logger.error({ missing }, "FATAL: Required production secrets are not set. Refusing to start.");
     process.exit(1);
   }
+
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-in-prod") {
-    logger.error("FATAL: JWT_SECRET is missing or is the default dev value. All tokens are forgeable. Set a strong secret.");
+    logger.error("FATAL: JWT_SECRET is missing or is the default dev value. All tokens are forgeable.");
     process.exit(1);
   }
+
   if (process.env.ADMIN_PASSWORD === "admin123") {
-    logger.error("FATAL: ADMIN_PASSWORD is the default 'admin123'. Set a strong password before going live.");
+    logger.error("FATAL: ADMIN_PASSWORD is the default 'admin123'. Set a strong password.");
     process.exit(1);
+  }
+
+  // Soft-required: warn but don't crash — app still works without them,
+  // functionality is just degraded (no broadcasts / no webhooks until set)
+  const SOFT_REQUIRED = ["TELEGRAM_GROUP_ID", "WEBHOOK_DOMAIN", "CORS_ORIGIN"] as const;
+  const softMissing = SOFT_REQUIRED.filter(k => !process.env[k] && !process.env.REPLIT_DOMAINS);
+  if (softMissing.length > 0) {
+    logger.warn({ softMissing }, "Some recommended env vars are not set — functionality may be degraded");
   }
 }
 
