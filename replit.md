@@ -23,13 +23,12 @@ A football-themed Telegram Mini App casino platform with four original games, th
 Railway is the permanent production host. The workflow is:
 
 ```
-Edit on Replit  →  node scripts/github-push.mjs  →  (safe, pushes to 'replit' branch only)
-                →  node scripts/promote.mjs        →  Railway auto-deploys  (~3 min)
+Edit on Replit  →  node scripts/github-push.mjs  →  Railway auto-deploys from main (~3 min)
 ```
 
-- `github-push.mjs` always syncs to the **`replit`** branch — Railway never sees it
-- `promote.mjs` merges `replit` → `main`, which triggers Railway auto-deploy
-- Never push directly to `main` from Replit — that would deploy untested code
+- `github-push.mjs` pushes all files directly to **`main`** on GitHub — Railway watches main and deploys automatically
+- `promote.mjs` is an alternative staged workflow (merges a local `replit` branch → `main`) — use only if you want a staging gate
+- After every significant change, run `node scripts/github-push.mjs` to keep Railway in sync
 
 The Railway URL (`*.up.railway.app`) is permanent. BotFather and CryptoBot webhook are wired to it once and never change.
 
