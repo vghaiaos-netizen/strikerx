@@ -44,7 +44,7 @@ export async function initGameBot(): Promise<void> {
     }
 
     await ctx.reply(
-      `Welcome to StrikerX, ${username}! The stadium is live.\n\n500 STRIKER welcome bonus waiting for you inside.`,
+      `Welcome to StrikerX, ${username}!\n\nThe stadium is live — WC2026 edition.\n\n500 STRIKER welcome bonus is waiting for you inside.\n\nRefer friends and earn 10% of everything they win. Forever.\nYour referral link is in the Profile tab.`,
       Markup.inlineKeyboard([
         [Markup.button.webApp("Open StrikerX", miniAppUrl)],
         [Markup.button.callback("My Balance", "balance")],
