@@ -1,6 +1,10 @@
 /**
  * StrikerX GitHub Push Script — GraphQL createCommitOnBranch
- * Pushes all files atomically in a single commit per batch.
+ *
+ * Pushes all Replit source files to the `replit` branch on GitHub.
+ * Railway watches `main` only — this branch is safe and never triggers a deploy.
+ * To promote to production (trigger Railway), run: node scripts/promote.mjs
+ *
  * Run: node scripts/github-push.mjs
  */
 import fs from "fs";
@@ -9,10 +13,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-// Strip any non-ASCII chars (e.g. Unicode spaces pasted in by mistake)
 const TOKEN = (process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? "").replace(/[^\x20-\x7E]/g, "").trim();
 const USERNAME = "vghaiaos-netizen";
 const REPO = "strikerx";
+const TARGET_BRANCH = "replit"; // safe — Railway watches `main`, not this branch
 const GRAPHQL = "https://api.github.com/graphql";
 const REST = "https://api.github.com";
 
@@ -39,24 +43,43 @@ async function graphql(query, variables) {
   return r.json();
 }
 
-async function ensureRepo() {
-  const { status } = await rest("GET", `/repos/${USERNAME}/${REPO}`);
-  if (status === 200) { console.log("  Repo exists"); return; }
-  const { status: cs } = await rest("POST", "/user/repos", {
-    name: REPO, description: "StrikerX — Football Telegram Mini App Casino",
-    private: false, auto_init: true,
-  });
-  if (cs === 201) { console.log("  Repo created"); await new Promise(r => setTimeout(r, 3000)); }
-  else { console.error("  Failed to create repo"); process.exit(1); }
+async function getBranchOid(branch) {
+  const { data } = await graphql(`
+    query { repository(owner: "${USERNAME}", name: "${REPO}") {
+      ref(qualifiedName: "refs/heads/${branch}") { target { oid } }
+    }}
+  `, {});
+  return data?.repository?.ref?.target?.oid ?? null;
 }
 
-async function getHeadOid() {
+async function getDefaultBranchOid() {
   const { data } = await graphql(`
     query { repository(owner: "${USERNAME}", name: "${REPO}") {
       defaultBranchRef { target { oid } }
     }}
   `, {});
-  return data?.repository?.defaultBranchRef?.target?.oid;
+  return data?.repository?.defaultBranchRef?.target?.oid ?? null;
+}
+
+async function ensureBranch() {
+  let oid = await getBranchOid(TARGET_BRANCH);
+  if (oid) {
+    console.log(`  Branch '${TARGET_BRANCH}' exists (${oid.slice(0, 8)}...)`);
+    return oid;
+  }
+  // Create branch from main HEAD
+  const mainOid = await getDefaultBranchOid();
+  if (!mainOid) { console.error("Could not get main HEAD"); process.exit(1); }
+  const { status, data } = await rest("POST", `/repos/${USERNAME}/${REPO}/git/refs`, {
+    ref: `refs/heads/${TARGET_BRANCH}`,
+    sha: mainOid,
+  });
+  if (status === 201) {
+    console.log(`  Created branch '${TARGET_BRANCH}' from main (${mainOid.slice(0, 8)}...)`);
+    return mainOid;
+  }
+  console.error("  Failed to create branch:", JSON.stringify(data).slice(0, 200));
+  process.exit(1);
 }
 
 async function commitBatch(files, headOid, batchNum) {
@@ -75,7 +98,7 @@ async function commitBatch(files, headOid, batchNum) {
 
   const variables = {
     input: {
-      branch: { repositoryNameWithOwner: `${USERNAME}/${REPO}`, branchName: "main" },
+      branch: { repositoryNameWithOwner: `${USERNAME}/${REPO}`, branchName: TARGET_BRANCH },
       message: { headline: `chore: sync ${files.length} files (batch ${batchNum})` },
       fileChanges: { additions },
       expectedHeadOid: headOid,
@@ -123,18 +146,16 @@ function walk(dir, base = "") {
 }
 
 async function run() {
-  console.log(`\nSyncing to github.com/${USERNAME}/${REPO}`);
-  console.log("=".repeat(48));
+  console.log(`\nSyncing Replit → github.com/${USERNAME}/${REPO}:${TARGET_BRANCH}`);
+  console.log("  (Railway watches 'main' only — this push will NOT trigger a deploy)");
+  console.log("  (To deploy to production: node scripts/promote.mjs)");
+  console.log("=".repeat(60));
 
   const { status, data: me } = await rest("GET", "/user");
   if (status !== 200) { console.error("Token invalid"); process.exit(1); }
   console.log(`Authenticated as ${me.login}`);
 
-  await ensureRepo();
-
-  let headOid = await getHeadOid();
-  if (!headOid) { console.error("Could not get HEAD oid"); process.exit(1); }
-  console.log(`HEAD: ${headOid.slice(0, 8)}...`);
+  let headOid = await ensureBranch();
 
   const files = walk(ROOT);
   console.log(`\nFound ${files.length} files — pushing in batches of 50\n`);
@@ -155,7 +176,6 @@ async function run() {
       pushed += batch.length;
       console.log(`done (${newOid.slice(0, 8)})`);
     } else {
-      // Try smaller sub-batches on failure
       console.log(`retrying individually...`);
       for (const f of batch) {
         const oid = await commitBatch([f], headOid, `${batchNum}r`);
@@ -165,13 +185,13 @@ async function run() {
       }
     }
 
-    // Rate limit buffer between batches
     if (i + BATCH_SIZE < files.length) await new Promise(r => setTimeout(r, 500));
   }
 
-  console.log(`\n${"=".repeat(48)}`);
-  console.log(`Pushed ${pushed}/${files.length} files`);
-  console.log(`https://github.com/${USERNAME}/${REPO}\n`);
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`Pushed ${pushed}/${files.length} files to branch '${TARGET_BRANCH}'`);
+  console.log(`https://github.com/${USERNAME}/${REPO}/tree/${TARGET_BRANCH}\n`);
+  console.log(`Run 'node scripts/promote.mjs' when ready to deploy to Railway.\n`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });
