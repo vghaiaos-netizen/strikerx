@@ -227,6 +227,31 @@ export async function initGameBot(): Promise<void> {
     }
   });
 
+  // Register bot commands so they appear in the "/" menu inside Telegram
+  await bot.telegram.setMyCommands([
+    { command: "start",       description: "Open StrikerX Mini App" },
+    { command: "balance",     description: "Check your token balances" },
+    { command: "deposit",     description: "Deposit TON / USDT / BNB / SOL" },
+    { command: "withdraw",    description: "Withdraw your winnings" },
+    { command: "stats",       description: "Your game statistics" },
+    { command: "streak",      description: "Daily streak status and rewards" },
+    { command: "vip",         description: "Your VIP tier and cashback info" },
+    { command: "referral",    description: "Get your referral link" },
+    { command: "leaderboard", description: "View the leaderboard" },
+    { command: "help",        description: "List all commands" },
+  ]).catch((err) => logger.warn({ err }, "setMyCommands failed — non-fatal"));
+
+  // Set the persistent Menu Button — this is the always-visible button in the
+  // Telegram chat input bar. Users never need to type anything; one tap opens the app.
+  // setChatMenuButton with no chat_id sets it globally for all users of this bot.
+  await bot.telegram.setChatMenuButton({
+    menuButton: {
+      type: "web_app",
+      text: "Open StrikerX",
+      web_app: { url: getAppUrl() },
+    },
+  }).catch((err) => logger.warn({ err }, "setChatMenuButton failed — non-fatal"));
+
   // Webhook registration is handled centrally in app.ts after all bots are initialized.
   // Here we just clear any stale webhook/polling state so Telegram stops queuing updates.
   await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
