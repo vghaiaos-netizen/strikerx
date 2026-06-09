@@ -101,6 +101,9 @@ In dev: API on port 8000, Vite on port 5000 (proxies `/api` and `/ws` to 8000).
 - Do not edit generated files in `lib/api-client-react/src/generated/` or `lib/api-zod/src/generated/` — regenerate via `pnpm --filter @workspace/api-spec run codegen`.
 - Do not add `setWebhook` calls to `gameBot.ts` or `groupBot.ts` — webhook registration is centralised in `app.ts` only.
 - Do not use `console.log` in server code — use `req.log` (in route handlers) or `logger` (everywhere else).
+- **Do not restart the `API Server` workflow and expect it to register Telegram webhooks** — Replit dev intentionally skips webhook registration. Railway registers its own webhooks on every deploy. If you restart the API server on Replit, webhooks stay with Railway (correct). See `docs/for-replit-agents.md` → "CRITICAL: Replit dev must never interfere with Railway production".
+- **Do not use `REPLIT_DOMAINS` for webhook registration or referral links** — it is a Replit-managed var used only for CORS. Using it for webhooks or links would break production bots and give players unusable Replit URLs.
+- **Do not construct referral links from the server domain** — always use `MINI_APP_LINK` env var (`t.me/StrykkerXBot/StrikerX`). Referral links are Telegram deep links, not HTTP URLs.
 
 ---
 
