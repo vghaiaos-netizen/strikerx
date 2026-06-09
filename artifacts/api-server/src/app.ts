@@ -12,6 +12,7 @@ import { initGameBot } from "./lib/gameBot";
 import { initGroupBotScheduler } from "./lib/groupBot";
 import { db, jackpotTable } from "@workspace/db";
 import { initConfig } from "./lib/configService";
+import { deriveWebhookSecret } from "./routes/bots";
 
 const app: Express = express();
 
@@ -26,11 +27,14 @@ const globalLimiter = rateLimit({ windowMs: 60_000, max: 300, standardHeaders: t
 const authLimiter = rateLimit({ windowMs: 15 * 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 const paymentLimiter = rateLimit({ windowMs: 15 * 60_000, max: 15, standardHeaders: true, legacyHeaders: false });
 const gameLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+// Tighter limit for admin endpoints — 200 req / 15 min per IP
+const adminLimiter = rateLimit({ windowMs: 15 * 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
 
 app.use(globalLimiter);
 app.use("/api/auth", authLimiter);
 app.use("/api/payments", paymentLimiter);
 app.use("/api/games", gameLimiter);
+app.use("/api/admin", adminLimiter);
 
 app.use(
   pinoHttp({
@@ -152,6 +156,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
             url: `https://${effectiveDomain}/api${urlPath}`,
             allowed_updates: ["message", "callback_query"],
             drop_pending_updates: true,
+            secret_token: deriveWebhookSecret(token),
           }),
         });
         const d = await r.json() as { ok: boolean; description?: string };

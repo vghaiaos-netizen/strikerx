@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHash, createHmac } from "crypto";
 import { db, playersTable, transactionsTable, withdrawalsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { strikerToTon, tonToStriker } from "../lib/gameEngine";
 import { broadcastWithdrawal } from "../lib/groupBot";
@@ -133,7 +133,7 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  if (player.strikerBalance < amountStriker) {
+  if (parseFloat(String(player.strikerBalance)) < amountStriker) {
     res.status(400).json({ error: "Insufficient balance" });
     return;
   }
@@ -150,10 +150,17 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
   const requiresReview = true;
   const status = "under_review";
 
-  await db
+  // Atomic deduction — prevents double-withdrawal race condition
+  const [deducted] = await db
     .update(playersTable)
-    .set({ strikerBalance: player.strikerBalance - amountStriker })
-    .where(eq(playersTable.id, playerId));
+    .set({ strikerBalance: sql`${playersTable.strikerBalance} - ${amountStriker}` })
+    .where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${amountStriker}`)
+    .returning();
+
+  if (!deducted) {
+    res.status(400).json({ error: "Insufficient balance" });
+    return;
+  }
 
   const [withdrawal] = await db
     .insert(withdrawalsTable)

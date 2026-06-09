@@ -13,62 +13,67 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
   let entries: Array<{ rank: number; playerId: number; username: string; vipTier: string; score: number; gamesPlayed?: number }> = [];
 
   if (type === "wagered") {
-    // Top players by lifetime TON wagered
-    const players = await db.select({
-      id: playersTable.id,
-      username: playersTable.username,
-      vipTier: playersTable.vipTier,
-      tonWageredLifetime: playersTable.tonWageredLifetime,
-    }).from(playersTable)
+    // Top players by lifetime TON wagered — single JOIN avoids N+1 COUNT queries
+    const results = await db
+      .select({
+        id: playersTable.id,
+        username: playersTable.username,
+        vipTier: playersTable.vipTier,
+        tonWageredLifetime: playersTable.tonWageredLifetime,
+        gamesPlayed: sql<number>`COALESCE(COUNT(${gamesTable.id}), 0)`,
+      })
+      .from(playersTable)
+      .leftJoin(gamesTable, eq(gamesTable.playerId, playersTable.id))
+      .groupBy(playersTable.id, playersTable.username, playersTable.vipTier, playersTable.tonWageredLifetime)
       .orderBy(desc(playersTable.tonWageredLifetime))
       .limit(limit);
 
-    entries = await Promise.all(players.map(async (p, i) => {
-      const [gc] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamesTable).where(eq(gamesTable.playerId, p.id));
-      return {
-        rank: i + 1,
-        playerId: p.id,
-        username: p.username,
-        vipTier: p.vipTier,
-        score: p.tonWageredLifetime,
-        gamesPlayed: Number(gc?.count ?? 0),
-      };
+    entries = results.map((p, i) => ({
+      rank: i + 1,
+      playerId: p.id,
+      username: p.username,
+      vipTier: p.vipTier,
+      score: p.tonWageredLifetime,
+      gamesPlayed: Number(p.gamesPlayed ?? 0),
     }));
   } else if (type === "wins") {
-    // Top players by total STRIKER won
-    const since = new Date(0);
-    const results = await db.select({
-      playerId: gamesTable.playerId,
-      totalWins: sql<number>`SUM(${gamesTable.winAmount})`,
-      gamesPlayed: sql<number>`COUNT(*)`,
-    }).from(gamesTable)
-      .groupBy(gamesTable.playerId)
+    // Top players by total STRIKER won — JOIN avoids N+1 player lookups
+    const results = await db
+      .select({
+        playerId: gamesTable.playerId,
+        username: playersTable.username,
+        vipTier: playersTable.vipTier,
+        totalWins: sql<number>`SUM(${gamesTable.winAmount})`,
+        gamesPlayed: sql<number>`COUNT(*)`,
+      })
+      .from(gamesTable)
+      .innerJoin(playersTable, eq(playersTable.id, gamesTable.playerId))
+      .groupBy(gamesTable.playerId, playersTable.username, playersTable.vipTier)
       .orderBy(desc(sql<number>`SUM(${gamesTable.winAmount})`))
       .limit(limit);
 
-    entries = await Promise.all(results.map(async (r, i) => {
-      const [player] = await db.select({ username: playersTable.username, vipTier: playersTable.vipTier }).from(playersTable).where(eq(playersTable.id, r.playerId));
-      return {
-        rank: i + 1,
-        playerId: r.playerId,
-        username: player?.username ?? "Unknown",
-        vipTier: player?.vipTier ?? "sunday_league",
-        score: Math.round(r.totalWins ?? 0),
-        gamesPlayed: Number(r.gamesPlayed ?? 0),
-      };
+    entries = results.map((r, i) => ({
+      rank: i + 1,
+      playerId: r.playerId,
+      username: r.username ?? "Unknown",
+      vipTier: r.vipTier ?? "amateur",
+      score: Math.round(Number(r.totalWins ?? 0)),
+      gamesPlayed: Number(r.gamesPlayed ?? 0),
     }));
   } else if (type === "streak") {
-    // Top players by streak days
-    const players = await db.select({
-      id: playersTable.id,
-      username: playersTable.username,
-      vipTier: playersTable.vipTier,
-      streakDays: playersTable.streakDays,
-    }).from(playersTable)
+    // Top players by streak days — no JOIN needed, data lives on player row
+    const results = await db
+      .select({
+        id: playersTable.id,
+        username: playersTable.username,
+        vipTier: playersTable.vipTier,
+        streakDays: playersTable.streakDays,
+      })
+      .from(playersTable)
       .orderBy(desc(playersTable.streakDays))
       .limit(limit);
 
-    entries = players.map((p, i) => ({
+    entries = results.map((p, i) => ({
       rank: i + 1,
       playerId: p.id,
       username: p.username,
@@ -76,40 +81,25 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
       score: p.streakDays,
     }));
   } else if (type === "referrals") {
-    // Top players by referral count — group by referredBy (the code used to sign up),
-    // then look up the player who owns that referral code
-    const referrers = await db
-      .select({
-        referredBy: playersTable.referredBy,
-        referralCount: sql<number>`COUNT(*)`,
-      })
-      .from(playersTable)
-      .where(sql`${playersTable.referredBy} IS NOT NULL`)
-      .groupBy(playersTable.referredBy)
-      .orderBy(desc(sql<number>`COUNT(*)`))
-      .limit(limit);
+    // Top referrers — self-join via raw SQL (Drizzle alias not available in this version)
+    const rows = await db.execute<{ owner_id: number; username: string; vip_tier: string; referral_count: string }>(
+      sql`SELECT owner.id AS owner_id, owner.username, owner.vip_tier, COUNT(referred.id)::int AS referral_count
+          FROM players owner
+          INNER JOIN players referred ON referred.referred_by = owner.referral_code
+          GROUP BY owner.id, owner.username, owner.vip_tier
+          ORDER BY COUNT(referred.id) DESC
+          LIMIT ${limit}`
+    );
 
-    entries = (
-      await Promise.all(
-        referrers.map(async (r, i) => {
-          if (!r.referredBy) return null;
-          const [owner] = await db
-            .select({ id: playersTable.id, username: playersTable.username, vipTier: playersTable.vipTier })
-            .from(playersTable)
-            .where(eq(playersTable.referralCode, r.referredBy));
-          if (!owner) return null;
-          return {
-            rank: i + 1,
-            playerId: owner.id,
-            username: owner.username,
-            vipTier: owner.vipTier,
-            score: Number(r.referralCount),
-          };
-        })
-      )
-    ).filter((e): e is NonNullable<typeof e> => e !== null);
+    entries = rows.rows.map((r, i) => ({
+      rank: i + 1,
+      playerId: r.owner_id,
+      username: r.username,
+      vipTier: r.vip_tier,
+      score: Number(r.referral_count),
+    }));
   } else {
-    // Legacy: daily/weekly/alltime by best multiplier
+    // daily / weekly / alltime by best multiplier — JOIN avoids N+1 player lookups
     let sinceDate = new Date();
     if (type === "daily") {
       sinceDate.setHours(0, 0, 0, 0);
@@ -121,24 +111,26 @@ router.get("/leaderboard", async (req, res): Promise<void> => {
       sinceDate = new Date(0);
     }
 
-    const results = await db.select({
-      playerId: gamesTable.playerId,
-      bestMultiplier: sql<number>`MAX(${gamesTable.resultMultiplier})`,
-    }).from(gamesTable)
+    const results = await db
+      .select({
+        playerId: gamesTable.playerId,
+        username: playersTable.username,
+        vipTier: playersTable.vipTier,
+        bestMultiplier: sql<number>`MAX(${gamesTable.resultMultiplier})`,
+      })
+      .from(gamesTable)
+      .innerJoin(playersTable, eq(playersTable.id, gamesTable.playerId))
       .where(gte(gamesTable.createdAt, sinceDate))
-      .groupBy(gamesTable.playerId)
+      .groupBy(gamesTable.playerId, playersTable.username, playersTable.vipTier)
       .orderBy(desc(sql<number>`MAX(${gamesTable.resultMultiplier})`))
       .limit(limit);
 
-    entries = await Promise.all(results.map(async (r, i) => {
-      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, r.playerId));
-      return {
-        rank: i + 1,
-        playerId: r.playerId,
-        username: player?.username ?? "Unknown",
-        vipTier: player?.vipTier ?? "sunday_league",
-        score: r.bestMultiplier,
-      };
+    entries = results.map((r, i) => ({
+      rank: i + 1,
+      playerId: r.playerId,
+      username: r.username ?? "Unknown",
+      vipTier: r.vipTier ?? "amateur",
+      score: r.bestMultiplier,
     }));
   }
 
@@ -158,26 +150,20 @@ router.get("/tournaments/active", async (_req, res): Promise<void> => {
     return;
   }
 
-  const entries = await db
-    .select()
+  // JOIN avoids N+1 player lookups for top-10 entries
+  const topEntries = await db
+    .select({
+      playerId: tournamentEntriesTable.playerId,
+      username: playersTable.username,
+      vipTier: playersTable.vipTier,
+      captainBalance: playersTable.captainBalance,
+      bestMultiplier: tournamentEntriesTable.bestMultiplier,
+    })
     .from(tournamentEntriesTable)
+    .innerJoin(playersTable, eq(playersTable.id, tournamentEntriesTable.playerId))
     .where(eq(tournamentEntriesTable.tournamentId, tournament.id))
     .orderBy(desc(tournamentEntriesTable.bestMultiplier))
     .limit(10);
-
-  const topEntries = await Promise.all(
-    entries.map(async (e, idx) => {
-      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, e.playerId));
-      return {
-        rank: idx + 1,
-        playerId: e.playerId,
-        username: player?.username ?? "Unknown",
-        value: e.bestMultiplier,
-        vipTier: player?.vipTier ?? "sunday_league",
-        captainBalance: player?.captainBalance ?? 0,
-      };
-    })
-  );
 
   res.json({
     id: tournament.id,
@@ -187,7 +173,14 @@ router.get("/tournaments/active", async (_req, res): Promise<void> => {
     startTime: tournament.startTime.toISOString(),
     endTime: tournament.endTime.toISOString(),
     entryFeeBoots: tournament.entryFeeBoots ?? null,
-    topEntries,
+    topEntries: topEntries.map((e, idx) => ({
+      rank: idx + 1,
+      playerId: e.playerId,
+      username: e.username ?? "Unknown",
+      value: e.bestMultiplier,
+      vipTier: e.vipTier ?? "amateur",
+      captainBalance: e.captainBalance ?? 0,
+    })),
   });
 });
 
@@ -214,12 +207,16 @@ router.post("/tournaments/:id/enter", requireAuth, async (req, res): Promise<voi
 
   if (!existing) {
     if (tournament.entryFeeBoots && tournament.entryFeeBoots > 0) {
-      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-      if (!player || player.bootBalance < tournament.entryFeeBoots) {
+      // Atomic deduction — prevents double-spend race on tournament entry fee
+      const [deducted] = await db
+        .update(playersTable)
+        .set({ bootBalance: sql`${playersTable.bootBalance} - ${tournament.entryFeeBoots}` })
+        .where(sql`${playersTable.id} = ${playerId} AND ${playersTable.bootBalance} >= ${tournament.entryFeeBoots}`)
+        .returning();
+      if (!deducted) {
         res.status(400).json({ error: "Insufficient BOOT balance for entry fee" });
         return;
       }
-      await db.update(playersTable).set({ bootBalance: player.bootBalance - tournament.entryFeeBoots }).where(eq(playersTable.id, playerId));
     }
     await db.insert(tournamentEntriesTable).values({ tournamentId, playerId });
   }
@@ -245,28 +242,28 @@ router.get("/tournaments/:id/leaderboard", async (req, res): Promise<void> => {
   const [tournament] = await db.select().from(tournamentsTable).where(eq(tournamentsTable.id, tournamentId));
   if (!tournament) { res.status(404).json({ error: "Tournament not found" }); return; }
 
+  const prizeDistribution = [0.5, 0.25, 0.15, 0.07, 0.03];
+
+  // JOIN avoids N+1 player lookups for up-to-50 leaderboard entries
   const entries = await db
-    .select()
+    .select({
+      playerId: tournamentEntriesTable.playerId,
+      username: playersTable.username,
+      bestMultiplier: tournamentEntriesTable.bestMultiplier,
+    })
     .from(tournamentEntriesTable)
+    .innerJoin(playersTable, eq(playersTable.id, tournamentEntriesTable.playerId))
     .where(eq(tournamentEntriesTable.tournamentId, tournamentId))
     .orderBy(desc(tournamentEntriesTable.bestMultiplier))
     .limit(50);
 
-  const prizeDistribution = [0.5, 0.25, 0.15, 0.07, 0.03];
-
-  const leaderboard = await Promise.all(
-    entries.map(async (e, idx) => {
-      const [player] = await db.select().from(playersTable).where(eq(playersTable.id, e.playerId));
-      const prizeFraction = prizeDistribution[idx] ?? 0;
-      return {
-        rank: idx + 1,
-        playerId: e.playerId,
-        username: player?.username ?? "Unknown",
-        score: e.bestMultiplier,
-        prize: parseFloat((tournament.prizePoolTon * prizeFraction).toFixed(4)),
-      };
-    })
-  );
+  const leaderboard = entries.map((e, idx) => ({
+    rank: idx + 1,
+    playerId: e.playerId,
+    username: e.username ?? "Unknown",
+    score: e.bestMultiplier,
+    prize: parseFloat((tournament.prizePoolTon * (prizeDistribution[idx] ?? 0)).toFixed(4)),
+  }));
 
   res.json(leaderboard);
 });

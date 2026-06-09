@@ -18,6 +18,9 @@ interface WsClient {
 const WS_RATE_LIMIT = 30;
 const WS_RATE_WINDOW_MS = 10_000;
 
+// Unauthenticated connections are closed after this many ms
+const WS_AUTH_TIMEOUT_MS = 30_000;
+
 function isRateLimited(client: WsClient): boolean {
   const now = Date.now();
   client.msgTimestamps = client.msgTimestamps.filter(t => now - t < WS_RATE_WINDOW_MS);
@@ -77,6 +80,15 @@ export function initWebSocketServer(server: HttpServer) {
     // Send current round state immediately
     sendToClient(ws, "round_state", crashEngine.getPublicState());
 
+    // Disconnect unauthenticated clients after 30 seconds — prevents connection exhaustion
+    const authTimeout = setTimeout(() => {
+      if (!client.playerId) {
+        logger.warn({ clients: clients.size }, "WS client failed to authenticate — closing");
+        sendToClient(ws, "error", { message: "Authentication timeout. Please reconnect and authenticate." });
+        ws.close();
+      }
+    }, WS_AUTH_TIMEOUT_MS);
+
     ws.on("message", async (raw) => {
       if (isRateLimited(client)) {
         sendToClient(ws, "error", { message: "Rate limit exceeded. Slow down." });
@@ -100,6 +112,7 @@ export function initWebSocketServer(server: HttpServer) {
         if (!player) { sendToClient(ws, "error", { message: "Player not found" }); return; }
         client.playerId = player.id;
         client.username = player.username;
+        clearTimeout(authTimeout);
         sendToClient(ws, "auth_ok", { playerId: player.id, username: player.username, strikerBalance: player.strikerBalance });
         return;
       }
@@ -141,11 +154,13 @@ export function initWebSocketServer(server: HttpServer) {
     });
 
     ws.on("close", () => {
+      clearTimeout(authTimeout);
       clients.delete(ws);
       logger.info({ clients: clients.size }, "WebSocket client disconnected");
     });
 
     ws.on("error", (err) => {
+      clearTimeout(authTimeout);
       logger.error({ err }, "WebSocket error");
       clients.delete(ws);
     });

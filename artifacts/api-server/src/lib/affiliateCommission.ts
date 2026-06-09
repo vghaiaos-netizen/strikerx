@@ -1,10 +1,11 @@
 import { db, playersTable, affiliatesTable, transactionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
  * Credits a commission to an affiliate owner when a referred player wins.
  * Fire-and-forget safe — catches all errors internally.
+ * Uses SQL expressions for all balance updates to avoid stale-read race conditions.
  */
 export async function creditAffiliateCommission(
   playerId: number,
@@ -31,33 +32,25 @@ export async function creditAffiliateCommission(
     const commission = Math.floor(winAmountStriker * rate);
     if (commission <= 0) return;
 
-    // Update aggregate on affiliate record
-    const prevEarned = parseFloat(String(affiliate.totalEarned ?? 0));
+    // Atomic increment — avoids stale-read race if two wins fire concurrently
     await db
       .update(affiliatesTable)
-      .set({ totalEarned: prevEarned + commission })
+      .set({ totalEarned: sql`${affiliatesTable.totalEarned} + ${commission}` })
       .where(eq(affiliatesTable.id, affiliate.id));
 
-    // If the affiliate has a linked player account, credit their balance
+    // If the affiliate has a linked player account, credit their balance atomically
     if (affiliate.ownerId) {
-      const [owner] = await db
-        .select({ strikerBalance: playersTable.strikerBalance })
-        .from(playersTable)
+      await db
+        .update(playersTable)
+        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${commission}` })
         .where(eq(playersTable.id, affiliate.ownerId));
 
-      if (owner) {
-        await db
-          .update(playersTable)
-          .set({ strikerBalance: owner.strikerBalance + commission })
-          .where(eq(playersTable.id, affiliate.ownerId));
-
-        await db.insert(transactionsTable).values({
-          playerId: affiliate.ownerId,
-          type: "referral",
-          amountStriker: commission,
-          status: "completed",
-        });
-      }
+      await db.insert(transactionsTable).values({
+        playerId: affiliate.ownerId,
+        type: "referral",
+        amountStriker: commission,
+        status: "completed",
+      });
     }
 
     logger.info(

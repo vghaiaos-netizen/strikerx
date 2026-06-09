@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, playersTable, gamesTable, minefieldSessionsTable, jackpotTable, transactionsTable, crashRoundsTable } from "@workspace/db";
-import { eq, desc, count, sql } from "drizzle-orm";
+import { eq, desc, count, sql, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import {
   playPenalty,
@@ -34,13 +34,17 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
   const seedAmount = parseFloat(process.env.JACKPOT_SEED_AMOUNT ?? "10");
   const strikerWin = winnerAmount * parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
 
-  await db.update(jackpotTable).set({
+  // Atomic update — only resets the jackpot if it's still "ready" at update time.
+  // Prevents two concurrent winners from both claiming the same pool.
+  const [claimed] = await db.update(jackpotTable).set({
     currentAmountTon: seedAmount,
     status: "building",
     lastTriggeredAt: new Date(),
     lastWinnerId: playerId,
     lastWinnerUsername: username,
-  }).where(eq(jackpotTable.id, jackpot.id));
+  }).where(and(eq(jackpotTable.id, jackpot.id), eq(jackpotTable.status, "ready"))).returning();
+
+  if (!claimed) return null; // Another concurrent request already claimed it
 
   await db.update(playersTable).set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerWin}` }).where(eq(playersTable.id, playerId));
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
