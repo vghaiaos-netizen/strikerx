@@ -31,13 +31,29 @@ if (isProd) {
     process.exit(1);
   }
 
-  // Soft-required: warn but don't crash — app still works without them,
-  // functionality is just degraded (no broadcasts / no webhooks until set)
-  const SOFT_REQUIRED = ["TELEGRAM_GROUP_ID", "WEBHOOK_DOMAIN", "CORS_ORIGIN"] as const;
-  const softMissing = SOFT_REQUIRED.filter(k => !process.env[k] && !process.env.REPLIT_DOMAINS);
-  if (softMissing.length > 0) {
-    logger.warn({ softMissing }, "Some recommended env vars are not set — functionality may be degraded");
+  // Soft-required: warn but don't crash — functionality is degraded without them
+  // At least one of REPLIT_DOMAINS, RAILWAY_PUBLIC_DOMAIN, or WEBHOOK_DOMAIN must be set
+  const hasPublicDomain =
+    !!process.env.REPLIT_DOMAINS ||
+    !!process.env.RAILWAY_PUBLIC_DOMAIN ||
+    !!process.env.WEBHOOK_DOMAIN;
+  if (!hasPublicDomain) {
+    logger.warn(
+      "No public domain env var found (REPLIT_DOMAINS / RAILWAY_PUBLIC_DOMAIN / WEBHOOK_DOMAIN). " +
+      "Telegram bot webhooks will NOT be registered automatically."
+    );
   }
+  if (!process.env.TELEGRAM_GROUP_ID) {
+    logger.warn("TELEGRAM_GROUP_ID not set — GroupBot broadcasts disabled");
+  }
+
+  logger.info(
+    {
+      platform: process.env.RAILWAY_ENVIRONMENT ? "railway" : process.env.REPLIT_DOMAINS ? "replit" : "other",
+      domain: process.env.RAILWAY_PUBLIC_DOMAIN ?? process.env.REPLIT_DOMAINS ?? process.env.WEBHOOK_DOMAIN ?? "(none)",
+    },
+    "Production startup"
+  );
 }
 
 // ── Global process handlers ───────────────────────────────────────────────────
@@ -81,3 +97,20 @@ server.on("error", (err) => {
   logger.error({ err }, "Server error");
   process.exit(1);
 });
+
+// ── Graceful shutdown (Railway sends SIGTERM before stopping the container) ───
+function gracefulShutdown(signal: string) {
+  logger.info({ signal }, "Shutdown signal received — draining connections");
+  server.close(() => {
+    logger.info("HTTP server closed cleanly");
+    process.exit(0);
+  });
+  // Force-exit if in-flight requests haven't drained within 15 s
+  setTimeout(() => {
+    logger.warn("Graceful shutdown timed out — forcing exit");
+    process.exit(1);
+  }, 15_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
