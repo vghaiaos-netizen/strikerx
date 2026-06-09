@@ -162,28 +162,20 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     if (process.env.GAMEBOT_TOKEN) {
       await registerTgWebhook(process.env.GAMEBOT_TOKEN, "/bots/gamebot/webhook", "GameBot");
     }
+    // Small delay between webhook registrations to avoid Telegram 429 rate-limit
+    await new Promise(r => setTimeout(r, 1500));
     if (process.env.GROUPBOT_TOKEN) {
       await registerTgWebhook(process.env.GROUPBOT_TOKEN, "/bots/groupbot/webhook", "GroupBot");
     }
 
-    // Register CryptoBot payment webhook
+    // CryptoBot webhook must be registered manually via @CryptoBot in Telegram:
+    //   /setwebhook → set URL to: https://<domain>/api/payments/webhook/cryptobot
+    // The API does not expose a setWebhook method — only manual setup is supported.
     if (process.env.CRYPTOBOT_API_TOKEN) {
-      const cryptobotWebhookUrl = `https://${effectiveDomain}/api/payments/webhook/cryptobot`;
-      try {
-        const r = await fetch("https://pay.crypt.bot/api/setWebhook", {
-          method: "POST",
-          headers: {
-            "Crypto-Pay-API-Token": process.env.CRYPTOBOT_API_TOKEN,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ url: cryptobotWebhookUrl }),
-        });
-        const d = await r.json() as { ok: boolean; result?: unknown };
-        if (d.ok) logger.info({ url: cryptobotWebhookUrl }, "CryptoBot webhook registered");
-        else logger.warn({ result: d }, "CryptoBot webhook registration returned not-ok");
-      } catch (err) {
-        logger.error({ err }, "Failed to register CryptoBot webhook");
-      }
+      logger.info(
+        { url: `https://${effectiveDomain}/api/payments/webhook/cryptobot` },
+        "CryptoBot webhook URL (register manually via @CryptoBot → /setwebhook)",
+      );
     }
   } else {
     logger.warn("No WEBHOOK_DOMAIN or REPLIT_DOMAINS set — Telegram and CryptoBot webhooks not registered");

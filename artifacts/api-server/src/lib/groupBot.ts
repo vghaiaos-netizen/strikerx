@@ -135,16 +135,9 @@ export async function initGroupBotScheduler(): Promise<void> {
     }
   });
 
-  // Webhook mode only — no polling (same reason as GameBot; polling 409s on Replit restarts)
-  const webhookDomain = process.env.WEBHOOK_DOMAIN ?? process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
-  if (webhookDomain) {
-    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-    await bot.telegram.setWebhook(`https://${webhookDomain}/api/bots/groupbot/webhook`);
-    logger.info({ url: `https://${webhookDomain}/api/bots/groupbot/webhook` }, "GroupBot webhook registered");
-  } else {
-    await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
-    logger.info("GroupBot running in send-only mode (no WEBHOOK_DOMAIN or REPLIT_DOMAINS set)");
-  }
+  // Webhook registration is handled centrally in app.ts after all bots are initialized.
+  await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+  logger.info("GroupBot scheduler initialized");
 
   // Schedule jackpot broadcasts every 30 minutes
   setInterval(() => {
