@@ -86,6 +86,9 @@ externalPort = 3000
 MINI_APP_LINK = "t.me/StrykkerXBot/StrikerX"
 PORT = "5000"
 NODE_ENV = "development"
+OPERATOR_TON_WALLET = "UQAokp-Xaa6wS1hxk33LMAjHaOjLsP5iQuAtAnv4K0PKdVPx"
+OPERATOR_USDT_TRC20_WALLET = "TRf9993cfY4zH4k6Q8eSUoK8cc4HzPA8cg"
+OPERATOR_USDT_TON_WALLET = "UQAokp-Xaa6wS1hxk33LMAjHaOjLsP5iQuAtAnv4K0PKdVPx"
 
 [nix]
 channel = "stable-25_05"

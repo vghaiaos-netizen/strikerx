@@ -2,7 +2,7 @@ import { Telegraf } from "telegraf";
 import { logger } from "./logger";
 
 let groupBot: Telegraf | null = null;
-const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
+const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID ?? process.env.GROUP_CHAT_ID;
 const MINI_APP_LINK = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
 
 export function getGroupBot(): Telegraf | null {
@@ -135,14 +135,15 @@ export async function initGroupBotScheduler(): Promise<void> {
     }
   });
 
-  // Set up polling or webhook
-  const webhookUrl = process.env.WEBHOOK_URL;
-  if (webhookUrl) {
-    await bot.telegram.setWebhook(`${webhookUrl}/api/bots/groupbot`);
-    logger.info("GroupBot webhook set");
+  // Webhook mode only — no polling (same reason as GameBot; polling 409s on Replit restarts)
+  const webhookDomain = process.env.WEBHOOK_DOMAIN;
+  if (webhookDomain) {
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    await bot.telegram.setWebhook(`https://${webhookDomain}/api/bots/groupbot/webhook`);
+    logger.info({ url: `https://${webhookDomain}/api/bots/groupbot/webhook` }, "GroupBot webhook registered");
   } else {
-    bot.launch({ dropPendingUpdates: true });
-    logger.info("GroupBot polling started");
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+    logger.info("GroupBot running in send-only mode (no WEBHOOK_DOMAIN set)");
   }
 
   // Schedule jackpot broadcasts every 30 minutes

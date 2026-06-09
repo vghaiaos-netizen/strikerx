@@ -212,14 +212,19 @@ export async function initGameBot(): Promise<void> {
     }
   });
 
-  // Set up webhook or polling
-  const webhookUrl = process.env.WEBHOOK_URL;
-  if (webhookUrl) {
-    await bot.telegram.setWebhook(`${webhookUrl}/api/bots/gamebot`);
-    logger.info("GameBot webhook set");
+  // Webhook mode only — no polling.
+  // Polling causes 409 conflicts in Replit (frequent restarts keep old sessions alive).
+  // In dev without WEBHOOK_DOMAIN, the bot is initialised for sending only (DMs, balance updates).
+  // Commands (/start, /balance etc.) require a deployed WEBHOOK_DOMAIN to work.
+  const webhookDomain = process.env.WEBHOOK_DOMAIN;
+  if (webhookDomain) {
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    await bot.telegram.setWebhook(`https://${webhookDomain}/api/bots/gamebot/webhook`);
+    logger.info({ url: `https://${webhookDomain}/api/bots/gamebot/webhook` }, "GameBot webhook registered");
   } else {
-    bot.launch({ dropPendingUpdates: true });
-    logger.info("GameBot polling started");
+    // Drop any lingering webhook so Telegram stops trying to send updates
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+    logger.info("GameBot running in send-only mode (no WEBHOOK_DOMAIN set)");
   }
 
   logger.info("GameBot initialized");

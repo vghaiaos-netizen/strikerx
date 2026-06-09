@@ -124,7 +124,7 @@ export async function getConfig(key: string): Promise<string> {
     admin_password: "ADMIN_PASSWORD",
     gamebot_token: "GAMEBOT_TOKEN",
     groupbot_token: "GROUPBOT_TOKEN",
-    cryptobot_token: "CRYPTOBOT_TOKEN",
+    cryptobot_token: "CRYPTOBOT_API_TOKEN",
     mini_app_link: "MINI_APP_LINK",
     welcome_bonus_striker: "WELCOME_BONUS_STRIKER",
   };
