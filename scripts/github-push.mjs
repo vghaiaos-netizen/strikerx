@@ -9,7 +9,8 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-const TOKEN = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+// Strip any non-ASCII chars (e.g. Unicode spaces pasted in by mistake)
+const TOKEN = (process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? "").replace(/[^\x20-\x7E]/g, "").trim();
 const USERNAME = "vghaiaos-netizen";
 const REPO = "strikerx";
 const GRAPHQL = "https://api.github.com/graphql";
