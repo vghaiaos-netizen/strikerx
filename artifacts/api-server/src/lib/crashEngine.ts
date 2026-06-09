@@ -96,8 +96,8 @@ class CrashEngine {
     this.broadcast("round_state", this.getPublicState());
     logger.info({ roundId: dbRound.id, crashPoint }, "Crash round waiting");
 
-    // Wait 5 seconds before starting
-    setTimeout(() => this.runRound(), 5000);
+    // Wait 8 seconds before starting — gives players time to see previous result and place bets
+    setTimeout(() => this.runRound(), 8000);
   }
 
   private runRound() {
@@ -124,8 +124,10 @@ class CrashEngine {
       if (!this.currentRound || this.currentRound.status !== "running") return;
 
       elapsed += 100;
-      // Exponential growth: multiplier = e^(0.0006 * elapsed_ms)
-      const raw = Math.exp(0.0006 * elapsed);
+      // Exponential growth: multiplier = e^(0.0003 * elapsed_ms)
+      // At 0.0003: 1.5x≈1.4s, 2x≈2.3s, 5x≈5.4s, 10x≈7.7s — gives players time to react and cash out.
+      // (Old rate 0.0006 reached 1.5x in 0.7s — too fast to see.)
+      const raw = Math.exp(0.0003 * elapsed);
       this.currentRound.multiplier = parseFloat(raw.toFixed(2));
 
       // Check auto-cashouts
@@ -188,11 +190,11 @@ class CrashEngine {
 
     logger.info({ roundId: this.currentRound.id, crashPoint: this.currentRound.crashPoint }, "Crash round crashed");
 
-    // Start next round after 3 seconds
-    setTimeout(() => this.startNewRound(), 3000);
+    // Start next round after 5 seconds — gives players time to read the crash result
+    setTimeout(() => this.startNewRound(), 5000);
   }
 
-  async placeBet(playerId: number, username: string, betStriker: number, autoCashout: number | null): Promise<{ success: boolean; error?: string; roundId?: number }> {
+  async placeBet(playerId: number, username: string, betStriker: number, autoCashout: number | null): Promise<{ success: boolean; error?: string; roundId?: number; newBalance?: number }> {
     if (!this.currentRound || this.currentRound.status !== "waiting") {
       return { success: false, error: "Round is not accepting bets right now" };
     }
@@ -282,7 +284,7 @@ class CrashEngine {
       }
     })().catch(() => {});
 
-    return { success: true, roundId: this.currentRound.id };
+    return { success: true, roundId: this.currentRound.id, newBalance: parseFloat(String(player.strikerBalance)) };
   }
 
   async performCashout(playerId: number, multiplier?: number): Promise<{ success: boolean; error?: string; winAmount?: number; multiplier?: number }> {

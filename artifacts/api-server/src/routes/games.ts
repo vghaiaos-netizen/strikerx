@@ -78,7 +78,7 @@ router.post("/games/shot/bet", requireAuth, async (req, res): Promise<void> => {
   const result = await crashEngine.placeBet(playerId, player.username, betStriker, autoCashout ?? null);
   if (!result.success) { res.status(400).json({ error: result.error }); return; }
 
-  res.json({ roundId: result.roundId, betStriker, status: "placed", newBalance: player.strikerBalance - betStriker });
+  res.json({ roundId: result.roundId, betStriker, status: "placed", newBalance: result.newBalance ?? parseFloat(String(player.strikerBalance)) - betStriker });
 });
 
 // POST /games/shot/:id/cashout — REST fallback (WS preferred)

@@ -28,9 +28,12 @@ export function generateCrashPoint(serverSeed: string): number {
   // Apply house edge: e = 1 - houseEdge
   // crash = 1 / (1 - r * (1 - houseEdge))
   const e = 1 - houseEdge;
-  if (r < houseEdge) return 1.0; // Instant crash (house edge % of rounds)
+  // House edge rounds still show a brief graph — minimum 1.1x so players always
+  // see the multiplier climb before crash. Pure 1.0x instant crashes are terrible UX.
+  if (r < houseEdge) return 1.1;
 
-  return Math.max(1.0, parseFloat((e / (1 - r * e)).toFixed(2)));
+  // Clamp minimum to 1.2x so even unlucky rounds give players a moment to react.
+  return Math.max(1.2, parseFloat((e / (1 - r * e)).toFixed(2)));
 }
 
 export function generateServerSeed(): string {
