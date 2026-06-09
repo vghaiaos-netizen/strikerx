@@ -28,6 +28,11 @@ function isRateLimited(client: WsClient): boolean {
 
 const clients = new Map<WebSocket, WsClient>();
 
+/** Returns the number of currently connected WebSocket clients */
+export function getConnectedClients(): number {
+  return clients.size;
+}
+
 function broadcast(event: string, data: unknown) {
   const msg = JSON.stringify({ event, data });
   for (const [ws] of clients) {
