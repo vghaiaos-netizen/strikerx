@@ -10,7 +10,7 @@ export async function processCryptoBotTransfer(
   address: string,
   username: string,
 ) {
-  const cryptobotToken = process.env.CRYPTOBOT_API_TOKEN;
+  const cryptobotToken = process.env.CRYPTOBOT_TOKEN;
   if (!cryptobotToken) return;
 
   try {

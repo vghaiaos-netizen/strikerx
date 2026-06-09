@@ -80,7 +80,7 @@ const ENV_MAP: Record<string, string> = {
   admin_password: "ADMIN_PASSWORD",
   gamebot_token: "GAMEBOT_TOKEN",
   groupbot_token: "GROUPBOT_TOKEN",
-  cryptobot_token: "CRYPTOBOT_API_TOKEN",
+  cryptobot_token: "CRYPTOBOT_TOKEN",
   mini_app_link: "MINI_APP_LINK",
   welcome_bonus_striker: "WELCOME_BONUS_STRIKER",
 };
@@ -120,14 +120,15 @@ async function loadCache() {
 
 /**
  * On startup: for every config key that has a corresponding env var set,
- * write the env var value into the DB row if the DB row is currently empty ("").
- *
- * This ensures:
+ * write the env var value into the DB row if the DB row is at its seeded default
+ * or empty. This ensures:
  *  - The admin config UI shows that secrets are actually set (masked as ••••••••)
  *  - Changing a value in the UI takes effect without redeploying env vars
  *  - The env var still acts as a fallback if the DB is ever wiped
  *
- * If the DB already has a non-empty value (admin changed it), we leave it alone.
+ * "Seeded default" means the DB still has the value from DEFAULT_CONFIG — i.e. the
+ * admin hasn't customised it yet. We compare against the default so that keys like
+ * admin_username (default "admin") get overwritten by the env var on first boot.
  */
 async function syncEnvToDB() {
   let synced = 0;
@@ -138,7 +139,11 @@ async function syncEnvToDB() {
     if (!envVal) continue;
 
     const entry = cache.get(configKey);
-    if (!entry || entry.value === "") {
+    const defaultVal = DEFAULT_CONFIG.find(d => d.key === configKey)?.value ?? "";
+    const dbVal = entry?.value ?? "";
+
+    // Sync if DB is at the seed default or empty — skip if admin has customised it
+    if (!entry || dbVal === "" || dbVal === defaultVal) {
       try {
         await db
           .update(appConfigTable)

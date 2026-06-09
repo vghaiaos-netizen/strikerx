@@ -179,7 +179,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     // CryptoBot webhook must be registered manually via @CryptoBot in Telegram:
     //   /setwebhook → set URL to: https://<domain>/api/payments/webhook/cryptobot
     // The API does not expose a setWebhook method — only manual setup is supported.
-    if (process.env.CRYPTOBOT_API_TOKEN) {
+    if (process.env.CRYPTOBOT_TOKEN) {
       logger.info(
         { url: `https://${effectiveDomain}/api/payments/webhook/cryptobot` },
         "CryptoBot webhook URL (register manually via @CryptoBot → /setwebhook)",
