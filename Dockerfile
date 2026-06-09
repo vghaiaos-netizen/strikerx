@@ -1,7 +1,7 @@
 FROM node:24-alpine AS base
 
-# Pin pnpm@9 — lockfileVersion: 9.0; pnpm v10 blocks postinstall scripts by default
-RUN npm install -g pnpm@9
+# Use pnpm@10 to match the lockfile generated in the Replit environment
+RUN npm install -g pnpm@10
 
 WORKDIR /app
 
