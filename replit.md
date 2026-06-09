@@ -23,8 +23,13 @@ A football-themed Telegram Mini App casino platform with four original games, th
 Railway is the permanent production host. The workflow is:
 
 ```
-Edit on Replit  →  node scripts/github-push.mjs  →  Railway auto-deploys  (~3 min)
+Edit on Replit  →  node scripts/github-push.mjs  →  (safe, pushes to 'replit' branch only)
+                →  node scripts/promote.mjs        →  Railway auto-deploys  (~3 min)
 ```
+
+- `github-push.mjs` always syncs to the **`replit`** branch — Railway never sees it
+- `promote.mjs` merges `replit` → `main`, which triggers Railway auto-deploy
+- Never push directly to `main` from Replit — that would deploy untested code
 
 The Railway URL (`*.up.railway.app`) is permanent. BotFather and CryptoBot webhook are wired to it once and never change.
 
@@ -111,7 +116,8 @@ In dev: API on port 8000, Vite on port 5000 (proxies `/api` and `/ws` to 8000).
 | `pnpm run typecheck` | Full typecheck across all packages |
 | `pnpm --filter @workspace/api-spec run codegen` | Regenerate React Query hooks and Zod schemas from the OpenAPI spec |
 | `pnpm --filter @workspace/db run push` | Push Drizzle schema to DB (dev only — never on prod) |
-| `node scripts/github-push.mjs` | Push all files to GitHub via Contents API (git push is blocked in Replit) |
+| `node scripts/github-push.mjs` | Sync all files to GitHub `replit` branch (safe — Railway does NOT see this) |
+| `node scripts/promote.mjs` | Merge `replit` → `main` on GitHub, triggering Railway production deploy (~3 min) |
 
 **Dev auth bypass:** `POST /api/auth/telegram` with `{ "initData": "dev:123456:player_dev" }` — only works when `NODE_ENV=development`.
 
