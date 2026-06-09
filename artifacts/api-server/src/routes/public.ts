@@ -51,4 +51,35 @@ router.get("/public/match-event", async (_req, res): Promise<void> => {
   }
 });
 
+// GET /public/wc-theme — World Cup 2026 theme status
+router.get("/public/wc-theme", async (_req, res): Promise<void> => {
+  try {
+    const { getConfig } = await import("../lib/configService");
+    const override = await getConfig("wc_edition_active").catch(() => "");
+    const kickOff = await getConfig("wc_kick_off").catch(() => "2026-06-11T16:00:00.000Z");
+    const wcEnd = await getConfig("wc_edition_ends").catch(() => "2026-07-20T00:00:00.000Z");
+
+    const now = Date.now();
+    const kickOffMs = new Date(kickOff || "2026-06-11T16:00:00.000Z").getTime();
+    const endMs = new Date(wcEnd || "2026-07-20T00:00:00.000Z").getTime();
+
+    // active if within WC window OR admin override is "true"
+    const dateActive = now >= kickOffMs && now <= endMs;
+    const active = override === "true" || dateActive;
+    const countdown = now < kickOffMs;
+    const live = now >= kickOffMs && now <= endMs;
+
+    res.json({
+      active: active || countdown,
+      live,
+      countdown,
+      kickOff: kickOff || "2026-06-11T16:00:00.000Z",
+      endsAt: wcEnd || "2026-07-20T00:00:00.000Z",
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to get WC theme status");
+    res.json({ active: false, live: false, countdown: false, kickOff: null, endsAt: null });
+  }
+});
+
 export default router;
