@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2 } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
 
 interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
-
+interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 interface WinEntry { user: string; amount: number; game: string; mult: string; }
 
 // Dev auth bypass — uses Telegram format in dev mode
@@ -54,6 +54,8 @@ export function Home() {
   const { player } = useAuth();
   const { notifications } = useNotifications();
   const [tickerIdx, setTickerIdx] = useState(0);
+  const [wcCountdownSecs, setWcCountdownSecs] = useState(0);
+  const wcTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: jackpot } = useGetJackpot({
     query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
@@ -67,6 +69,30 @@ export function Home() {
     },
     refetchInterval: 60_000,
   });
+
+  const { data: wcTheme } = useQuery<WcTheme>({
+    queryKey: ["wc-theme"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/wc-theme");
+      return res.json() as Promise<WcTheme>;
+    },
+    refetchInterval: 300_000,
+  });
+
+  useEffect(() => {
+    if (wcTheme?.countdown && wcTheme.kickOff) {
+      const end = new Date(wcTheme.kickOff).getTime();
+      // Set immediately so it doesn't flash 00:00:00
+      setWcCountdownSecs(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+      if (wcTimerRef.current) clearInterval(wcTimerRef.current);
+      wcTimerRef.current = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+        setWcCountdownSecs(remaining);
+        if (remaining === 0 && wcTimerRef.current) clearInterval(wcTimerRef.current);
+      }, 1000);
+    }
+    return () => { if (wcTimerRef.current) clearInterval(wcTimerRef.current); };
+  }, [wcTheme]);
 
   // Build live wins from real WS big_win events; fall back to seed data if none yet
   const liveWins: WinEntry[] = notifications
@@ -94,9 +120,80 @@ export function Home() {
   const currentWin = wins[safeIdx]!;
   const pct = jackpot?.percentFull ?? 0;
 
+  const formatWcCountdown = (secs: number) => {
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (d > 0) return { d, h, m, s };
+    return { d: 0, h, m, s };
+  };
+  const wct = formatWcCountdown(wcCountdownSecs);
+
   return (
     <Layout>
       <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
+
+        {/* ── World Cup 2026 Banner ── */}
+        <AnimatePresence>
+          {wcTheme?.active && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="relative overflow-hidden rounded-2xl border border-[#e63946]/30 bg-gradient-to-br from-[#1d3557]/70 via-[#0d1117] to-[#1a0a0a]/60 p-4"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,#e6394620,transparent_55%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,#ffd70010,transparent_55%)]" />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-3">
+                  <Globe className="w-3.5 h-3.5 text-[#e63946]" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#e63946]">
+                    World Cup 2026
+                  </span>
+                  {wcTheme.live ? (
+                    <span className="ml-auto text-[10px] font-mono bg-[#e63946]/20 text-[#e63946] border border-[#e63946]/30 rounded-full px-2 py-0.5 animate-pulse">
+                      LIVE
+                    </span>
+                  ) : (
+                    <span className="ml-auto text-[10px] font-mono bg-white/5 text-white/40 border border-white/10 rounded-full px-2 py-0.5">
+                      COMING SOON
+                    </span>
+                  )}
+                </div>
+
+                {wcTheme.live ? (
+                  <div className="text-center py-1">
+                    <div className="font-display font-black text-xl text-white tracking-wide">
+                      THE TOURNAMENT IS LIVE
+                    </div>
+                    <div className="text-[11px] font-mono text-white/40 mt-1">
+                      Play all games for a chance to win the ultimate jackpot
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-3 py-1">
+                    {[
+                      { val: wct.d, label: "DAYS" },
+                      { val: wct.h, label: "HRS" },
+                      { val: wct.m, label: "MIN" },
+                      { val: wct.s, label: "SEC" },
+                    ].map(({ val, label }) => (
+                      <div key={label} className="flex flex-col items-center">
+                        <div className="bg-white/8 border border-white/10 rounded-lg w-12 h-10 flex items-center justify-center">
+                          <span className="font-display font-black text-lg text-white">
+                            {String(val).padStart(2, "0")}
+                          </span>
+                        </div>
+                        <span className="text-[8px] font-mono text-white/30 mt-1 tracking-widest">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Match Event Banner ── */}
         <AnimatePresence>
@@ -191,7 +288,16 @@ export function Home() {
 
         {/* ── Game Grid ── */}
         <div>
-          <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30 mb-2.5">ORIGINALS</div>
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">
+              {wcTheme?.active ? "WC ORIGINALS" : "ORIGINALS"}
+            </div>
+            {wcTheme?.active && (
+              <span className="text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">
+                2026
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             {GAMES.map(({ href, name, sub, icon: Icon, color, bg }) => (
               <Link key={href} href={href}>

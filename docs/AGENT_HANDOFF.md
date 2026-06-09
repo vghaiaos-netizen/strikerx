@@ -340,9 +340,17 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
 - [x] Admin layout updated with Rate Events + Flagged nav items
 - [x] App.tsx wired with `/admin/rate-events` and `/admin/flagged` routes
 
-### Phase 8 (Next)
-- [ ] Deposit page rate event banner (show boosted rate during active rate event)
-- [ ] Push notifications via Telegram for jackpot wins + achievement milestones
-- [ ] World Cup themed UI skin (Phase 5 from ROADMAP)
-- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) and go live
-- [ ] Deploy via Replit deployment
+### Phase 8 ✅
+- [x] Deposit page rate event banner — already fully built (deposit.tsx line 117, /api/public/rate-event)
+- [x] Push notifications via Telegram for jackpot wins + achievement milestones — already wired (services/telegramNotify.ts, called from games.ts + crashEngine.ts)
+- [x] World Cup themed UI skin — BUILT:
+  - `GET /api/public/wc-theme` — returns { active, live, countdown, kickOff, endsAt } (auto date range Jun 11–Jul 19 2026; admin can override with `wc_edition_active` config key)
+  - `layout.tsx` — "WC '26" red badge next to logo + red accent underline across header, active on all pages
+  - `home.tsx` — live countdown banner (DD/HH/MM/SS blocks) before Jun 11 kick-off; switches to "THE TOURNAMENT IS LIVE" once started; game section relabelled "WC ORIGINALS 2026"
+  - Layout fetches its own WC state so all pages inherit the badge automatically (shared React Query cache key `["wc-theme"]`)
+
+### Phase 9 (Next)
+- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) on Railway and go live
+- [ ] Deploy to Railway production via `node scripts/github-push.mjs`
+- [ ] World Cup special tournament series (admin → /admin/tournaments)
+- [ ] Match reaction posts during live WC matches (GroupBot)
