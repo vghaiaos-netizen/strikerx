@@ -6,9 +6,11 @@ import {
   transactionsTable,
   vipCashbackTable,
 } from "@workspace/db";
-import { eq, lt, and, desc, gte, lte } from "drizzle-orm";
+import { eq, lt, and, desc, gte, lte, isNotNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { broadcastToAll } from "./wsServer";
+import { getConfig, setConfig } from "./configService";
+import { sendReactivationDM } from "../services/telegramNotify";
 
 const PRIZE_DISTRIBUTION = [0.5, 0.25, 0.15, 0.07, 0.03];
 
@@ -229,6 +231,71 @@ async function processWeeklyCashback() {
   logger.info("Weekly cashback auto-payout complete");
 }
 
+// ── Rate event auto-expiry ─────────────────────────────────────────────────────
+
+async function processRateEventExpiry() {
+  try {
+    const active = await getConfig("rate_event_active").catch(() => "false");
+    if (active !== "true") return;
+    const endsAt = await getConfig("rate_event_ends_at").catch(() => "");
+    if (!endsAt) return;
+    if (new Date(endsAt).getTime() < Date.now()) {
+      await setConfig("rate_event_active", "false");
+      logger.info("Rate event expired — auto-disabled");
+    }
+  } catch (err) {
+    logger.error({ err }, "Rate event expiry check failed");
+  }
+}
+
+// ── Reactivation DMs ───────────────────────────────────────────────────────────
+
+async function processReactivationDMs() {
+  try {
+    const now = new Date();
+    const sevenDaysAgo  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
+    const eightDaysAgo  = new Date(now.getTime() - 8  * 24 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const fifteenDaysAgo  = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+
+    // 7-day inactive players (last active between 7 and 8 days ago)
+    const sevenDay = await db
+      .select({ telegramId: playersTable.telegramId })
+      .from(playersTable)
+      .where(
+        and(
+          isNotNull(playersTable.telegramId),
+          sql`${playersTable.lastActive} <= ${sevenDaysAgo} AND ${playersTable.lastActive} > ${eightDaysAgo}`,
+        ),
+      );
+
+    for (const p of sevenDay) {
+      if (p.telegramId) sendReactivationDM(p.telegramId, 7);
+    }
+
+    // 14-day inactive players (last active between 14 and 15 days ago)
+    const fourteenDay = await db
+      .select({ telegramId: playersTable.telegramId })
+      .from(playersTable)
+      .where(
+        and(
+          isNotNull(playersTable.telegramId),
+          sql`${playersTable.lastActive} <= ${fourteenDaysAgo} AND ${playersTable.lastActive} > ${fifteenDaysAgo}`,
+        ),
+      );
+
+    for (const p of fourteenDay) {
+      if (p.telegramId) sendReactivationDM(p.telegramId, 14);
+    }
+
+    if (sevenDay.length + fourteenDay.length > 0) {
+      logger.info({ sevenDay: sevenDay.length, fourteenDay: fourteenDay.length }, "Reactivation DMs sent");
+    }
+  } catch (err) {
+    logger.error({ err }, "Reactivation DM job failed");
+  }
+}
+
 // ── Scheduler entrypoint ───────────────────────────────────────────────────────
 
 export function startScheduler() {
@@ -240,6 +307,13 @@ export function startScheduler() {
 
   // Tournament live leaderboard — every 30 seconds
   setInterval(() => { broadcastTournamentLeaderboards().catch(() => {}); }, 30_000);
+
+  // Rate event auto-expiry — every 60 seconds
+  processRateEventExpiry().catch(() => {});
+  setInterval(() => { processRateEventExpiry().catch(() => {}); }, 60_000);
+
+  // Reactivation DMs — every 24 hours
+  setInterval(() => { processReactivationDMs().catch(() => {}); }, 24 * 60 * 60 * 1000);
 
   // Weekly cashback auto-payout — every Sunday at 00:05 UTC
   const scheduleWeeklyCashback = () => {

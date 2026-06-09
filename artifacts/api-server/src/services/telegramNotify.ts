@@ -23,17 +23,32 @@ async function sendMessage(telegramId: string, text: string): Promise<void> {
   }
 }
 
-export function sendJackpotWin(telegramId: string, amount: number, game: string): void {
+export function sendJackpotWin(telegramId: string, amountTon: number, game: string): void {
   sendMessage(
     telegramId,
-    `🏆 <b>JACKPOT!</b> You just won <b>${amount.toLocaleString()} STRIKER</b> on ${game}! Check your balance.`,
+    `<b>JACKPOT!</b> You just won the Golden Boot — <b>${amountTon.toFixed(2)} TON</b> on ${game}! Check your balance.`,
   ).catch((err) => logger.warn({ err, telegramId }, "sendJackpotWin failed"));
 }
 
-export function sendAchievementUnlocked(telegramId: string, achievementName: string, reward: number): void {
-  const rewardText = reward > 0 ? ` +${reward.toLocaleString()} STRIKER credited.` : "";
+export function sendAchievementUnlocked(telegramId: string, achievementTitle: string, rarity: string): void {
+  const rarityLabel: Record<string, string> = {
+    common: "Common",
+    rare: "Rare",
+    epic: "Epic",
+    legendary: "LEGENDARY",
+  };
   sendMessage(
     telegramId,
-    `🎖️ <b>Achievement unlocked:</b> ${achievementName}!${rewardText}`,
+    `<b>Achievement unlocked:</b> ${achievementTitle}\n<i>${rarityLabel[rarity] ?? rarity}</i> — open StrikerX to see your collection.`,
   ).catch((err) => logger.warn({ err, telegramId }, "sendAchievementUnlocked failed"));
+}
+
+export function sendReactivationDM(telegramId: string, daysSince: number): void {
+  const lines =
+    daysSince >= 14
+      ? `It's been a while! Your STRIKER balance is waiting — come back and claim your daily streak bonus.`
+      : `You haven't played in ${daysSince} days. Your streak bonus is ready to claim — don't let it expire!`;
+  sendMessage(telegramId, lines).catch((err) =>
+    logger.warn({ err, telegramId }, "sendReactivationDM failed"),
+  );
 }

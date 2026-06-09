@@ -16,7 +16,8 @@ import { crashEngine } from "../lib/crashEngine";
 import { broadcastBigWin, broadcastJackpot } from "../lib/groupBot";
 import { broadcastToAll } from "../lib/wsServer";
 import { logger } from "../lib/logger";
-import { checkAndAward } from "../lib/achievementsService";
+import { checkAndAward, ACHIEVEMENT_MAP } from "../lib/achievementsService";
+import { sendJackpotWin, sendAchievementUnlocked } from "../services/telegramNotify";
 import { getMatchEventBonus } from "../lib/matchEventBonus";
 import { creditAffiliateCommission } from "../lib/affiliateCommission";
 
@@ -24,7 +25,7 @@ const router: IRouter = Router();
 
 // ─── Helper: check & trigger jackpot ─────────────────────────────────────────
 
-async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string) {
+async function checkAndTriggerJackpot(playerId: number, betStriker: number, username: string, telegramId?: string | null) {
   const [jackpot] = await db.select().from(jackpotTable).limit(1);
   if (!jackpot || jackpot.status !== "ready") return null;
   if (!shouldTriggerJackpot(jackpot.currentAmountTon, betStriker)) return null;
@@ -45,6 +46,7 @@ async function checkAndTriggerJackpot(playerId: number, betStriker: number, user
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: strikerWin, amountTon: winnerAmount, status: "completed" });
 
   broadcastJackpot(username, winnerAmount).catch((err) => logger.error({ err }, "Failed to broadcast jackpot"));
+  if (telegramId) sendJackpotWin(telegramId, winnerAmount, "StrikerX");
   return { triggered: true, amountTon: winnerAmount, strikerWin };
 }
 
@@ -153,7 +155,7 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     gameData: { keeperDirection, direction },
   }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, player.telegramId);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (win && (winAmount >= bigWinThreshold || multiplier >= 5)) {
     broadcastBigWin(player.username, betStriker, winAmount, "Penalty").catch(() => {});
@@ -161,13 +163,23 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
   }
 
   // fire-and-forget achievement checks
+  const _playerTelegramIdPenalty = player.telegramId;
+  const _playerUsernamePenalty = player.username;
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
     const awarded: string[] = [];
     awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
     awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "penalty", outcome, winAmount, multiplier: win ? multiplier : 0 }));
     if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
-    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player.username, keys: awarded, at: Date.now() });
+    if (awarded.length > 0) {
+      broadcastToAll("achievement_unlocked", { playerId, username: _playerUsernamePenalty, keys: awarded, at: Date.now() });
+      if (_playerTelegramIdPenalty) {
+        for (const key of awarded) {
+          const def = ACHIEVEMENT_MAP[key];
+          if (def) sendAchievementUnlocked(_playerTelegramIdPenalty, def.title, def.rarity);
+        }
+      }
+    }
   })().catch(() => {});
 
   res.json({
@@ -276,7 +288,7 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   creditAffiliateCommission(playerId, winAmount).catch(() => {});
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player");
+  const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player", player?.telegramId);
 
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || session.currentMultiplier >= 5) {
@@ -285,13 +297,23 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   }
 
   // fire-and-forget achievement checks
+  const _playerTelegramIdMine = player?.telegramId ?? null;
+  const _playerUsernameMine = player?.username ?? "Player";
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
     const awarded: string[] = [];
     awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) }));
     awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "minefield", outcome: "cashout", winAmount, multiplier: session.currentMultiplier, safePickCount: session.revealedPositions.length }));
     if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
-    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player?.username ?? "Player", keys: awarded, at: Date.now() });
+    if (awarded.length > 0) {
+      broadcastToAll("achievement_unlocked", { playerId, username: _playerUsernameMine, keys: awarded, at: Date.now() });
+      if (_playerTelegramIdMine) {
+        for (const key of awarded) {
+          const def = ACHIEVEMENT_MAP[key];
+          if (def) sendAchievementUnlocked(_playerTelegramIdMine, def.title, def.rarity);
+        }
+      }
+    }
   })().catch(() => {});
 
   res.json({ gameId: sessionId, gameType: "minefield", betStriker: session.betStriker, outcome: "cashout", multiplier: session.currentMultiplier, winAmount, newBalance: (player?.strikerBalance ?? 0) + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
@@ -351,7 +373,7 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
 
   const [game] = await db.insert(gamesTable).values({ playerId, gameType: "freekick", betStriker, resultMultiplier: multiplier, winAmount, outcome, gameData: { slot, riskLevel } }).returning();
 
-  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username);
+  const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, player.telegramId);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
   if (winAmount >= bigWinThreshold || multiplier >= 5) {
     broadcastBigWin(player.username, betStriker, winAmount, "Free Kick").catch(() => {});
@@ -359,13 +381,23 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
   }
 
   // fire-and-forget achievement checks
+  const _playerTelegramIdFK = player.telegramId;
+  const _playerUsernameFK = player.username;
   (async () => {
     const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
     const awarded: string[] = [];
     awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
     awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "freekick", outcome, winAmount, multiplier }));
     if (jackpotResult) awarded.push(...await checkAndAward(playerId, { event: "jackpot_won" }));
-    if (awarded.length > 0) broadcastToAll("achievement_unlocked", { playerId, username: player.username, keys: awarded, at: Date.now() });
+    if (awarded.length > 0) {
+      broadcastToAll("achievement_unlocked", { playerId, username: _playerUsernameFK, keys: awarded, at: Date.now() });
+      if (_playerTelegramIdFK) {
+        for (const key of awarded) {
+          const def = ACHIEVEMENT_MAP[key];
+          if (def) sendAchievementUnlocked(_playerTelegramIdFK, def.title, def.rarity);
+        }
+      }
+    }
   })().catch(() => {});
 
   res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: newBalance + winAmount, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });

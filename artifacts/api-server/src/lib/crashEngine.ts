@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import { db, crashRoundsTable, gamesTable, playersTable, transactionsTable, jackpotTable } from "@workspace/db";
 import { eq, count, sql } from "drizzle-orm";
-import { checkAndAward } from "./achievementsService";
+import { checkAndAward, ACHIEVEMENT_MAP } from "./achievementsService";
+import { sendAchievementUnlocked } from "../services/telegramNotify";
 import { logger } from "./logger";
 import { broadcastBigWin, broadcastJackpot } from "./groupBot";
 import {
@@ -20,6 +21,7 @@ import { creditAffiliateCommission } from "./affiliateCommission";
 export interface CrashBet {
   playerId: number;
   username: string;
+  telegramId: string | null;
   betStriker: number;
   autoCashout: number | null;
   cashedOut: boolean;
@@ -241,6 +243,7 @@ class CrashEngine {
     this.currentRound.bets.set(playerId, {
       playerId,
       username,
+      telegramId: player.telegramId ?? null,
       betStriker,
       autoCashout,
       cashedOut: false,
@@ -258,7 +261,15 @@ class CrashEngine {
       if (newVip !== player.vipTier) {
         awarded.push(...await checkAndAward(playerId, { event: "vip_updated", vipTier: newVip }));
       }
-      if (awarded.length > 0) this.broadcast("achievement_unlocked", { playerId, username, keys: awarded, at: Date.now() });
+      if (awarded.length > 0) {
+        this.broadcast("achievement_unlocked", { playerId, username, keys: awarded, at: Date.now() });
+        if (player.telegramId) {
+          for (const key of awarded) {
+            const def = ACHIEVEMENT_MAP[key];
+            if (def) sendAchievementUnlocked(player.telegramId, def.title, def.rarity);
+          }
+        }
+      }
     })().catch(() => {});
 
     return { success: true, roundId: this.currentRound.id };
@@ -321,7 +332,15 @@ class CrashEngine {
       const awarded: string[] = [];
       awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames) }));
       awarded.push(...await checkAndAward(playerId, { event: "game_result", gameType: "shot", outcome: "cashout", winAmount, multiplier: cashoutMult }));
-      if (awarded.length > 0) this.broadcast("achievement_unlocked", { playerId, username: bet.username, keys: awarded, at: Date.now() });
+      if (awarded.length > 0) {
+        this.broadcast("achievement_unlocked", { playerId, username: bet.username, keys: awarded, at: Date.now() });
+        if (bet.telegramId) {
+          for (const key of awarded) {
+            const def = ACHIEVEMENT_MAP[key];
+            if (def) sendAchievementUnlocked(bet.telegramId, def.title, def.rarity);
+          }
+        }
+      }
     })().catch(() => {});
 
     return { success: true, winAmount, multiplier: cashoutMult };
