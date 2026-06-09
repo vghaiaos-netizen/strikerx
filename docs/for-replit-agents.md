@@ -31,8 +31,8 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
 | API server port | 8000 (workflow: `API Server`) | Auto-assigned via `PORT` env var |
 | Frontend port | 5000 (workflow: `Start application`) | Served by Express as static files |
 | DB | Replit PostgreSQL (`DATABASE_URL`) | Railway PostgreSQL (separate service) |
-| Domain | Rotates on restart (breaks bot webhooks) | Permanent — never changes |
-| Bot webhooks | Registered to current Replit dev URL | Registered to Railway URL on startup |
+| Domain | Rotates on restart (`REPLIT_DEV_DOMAIN`) | Permanent — never changes |
+| Bot webhooks | **NOT registered** — intentional, Railway owns them | Registered to Railway URL on startup |
 | Auth bypass | `initData: "dev:123456:player_dev"` works | Only real Telegram initData accepted |
 | NODE_ENV | `development` | `production` |
 
@@ -47,6 +47,36 @@ Replit (dev)  →  edit code  →  node scripts/github-push.mjs  →  GitHub (ma
 
 **After any server-side change:** restart the `API Server` workflow (it runs `pnpm build` before starting).  
 **After any frontend change:** Vite HMR reloads automatically — no restart needed.
+
+---
+
+## CRITICAL: Replit dev must never interfere with Railway production
+
+**Restarting the `API Server` workflow on Replit does NOT register Telegram bot webhooks.**
+This is intentional. The webhooks belong to Railway. If Replit were to call `setWebhook`, it would
+hijack the live bots away from Railway and break production every time the dev server restarts.
+
+### What NOT to use `REPLIT_DOMAINS` for
+`REPLIT_DOMAINS` is a Replit-managed env var injected automatically in all Replit environments
+(dev, Replit Publish, etc.). It is used **only** for CORS configuration. It must never be used for:
+- Telegram webhook registration (`setWebhook`)
+- Referral link base URLs
+- Any URL that players or bots will click on in production
+
+### Webhook registration rules (see `app.ts`)
+| Env var present | Behaviour |
+|---|---|
+| `WEBHOOK_DOMAIN` | Register webhooks to this domain (manual override) |
+| `RAILWAY_PUBLIC_DOMAIN` | Register webhooks to Railway URL (auto-injected by Railway) |
+| Neither (Replit dev) | Skip registration entirely — Railway already has the correct webhook |
+
+Webhooks will self-heal: when Railway restarts or deploys, it re-registers them to its own URL.
+**Never manually call `setWebhook` from Replit dev** — this is the exact bug it is protecting against.
+
+### Referral links must always use MINI_APP_LINK
+Referral links are Telegram deep links: `https://t.me/StrykkerXBot/StrikerX?startapp=CODE`.
+They must use the `MINI_APP_LINK` env var (`t.me/StrykkerXBot/StrikerX`), never the HTTP server domain.
+The server domain (Replit or Railway) is the API backend — it is not a valid Telegram Mini App entry point.
 
 ---
 
