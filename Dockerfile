@@ -1,5 +1,6 @@
 FROM node:24-slim AS base
 
+# cache-bust: 2026-06-09
 # Use pnpm@10 to match the lockfile generated in the Replit environment
 RUN npm install -g pnpm@10
 
