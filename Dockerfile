@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:24-slim AS base
 
 # Use pnpm@10 to match the lockfile generated in the Replit environment
 RUN npm install -g pnpm@10
