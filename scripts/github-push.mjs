@@ -1,9 +1,8 @@
 /**
  * StrikerX GitHub Push Script — GraphQL createCommitOnBranch
  *
- * Pushes all Replit source files to the `replit` branch on GitHub.
- * Railway watches `main` only — this branch is safe and never triggers a deploy.
- * To promote to production (trigger Railway), run: node scripts/promote.mjs
+ * Pushes all Replit source files directly to `main` on GitHub.
+ * Railway watches `main` and will auto-deploy after each push (~3 min).
  *
  * Run: node scripts/github-push.mjs
  */
@@ -16,7 +15,7 @@ const ROOT = path.resolve(__dirname, "..");
 const TOKEN = (process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? "").replace(/[^\x20-\x7E]/g, "").trim();
 const USERNAME = "vghaiaos-netizen";
 const REPO = "strikerx";
-const TARGET_BRANCH = "replit"; // safe — Railway watches `main`, not this branch
+const TARGET_BRANCH = "main"; // Railway watches main — pushes here trigger a deploy
 const GRAPHQL = "https://api.github.com/graphql";
 const REST = "https://api.github.com";
 
@@ -147,8 +146,7 @@ function walk(dir, base = "") {
 
 async function run() {
   console.log(`\nSyncing Replit → github.com/${USERNAME}/${REPO}:${TARGET_BRANCH}`);
-  console.log("  (Railway watches 'main' only — this push will NOT trigger a deploy)");
-  console.log("  (To deploy to production: node scripts/promote.mjs)");
+  console.log("  Railway will auto-deploy from main (~3 min after push completes)");
   console.log("=".repeat(60));
 
   const { status, data: me } = await rest("GET", "/user");
@@ -189,9 +187,9 @@ async function run() {
   }
 
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`Pushed ${pushed}/${files.length} files to branch '${TARGET_BRANCH}'`);
-  console.log(`https://github.com/${USERNAME}/${REPO}/tree/${TARGET_BRANCH}\n`);
-  console.log(`Run 'node scripts/promote.mjs' when ready to deploy to Railway.\n`);
+  console.log(`Pushed ${pushed}/${files.length} files to main`);
+  console.log(`https://github.com/${USERNAME}/${REPO}/tree/main`);
+  console.log(`Railway is deploying now — check https://railway.app/dashboard (~3 min)\n`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });
