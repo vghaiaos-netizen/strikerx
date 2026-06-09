@@ -12,10 +12,11 @@ const MINI_APP_LINK = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
 function getAppUrl(): string {
   const domain =
     process.env.WEBHOOK_DOMAIN ??
-    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ??
+    process.env.RAILWAY_PUBLIC_DOMAIN ??
+    process.env.REPLIT_DEV_DOMAIN;
   if (domain) return `https://${domain}`;
-  // Last-resort fallback (dev without REPLIT_DOMAINS)
-  return getAppUrl();
+  return `https://t.me/StrykkerXBot/StrikerX`;
 }
 
 export function getGameBot(): Telegraf | null {

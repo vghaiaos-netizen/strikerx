@@ -51,7 +51,13 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
         payload: JSON.stringify({ playerId, currency }),
         expires_in: 3600,
         paid_btn_name: "openBot",
-        paid_btn_url: `https://${process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX"}`,
+        paid_btn_url: process.env.WEBHOOK_DOMAIN
+          ? `https://${process.env.WEBHOOK_DOMAIN}`
+          : process.env.REPLIT_DOMAINS
+            ? `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`
+            : process.env.REPLIT_DEV_DOMAIN
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : `https://t.me/StrykkerXBot/StrikerX`,
       }),
     });
 

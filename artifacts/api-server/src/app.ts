@@ -15,7 +15,7 @@ import { initConfig } from "./lib/configService";
 
 const app: Express = express();
 
-// Trust the Replit reverse proxy so rate-limit can read real IPs from X-Forwarded-For
+// Trust reverse proxies (Replit, Railway, etc.) for real IP via X-Forwarded-For
 app.set("trust proxy", 1);
 
 // Security headers
@@ -43,13 +43,14 @@ app.use(
 );
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
-// Priority: CORS_ORIGIN env → REPLIT_DOMAINS (auto-set by Replit on deploy) → dev fallback
+// Priority: CORS_ORIGIN env → REPLIT_DOMAINS → RAILWAY_PUBLIC_DOMAIN → dev fallback
 const isProd = process.env.NODE_ENV === "production";
 const corsOrigin = process.env.CORS_ORIGIN;
 const replitDomains = process.env.REPLIT_DOMAINS;
+const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
 
-if (isProd && !corsOrigin && !replitDomains) {
-  logger.error("CORS_ORIGIN and REPLIT_DOMAINS are both unset in production — refusing to start with open CORS.");
+if (isProd && !corsOrigin && !replitDomains && !railwayDomain) {
+  logger.error("No CORS origin configured in production — set CORS_ORIGIN, REPLIT_DOMAINS, or RAILWAY_PUBLIC_DOMAIN.");
   process.exit(1);
 }
 
@@ -58,6 +59,7 @@ const allowedOrigins: string[] = corsOrigin
   : [
       ...(replitDomains ? replitDomains.split(",").map(d => `https://${d.trim()}`) : []),
       ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
+      ...(railwayDomain ? [`https://${railwayDomain}`] : []),
       ...(!isProd ? ["http://localhost:5000", "http://localhost:3000", "http://localhost:8000"] : []),
     ];
 
@@ -133,8 +135,11 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     initGroupBotScheduler().catch((err) => logger.error({ err }, "GroupBot init failed")),
   ]);
 
-  // Resolve the effective domain: explicit WEBHOOK_DOMAIN overrides REPLIT_DOMAINS
-  const effectiveDomain = process.env.WEBHOOK_DOMAIN ?? replitDomains?.split(",")[0]?.trim();
+  // Resolve the effective domain: WEBHOOK_DOMAIN > REPLIT_DOMAINS > RAILWAY_PUBLIC_DOMAIN
+  const effectiveDomain =
+    process.env.WEBHOOK_DOMAIN ??
+    replitDomains?.split(",")[0]?.trim() ??
+    railwayDomain;
 
   if (effectiveDomain) {
     // Register Telegram bot webhooks

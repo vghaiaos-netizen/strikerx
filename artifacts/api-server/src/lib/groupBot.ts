@@ -3,7 +3,16 @@ import { logger } from "./logger";
 
 let groupBot: Telegraf | null = null;
 const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID ?? process.env.GROUP_CHAT_ID;
-const MINI_APP_LINK = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
+
+function getAppUrl(): string {
+  const domain =
+    process.env.WEBHOOK_DOMAIN ??
+    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ??
+    process.env.RAILWAY_PUBLIC_DOMAIN ??
+    process.env.REPLIT_DEV_DOMAIN;
+  if (domain) return `https://${domain}`;
+  return `https://t.me/StrykkerXBot/StrikerX`;
+}
 
 export function getGroupBot(): Telegraf | null {
   if (!groupBot && process.env.GROUPBOT_TOKEN) {
@@ -28,7 +37,7 @@ async function sendToGroup(text: string, inlineButton?: { text: string; url: str
 
 export async function broadcastWelcome(username: string, jackpotAmount: number): Promise<void> {
   const text = `Welcome to StrikerX @${username}!\nThe stadium is LIVE. Golden Boot: <b>${jackpotAmount.toFixed(2)} TON</b>\nYour 500 STRIKER welcome bonus is waiting.`;
-  await sendToGroup(text, { text: "Claim & Play", url: `https://${MINI_APP_LINK}` });
+  await sendToGroup(text, { text: "Claim & Play", url: getAppUrl() });
 }
 
 export async function broadcastBigWin(username: string, betStriker: number, winStriker: number, game: string): Promise<void> {
@@ -37,18 +46,18 @@ export async function broadcastBigWin(username: string, betStriker: number, winS
   const winTon = (winStriker / depositRate).toFixed(2);
   const multiplier = (winStriker / betStriker).toFixed(2);
   const text = `GOOOAL!\n@${username} just turned <b>${betTon} TON</b> into <b>${winTon} TON</b>\non <b>${game}</b> at ${multiplier}x!\nCan you beat it?`;
-  await sendToGroup(text, { text: "Play Now", url: `https://${MINI_APP_LINK}` });
+  await sendToGroup(text, { text: "Play Now", url: getAppUrl() });
 }
 
 export async function broadcastJackpot(username: string, amountTon: number): Promise<void> {
   const seedAmount = parseFloat(process.env.JACKPOT_SEED_AMOUNT ?? "10");
   const text = `GOLDEN BOOT CLAIMED!\n@${username} just won <b>${amountTon.toFixed(2)} TON</b>!\nNew Golden Boot starting at ${seedAmount} TON now.`;
-  await sendToGroup(text, { text: "Play Now", url: `https://${MINI_APP_LINK}` });
+  await sendToGroup(text, { text: "Play Now", url: getAppUrl() });
 }
 
 export async function broadcastWithdrawal(username: string, amountTon: number): Promise<void> {
   const text = `@${username} just cashed out <b>${amountTon.toFixed(2)} TON</b>.\nReal money. Real fast.`;
-  await sendToGroup(text, { text: "Open Casino", url: `https://${MINI_APP_LINK}` });
+  await sendToGroup(text, { text: "Open Casino", url: getAppUrl() });
 }
 
 export async function broadcastJackpotUpdate(): Promise<void> {
@@ -63,7 +72,7 @@ export async function broadcastJackpotUpdate(): Promise<void> {
       : null;
 
     const text = `Golden Boot Jackpot: <b>${jackpot.currentAmountTon.toFixed(2)} TON</b>\nGrowing with every kick.${lastWon !== null ? ` Last won ${lastWon}h ago.` : ""}`;
-    await sendToGroup(text, { text: "Take Your Shot", url: `https://${MINI_APP_LINK}` });
+    await sendToGroup(text, { text: "Take Your Shot", url: getAppUrl() });
   } catch (err) {
     logger.error({ err }, "Failed to broadcast jackpot update");
   }
@@ -97,7 +106,7 @@ export async function broadcastMorningMessage(): Promise<void> {
     }
 
     const text = `Match Day at StrikerX!${topScorerLine}\nGolden Boot: <b>${jackpot?.currentAmountTon.toFixed(2) ?? "0"} TON</b>\nYour move.`;
-    await sendToGroup(text, { text: "Open Casino", url: `https://${MINI_APP_LINK}` });
+    await sendToGroup(text, { text: "Open Casino", url: getAppUrl() });
   } catch (err) {
     logger.error({ err }, "Failed to broadcast morning message");
   }
