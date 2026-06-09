@@ -6,8 +6,11 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNotifications } from "@/lib/ws-notifications";
 
 interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
+
+interface WinEntry { user: string; amount: number; game: string; mult: string; }
 
 // Dev auth bypass — uses Telegram format in dev mode
 function useDevAuth() {
@@ -37,17 +40,19 @@ const GAMES = [
   { href: "/games/freekick",  name: "Free Kick",  sub: "Plinko",   icon: Zap,        color: "#f59e0b", bg: "from-[#f59e0b]/10" },
 ];
 
-const MOCK_WINS = [
-  { user: "striker_99", amount: 2840, game: "The Shot", mult: "5.23x" },
-  { user: "goalie_k",   amount: 920,  game: "Penalty",  mult: "1.92x" },
-  { user: "mfield_pro", amount: 4500, game: "Minefield",mult: "9.10x" },
-  { user: "fk_beast",   amount: 1200, game: "Free Kick",mult: "12x"   },
+// Seed wins shown before any real WS data arrives
+const SEED_WINS: WinEntry[] = [
+  { user: "striker_99", amount: 2840, game: "The Shot",  mult: "5.23x"  },
+  { user: "goalie_k",   amount: 920,  game: "Penalty",   mult: "1.92x"  },
+  { user: "mfield_pro", amount: 4500, game: "Minefield", mult: "9.10x"  },
+  { user: "fk_beast",   amount: 1200, game: "Free Kick", mult: "12.00x" },
 ];
 
 export function Home() {
   useDevAuth();
 
   const { player } = useAuth();
+  const { notifications } = useNotifications();
   const [tickerIdx, setTickerIdx] = useState(0);
 
   const { data: jackpot } = useGetJackpot({
@@ -63,11 +68,30 @@ export function Home() {
     refetchInterval: 60_000,
   });
 
-  useEffect(() => {
-    const t = setInterval(() => setTickerIdx(i => (i + 1) % MOCK_WINS.length), 3500);
-    return () => clearInterval(t);
-  }, []);
+  // Build live wins from real WS big_win events; fall back to seed data if none yet
+  const liveWins: WinEntry[] = notifications
+    .filter(n => n.type === "big_win")
+    .slice(0, 10)
+    .map(n => ({
+      user:   n.username,
+      amount: parseInt(n.detail.replace(/[^\d]/g, ""), 10) || 0,
+      game:   n.detail.split(" on ")[1] ?? n.message,
+      mult:   n.message.split(" hit ")[1] ?? "x",
+    }));
 
+  const wins = liveWins.length >= 2 ? liveWins : SEED_WINS;
+
+  useEffect(() => {
+    setTickerIdx(0);
+  }, [wins.length]);
+
+  useEffect(() => {
+    const t = setInterval(() => setTickerIdx(i => (i + 1) % wins.length), 3500);
+    return () => clearInterval(t);
+  }, [wins.length]);
+
+  const safeIdx = tickerIdx % wins.length;
+  const currentWin = wins[safeIdx]!;
   const pct = jackpot?.percentFull ?? 0;
 
   return (
@@ -189,12 +213,17 @@ export function Home() {
           </div>
         </div>
 
-        {/* ── Recent Wins Ticker ── */}
+        {/* ── Live Wins Ticker ── */}
         <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
-          <div className="px-3 pt-2.5 pb-0 text-[9px] font-mono font-bold uppercase tracking-widest text-white/25">Live Wins</div>
+          <div className="px-3 pt-2.5 pb-0 flex items-center gap-1.5">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/25">Live Wins</span>
+            {liveWins.length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse ml-auto mr-1" />
+            )}
+          </div>
           <div className="relative h-11 overflow-hidden">
             <AnimatePresence mode="wait">
-              <motion.div key={tickerIdx}
+              <motion.div key={safeIdx}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -20, opacity: 0 }}
@@ -202,13 +231,13 @@ export function Home() {
                 className="absolute inset-0 flex items-center px-3 gap-2"
               >
                 <div className="w-6 h-6 rounded-full bg-[#00ff88]/15 border border-[#00ff88]/20 flex items-center justify-center text-[10px] font-mono font-bold text-[#00ff88]">
-                  {MOCK_WINS[tickerIdx]!.user[0]!.toUpperCase()}
+                  {(currentWin.user[0] ?? "?").toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-xs text-white font-semibold">{MOCK_WINS[tickerIdx]!.user}</span>
+                  <span className="font-mono text-xs text-white font-semibold">{currentWin.user}</span>
                   <span className="font-mono text-xs text-white/40"> won </span>
-                  <span className="font-mono text-xs text-[#00ff88] font-bold">{MOCK_WINS[tickerIdx]!.amount.toLocaleString()} STRIKER</span>
-                  <span className="font-mono text-[10px] text-white/25"> · {MOCK_WINS[tickerIdx]!.game} · {MOCK_WINS[tickerIdx]!.mult}</span>
+                  <span className="font-mono text-xs text-[#00ff88] font-bold">{currentWin.amount.toLocaleString()} STRIKER</span>
+                  <span className="font-mono text-[10px] text-white/25"> · {currentWin.game} · {currentWin.mult}</span>
                 </div>
               </motion.div>
             </AnimatePresence>
