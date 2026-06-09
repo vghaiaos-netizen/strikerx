@@ -101,7 +101,8 @@ export function TheShot() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
-  }, [token, handleEvent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const handleEvent = useCallback((event: string, data: unknown) => {
     const d = data as Record<string, unknown>;
