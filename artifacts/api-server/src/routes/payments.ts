@@ -20,7 +20,7 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const cryptobotToken = process.env.CRYPTOBOT_API_TOKEN;
+  const cryptobotToken = process.env.CRYPTOBOT_TOKEN;
   if (!cryptobotToken) {
     res.status(503).json({ error: "Payment system not configured" });
     return;
@@ -190,7 +190,7 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
 
 // POST /payments/webhook/cryptobot
 router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
-  const cryptobotToken = process.env.CRYPTOBOT_API_TOKEN ?? "";
+  const cryptobotToken = process.env.CRYPTOBOT_TOKEN ?? "";
 
   // Require valid HMAC-SHA256 signature from CryptoBot (production guard)
   const incomingSignature = req.headers["crypto-pay-api-signature"];

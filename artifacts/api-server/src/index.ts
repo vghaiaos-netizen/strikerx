@@ -12,7 +12,7 @@ if (isProd) {
   // Hard-required: these have no safe fallback
   const HARD_REQUIRED = [
     "JWT_SECRET", "GAMEBOT_TOKEN", "GROUPBOT_TOKEN",
-    "CRYPTOBOT_API_TOKEN", "ADMIN_USERNAME", "ADMIN_PASSWORD",
+    "CRYPTOBOT_TOKEN", "ADMIN_USERNAME", "ADMIN_PASSWORD",
   ] as const;
 
   const missing = HARD_REQUIRED.filter(k => !process.env[k]);
