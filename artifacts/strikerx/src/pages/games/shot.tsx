@@ -65,39 +65,43 @@ export function TheShot() {
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${proto}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let destroyed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    ws.onopen = () => {
-      setWsReady(true);
-      if (token) ws.send(JSON.stringify({ type: "auth", token }));
-    };
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onmessage = (e) => {
-      try {
-        const { event, data } = JSON.parse(e.data) as { event: string; data: unknown };
-        handleEvent(event, data);
-      } catch {}
-    };
+      ws.onopen = () => {
+        setWsReady(true);
+        if (token) ws.send(JSON.stringify({ type: "auth", token }));
+      };
 
-    ws.onclose = () => {
-      setWsReady(false);
-      // Reconnect after 2s
-      setTimeout(() => {
-        if (wsRef.current === ws) {
-          // remount effect by updating a dep — just recreate
-          const proto2 = window.location.protocol === "https:" ? "wss:" : "ws:";
-          wsRef.current = new WebSocket(`${proto2}//${window.location.host}/ws`);
+      ws.onmessage = (e) => {
+        try {
+          const { event, data } = JSON.parse(e.data) as { event: string; data: unknown };
+          handleEvent(event, data);
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        setWsReady(false);
+        if (!destroyed) {
+          reconnectTimer = setTimeout(connect, 2000);
         }
-      }, 2000);
+      };
+
+      ws.onerror = () => {};
     };
 
-    ws.onerror = () => {};
+    connect();
 
     return () => {
-      ws.close();
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
     };
-  }, [token]);
+  }, [token, handleEvent]);
 
   const handleEvent = useCallback((event: string, data: unknown) => {
     const d = data as Record<string, unknown>;
