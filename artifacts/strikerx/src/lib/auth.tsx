@@ -37,13 +37,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminTokenState(newToken);
   };
 
-  const { data: player, isLoading } = useGetMe({
+  const { data: player, isLoading, error } = useGetMe({
     query: {
       enabled: !!token,
       queryKey: getGetMeQueryKey(),
       retry: false
     }
   });
+
+  // If the stored token is invalid/expired (401), clear it so the dev auto-login
+  // in home.tsx can re-authenticate cleanly.
+  useEffect(() => {
+    if (error && token) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        localStorage.removeItem("strikerx_token");
+        setTokenState(null);
+      }
+    }
+  }, [error, token]);
 
   return (
     <AuthContext.Provider value={{ token, adminToken, setToken, setAdminToken, player: player || null, isLoading }}>
