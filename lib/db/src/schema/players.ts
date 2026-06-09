@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, real, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, real, integer, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,7 +29,14 @@ export const playersTable = pgTable("players", {
   firstWithdrawalReviewed: boolean("first_withdrawal_reviewed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  // Leaderboard & referral lookups — frequently queried fields
+  index("players_referred_by_idx").on(table.referredBy),
+  index("players_affiliate_code_idx").on(table.affiliateCode),
+  index("players_ton_wagered_idx").on(table.tonWageredLifetime),
+  index("players_streak_idx").on(table.streakDays),
+  index("players_last_active_idx").on(table.lastActive),
+]);
 
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
