@@ -334,7 +334,8 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
     }
   })().catch(() => {});
 
-  const mineCashoutBalance = (player?.strikerBalance ?? 0) + winAmount;
+  // player was re-fetched AFTER the DB credit, so strikerBalance already includes winAmount
+  const mineCashoutBalance = parseFloat(String(player?.strikerBalance ?? 0));
   if (mineCashoutBalance < 200 && player?.telegramId) {
     sendLowBalanceReminder(player.telegramId, mineCashoutBalance);
   }
