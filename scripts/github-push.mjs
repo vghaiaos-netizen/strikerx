@@ -100,7 +100,7 @@ async function commitBatch(files, headOid, batchNum) {
 const SKIP_DIRS = new Set(["node_modules",".git","dist","build",".local",".agents",".cache","generated"]);
 const SKIP_EXTS = new Set([".tsbuildinfo",".lock",".log",".map"]);
 const SKIP_FILES = new Set(["pnpm-lock.yaml"]);
-const ALLOW_ROOTS = new Set(["artifacts","lib","docs","scripts","package.json","pnpm-workspace.yaml","tsconfig.json","tsconfig.base.json","replit.md",".gitignore"]);
+const ALLOW_ROOTS = new Set(["artifacts","lib","docs","scripts","package.json","pnpm-workspace.yaml","tsconfig.json","tsconfig.base.json","replit.md",".gitignore","railway.json","nixpacks.toml"]);
 
 function walk(dir, base = "") {
   const out = [];
