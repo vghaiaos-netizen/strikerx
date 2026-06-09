@@ -146,8 +146,9 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
   }
 
   const amountTon = strikerToTon(amountStriker);
-  const requiresReview = !player.firstWithdrawalReviewed;
-  const status = requiresReview ? "under_review" : "pending";
+  // All withdrawals require admin approval — auto-release is disabled for safety at launch
+  const requiresReview = true;
+  const status = "under_review";
 
   await db
     .update(playersTable)
@@ -185,9 +186,14 @@ router.post("/payments/withdraw", requireAuth, async (req, res): Promise<void> =
 router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
   const cryptobotToken = process.env.CRYPTOBOT_API_TOKEN ?? "";
 
-  // Verify CryptoBot HMAC-SHA256 signature
+  // Require valid HMAC-SHA256 signature from CryptoBot (production guard)
   const incomingSignature = req.headers["crypto-pay-api-signature"];
-  if (cryptobotToken && incomingSignature) {
+  if (cryptobotToken) {
+    if (!incomingSignature) {
+      logger.warn("CryptoBot webhook received with no signature — rejecting");
+      res.status(401).json({ error: "Missing signature" });
+      return;
+    }
     const secret = createHash("sha256").update(cryptobotToken).digest();
     const rawBody = (req as typeof req & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body));
     const expectedSignature = createHmac("sha256", secret).update(rawBody).digest("hex");

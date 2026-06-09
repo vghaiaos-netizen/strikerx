@@ -201,36 +201,46 @@ class CrashEngine {
       return { success: false, error: "Already bet on this round" };
     }
 
-    // Deduct from player balance
-    const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-    if (!player) return { success: false, error: "Player not found" };
-    if (player.isBanned) return { success: false, error: "Account banned" };
-    if (player.strikerBalance < betStriker) return { success: false, error: "Insufficient balance" };
+    if (!betStriker || betStriker <= 0) return { success: false, error: "Invalid bet amount" };
 
-    // Jackpot contribution — atomic increment to avoid concurrent-bet race
+    // Server-side max bet cap
+    const maxBet = parseFloat(process.env.MAX_BET_STRIKER ?? "50000");
+    if (betStriker > maxBet) return { success: false, error: `Maximum bet is ${maxBet.toLocaleString()} STRIKER` };
+
+    // Check banned status and capture current VIP tier (cheap read)
+    const [precheck] = await db.select({ isBanned: playersTable.isBanned, telegramId: playersTable.telegramId, vipTier: playersTable.vipTier })
+      .from(playersTable).where(eq(playersTable.id, playerId));
+    if (!precheck) return { success: false, error: "Player not found" };
+    if (precheck.isBanned) return { success: false, error: "Account banned" };
+    const oldVipTier = precheck.vipTier;
+
+    // Atomic deduction — only succeeds if balance >= bet (prevents double-spend race)
+    const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+    const betTon = betStriker / depositRate;
     const jackpotContrib = calculateJackpotContribution(betStriker);
     const minPool = parseFloat(process.env.JACKPOT_MIN_POOL ?? "50");
+
+    const [player] = await db.update(playersTable).set({
+      strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
+      strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
+      tonWageredLifetime: sql`${playersTable.tonWageredLifetime} + ${betTon}`,
+      vipTier: sql`CASE WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 100 THEN 'world_cup' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 50 THEN 'champions_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 20 THEN 'premier_league' WHEN ${playersTable.tonWageredLifetime} + ${betTon} >= 5 THEN 'division_one' ELSE 'amateur' END`,
+      bootBalance: sql`${playersTable.bootBalance} + ${calculateBootEarned(betStriker)}`,
+      lastActive: new Date(),
+    }).where(sql`${playersTable.id} = ${playerId} AND ${playersTable.strikerBalance} >= ${betStriker}`).returning();
+
+    if (!player) return { success: false, error: "Insufficient balance" };
+
+    const newTonWagered = parseFloat(String(player.tonWageredLifetime));
+    const newVip = getVipTier(newTonWagered);
+
+    // Jackpot contribution — atomic increment
     await db
       .update(jackpotTable)
       .set({
         currentAmountTon: sql`${jackpotTable.currentAmountTon} + ${jackpotContrib}`,
         status: sql`CASE WHEN ${jackpotTable.currentAmountTon} + ${jackpotContrib} >= ${minPool} THEN 'ready' ELSE 'building' END`,
       });
-
-    const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
-    const betTon = betStriker / depositRate;
-    const newTonWagered = player.tonWageredLifetime + betTon;
-    const newVip = getVipTier(newTonWagered);
-
-    const bootEarned = calculateBootEarned(betStriker);
-    await db.update(playersTable).set({
-      strikerBalance: sql`${playersTable.strikerBalance} - ${betStriker}`,
-      strikerWageredSinceBonus: sql`${playersTable.strikerWageredSinceBonus} + ${betStriker}`,
-      tonWageredLifetime: newTonWagered,
-      vipTier: newVip,
-      bootBalance: sql`${playersTable.bootBalance} + ${bootEarned}`,
-      lastActive: new Date(),
-    }).where(eq(playersTable.id, playerId));
 
     await db.insert(transactionsTable).values({
       playerId,
@@ -258,7 +268,7 @@ class CrashEngine {
       const [{ value: totalGames }] = await db.select({ value: count() }).from(gamesTable).where(eq(gamesTable.playerId, playerId));
       const awarded: string[] = [];
       awarded.push(...await checkAndAward(playerId, { event: "bet_placed", totalGames: Number(totalGames), tonWageredLifetime: newTonWagered }));
-      if (newVip !== player.vipTier) {
+      if (newVip !== oldVipTier) {
         awarded.push(...await checkAndAward(playerId, { event: "vip_updated", vipTier: newVip }));
       }
       if (awarded.length > 0) {

@@ -381,7 +381,7 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     gameBreakdown[gt] = { count: rows.length, volume: parseFloat((rows.reduce((s, r) => s + r.betStriker / depositRate, 0)).toFixed(4)) };
   }
 
-  const vipTiers = ["sunday_league", "championship", "premier_league", "champions_league", "world_cup"];
+  const vipTiers = ["amateur", "division_one", "premier_league", "champions_league", "world_cup"];
   const vipDistribution: Record<string, number> = {};
   for (const tier of vipTiers) {
     const [count] = await db.select({ count: sql<number>`COUNT(*)` }).from(playersTable).where(eq(playersTable.vipTier, tier));

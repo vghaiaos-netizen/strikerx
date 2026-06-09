@@ -94,13 +94,13 @@ router.get("/public/recent-wins", async (_req, res): Promise<void> => {
         gameType:   gamesTable.gameType,
         betStriker: gamesTable.betStriker,
         winAmount:  gamesTable.winAmount,
-        multiplier: gamesTable.multiplier,
-        playedAt:   gamesTable.playedAt,
+        multiplier: gamesTable.resultMultiplier,
+        playedAt:   gamesTable.createdAt,
       })
       .from(gamesTable)
       .innerJoin(playersTable, eq(gamesTable.playerId, playersTable.id))
       .where(eq(gamesTable.outcome, "win"))
-      .orderBy(desc(gamesTable.playedAt))
+      .orderBy(desc(gamesTable.createdAt))
       .limit(20);
 
     res.json(wins.map(w => ({

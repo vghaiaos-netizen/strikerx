@@ -282,8 +282,11 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   const winAmount = parseFloat((session.betStriker * session.currentMultiplier * matchBonus).toFixed(2));
   await db.update(minefieldSessionsTable).set({ status: "won" }).where(eq(minefieldSessionsTable.id, sessionId));
 
+  // Atomic credit — avoids stale-read race if two cashout requests arrive simultaneously
+  await db.update(playersTable)
+    .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${winAmount}` })
+    .where(eq(playersTable.id, playerId));
   const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
-  await db.update(playersTable).set({ strikerBalance: (player?.strikerBalance ?? 0) + winAmount }).where(eq(playersTable.id, playerId));
   await db.insert(transactionsTable).values({ playerId, type: "win", amountStriker: winAmount, status: "completed" });
   creditAffiliateCommission(playerId, winAmount).catch(() => {});
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
