@@ -159,8 +159,19 @@ router.post("/auth/admin/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const adminUsername = process.env.ADMIN_USERNAME ?? "admin";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin123";
+  // In production index.ts already crash-exits if these are missing — safe to use fallbacks in dev only
+  const adminUsername = process.env.ADMIN_USERNAME ?? (process.env.NODE_ENV !== "production" ? "admin" : undefined);
+  const adminPassword = process.env.ADMIN_PASSWORD ?? (process.env.NODE_ENV !== "production" ? "admin123" : undefined);
+
+  if (!adminUsername || !adminPassword) {
+    req.log.error("Admin credentials not configured — ADMIN_USERNAME / ADMIN_PASSWORD env vars must be set.");
+    res.status(503).json({ error: "Admin login is not configured on this server." });
+    return;
+  }
+
+  if (!process.env.ADMIN_USERNAME && process.env.NODE_ENV !== "production") {
+    req.log.warn("Using default admin credentials — set ADMIN_USERNAME / ADMIN_PASSWORD env vars before going to production.");
+  }
 
   if (username !== adminUsername || password !== adminPassword) {
     req.log.warn({ username }, "Failed admin login attempt");

@@ -10,6 +10,20 @@ interface WsClient {
   ws: WebSocket;
   playerId?: number;
   username?: string;
+  // Rate limiting: sliding window of message timestamps
+  msgTimestamps: number[];
+}
+
+// Per-connection message rate limit: max 30 messages per 10 seconds
+const WS_RATE_LIMIT = 30;
+const WS_RATE_WINDOW_MS = 10_000;
+
+function isRateLimited(client: WsClient): boolean {
+  const now = Date.now();
+  client.msgTimestamps = client.msgTimestamps.filter(t => now - t < WS_RATE_WINDOW_MS);
+  if (client.msgTimestamps.length >= WS_RATE_LIMIT) return true;
+  client.msgTimestamps.push(now);
+  return false;
 }
 
 const clients = new Map<WebSocket, WsClient>();
@@ -51,7 +65,7 @@ export function initWebSocketServer(server: HttpServer) {
   crashEngine.setBroadcast(broadcast);
 
   wss.on("connection", (ws, req) => {
-    const client: WsClient = { ws };
+    const client: WsClient = { ws, msgTimestamps: [] };
     clients.set(ws, client);
     logger.info({ clients: clients.size }, "WebSocket client connected");
 
@@ -59,6 +73,11 @@ export function initWebSocketServer(server: HttpServer) {
     sendToClient(ws, "round_state", crashEngine.getPublicState());
 
     ws.on("message", async (raw) => {
+      if (isRateLimited(client)) {
+        sendToClient(ws, "error", { message: "Rate limit exceeded. Slow down." });
+        return;
+      }
+
       let msg: { type: string; token?: string; payload?: unknown };
       try {
         msg = JSON.parse(raw.toString());

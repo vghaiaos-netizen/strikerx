@@ -18,14 +18,16 @@ const REQUIRED_IN_PROD = [
 if (isProd) {
   const missing = REQUIRED_IN_PROD.filter(k => !process.env[k]);
   if (missing.length > 0) {
-    // Log but don't crash — operator can still set them via env without a code change
-    logger.warn({ missing }, "Production env vars not set — set these before going live");
+    logger.error({ missing }, "FATAL: Required production env vars are not set. Refusing to start.");
+    process.exit(1);
   }
-  if (process.env.JWT_SECRET === "dev-secret-change-in-prod") {
-    logger.error("CRITICAL: JWT_SECRET is the default dev value. All tokens are forgeable. Set a real secret.");
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-in-prod") {
+    logger.error("FATAL: JWT_SECRET is missing or is the default dev value. All tokens are forgeable. Set a strong secret.");
+    process.exit(1);
   }
-  if (process.env.ADMIN_PASSWORD === "admin123" || !process.env.ADMIN_PASSWORD) {
-    logger.warn("ADMIN_PASSWORD is weak or unset. Change it before going live.");
+  if (process.env.ADMIN_PASSWORD === "admin123") {
+    logger.error("FATAL: ADMIN_PASSWORD is the default 'admin123'. Set a strong password before going live.");
+    process.exit(1);
   }
 }
 

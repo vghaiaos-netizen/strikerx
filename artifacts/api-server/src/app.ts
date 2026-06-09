@@ -40,17 +40,37 @@ app.use(
   }),
 );
 
-// CORS — allow configured origins; defaults to all in dev, locked to domain in prod
+// CORS — strictly controlled
+// In production, CORS_ORIGIN must be set. In dev, auto-allow the Replit dev domain if available.
 const corsOrigin = process.env.CORS_ORIGIN;
-if (!corsOrigin && process.env.NODE_ENV === "production") {
-  logger.warn("CORS_ORIGIN is not set — all origins are allowed. Set CORS_ORIGIN for production.");
+const isProd = process.env.NODE_ENV === "production";
+
+if (!corsOrigin && isProd) {
+  logger.error("CORS_ORIGIN is not set in production — refusing to start with open CORS.");
+  process.exit(1);
 }
+
+const allowedOrigins: string[] = corsOrigin
+  ? corsOrigin.split(",").map(o => o.trim())
+  : [
+      // Dev: auto-allow the Replit proxy domain and localhost
+      ...(process.env.REPLIT_DEV_DOMAIN ? [`https://${process.env.REPLIT_DEV_DOMAIN}`] : []),
+      "http://localhost:5000",
+      "http://localhost:3000",
+    ];
+
 app.use(
-  cors(
-    corsOrigin
-      ? { origin: corsOrigin.split(",").map(o => o.trim()), credentials: true }
-      : { origin: true, credentials: true },
-  ),
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (server-to-server, curl, CryptoBot webhooks)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some(o => origin === o || origin.endsWith(`.${o.replace(/^https?:\/\//, "")}`))) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  }),
 );
 
 // Capture raw body for CryptoBot webhook HMAC verification
