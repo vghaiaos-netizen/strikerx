@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { signToken, validateTelegramInitData } from "../lib/auth";
 import { generateReferralCode } from "../lib/referralCode";
 import { logger } from "../lib/logger";
+import { getConfig } from "../lib/configService";
 
 const router: IRouter = Router();
 
@@ -21,7 +22,7 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     return;
   }
 
-  const gamebotToken = process.env.GAMEBOT_TOKEN ?? "";
+  const gamebotToken = await getConfig("gamebot_token");
 
   let userData: Record<string, string> | null = null;
 
@@ -159,18 +160,15 @@ router.post("/auth/admin/login", async (req, res): Promise<void> => {
     return;
   }
 
-  // In production index.ts already crash-exits if these are missing — safe to use fallbacks in dev only
-  const adminUsername = process.env.ADMIN_USERNAME ?? (process.env.NODE_ENV !== "production" ? "admin" : undefined);
-  const adminPassword = process.env.ADMIN_PASSWORD ?? (process.env.NODE_ENV !== "production" ? "admin123" : undefined);
+  // Read from configService — which mirrors env vars to DB on startup.
+  // Admin can change credentials via the /admin/config UI and they take effect within 15 seconds.
+  const adminUsername = await getConfig("admin_username");
+  const adminPassword = await getConfig("admin_password");
 
   if (!adminUsername || !adminPassword) {
-    req.log.error("Admin credentials not configured — ADMIN_USERNAME / ADMIN_PASSWORD env vars must be set.");
+    req.log.error("Admin credentials not configured — set ADMIN_USERNAME / ADMIN_PASSWORD env vars or configure via /admin/config.");
     res.status(503).json({ error: "Admin login is not configured on this server." });
     return;
-  }
-
-  if (!process.env.ADMIN_USERNAME && process.env.NODE_ENV !== "production") {
-    req.log.warn("Using default admin credentials — set ADMIN_USERNAME / ADMIN_PASSWORD env vars before going to production.");
   }
 
   if (username !== adminUsername || password !== adminPassword) {

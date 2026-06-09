@@ -48,12 +48,42 @@ const DEFAULT_CONFIG: Array<Omit<ConfigEntry, "updatedAt">> = [
   // Security
   { key: "session_secret", value: "", category: "security", label: "JWT Session Secret", description: "Secret key for signing JWTs. CHANGING THIS INVALIDATES ALL ACTIVE SESSIONS.", isSecret: true, isRestartRequired: true },
   { key: "admin_username", value: "admin", category: "security", label: "Admin Username", description: "Username for the admin dashboard", isSecret: false, isRestartRequired: false },
-  { key: "admin_password", value: "", category: "security", label: "Admin Password", description: "Password for the admin dashboard. Leave blank to keep current.", isSecret: true, isRestartRequired: false },
+  { key: "admin_password", value: "", category: "security", label: "Admin Password", description: "Password for the admin dashboard.", isSecret: true, isRestartRequired: false },
   // Platform
   { key: "welcome_bonus_striker", value: "500", category: "platform", label: "Welcome Bonus (STRIKER)", description: "STRIKER tokens given to new players on first login", isSecret: false, isRestartRequired: false },
   { key: "maintenance_mode", value: "false", category: "platform", label: "Maintenance Mode", description: "When true, all game endpoints return 503. Admin still accessible.", isSecret: false, isRestartRequired: false },
   { key: "max_players_per_round", value: "100", category: "platform", label: "Max Players Per Round", description: "Maximum concurrent players in a crash round", isSecret: false, isRestartRequired: false },
 ];
+
+/**
+ * Canonical mapping: config DB key → environment variable name.
+ * Used in two places:
+ *   1. getConfig() — env var fallback when DB value is empty
+ *   2. syncEnvToDB() — writes env var into DB on startup so the admin UI shows real values
+ */
+const ENV_MAP: Record<string, string> = {
+  house_edge_shot: "HOUSE_EDGE_SHOT",
+  house_edge_penalty: "HOUSE_EDGE_PENALTY",
+  house_edge_minefield: "HOUSE_EDGE_MINEFIELD",
+  house_edge_freekick: "HOUSE_EDGE_FREEKICK",
+  striker_deposit_rate: "STRIKER_DEPOSIT_RATE",
+  striker_withdraw_rate: "STRIKER_WITHDRAW_RATE",
+  min_deposit_ton: "MIN_DEPOSIT_TON",
+  min_withdraw_striker: "MIN_WITHDRAW_STRIKER",
+  wager_requirement_multiplier: "WAGER_REQUIREMENT_MULTIPLIER",
+  jackpot_percentage: "JACKPOT_PERCENTAGE",
+  jackpot_min_pool: "JACKPOT_MIN_POOL",
+  jackpot_seed_amount: "JACKPOT_SEED_AMOUNT",
+  // NOTE: the env var is JWT_SECRET, not SESSION_SECRET
+  session_secret: "JWT_SECRET",
+  admin_username: "ADMIN_USERNAME",
+  admin_password: "ADMIN_PASSWORD",
+  gamebot_token: "GAMEBOT_TOKEN",
+  groupbot_token: "GROUPBOT_TOKEN",
+  cryptobot_token: "CRYPTOBOT_API_TOKEN",
+  mini_app_link: "MINI_APP_LINK",
+  welcome_bonus_striker: "WELCOME_BONUS_STRIKER",
+};
 
 // In-memory cache
 let cache: Map<string, ConfigEntry> = new Map();
@@ -88,9 +118,54 @@ async function loadCache() {
   }
 }
 
+/**
+ * On startup: for every config key that has a corresponding env var set,
+ * write the env var value into the DB row if the DB row is currently empty ("").
+ *
+ * This ensures:
+ *  - The admin config UI shows that secrets are actually set (masked as ••••••••)
+ *  - Changing a value in the UI takes effect without redeploying env vars
+ *  - The env var still acts as a fallback if the DB is ever wiped
+ *
+ * If the DB already has a non-empty value (admin changed it), we leave it alone.
+ */
+async function syncEnvToDB() {
+  let synced = 0;
+  const toLog: string[] = [];
+
+  for (const [configKey, envKey] of Object.entries(ENV_MAP)) {
+    const envVal = process.env[envKey];
+    if (!envVal) continue;
+
+    const entry = cache.get(configKey);
+    if (!entry || entry.value === "") {
+      try {
+        await db
+          .update(appConfigTable)
+          .set({ value: envVal, updatedAt: new Date() })
+          .where(eq(appConfigTable.key, configKey));
+
+        // Keep in-memory cache consistent so getConfig() sees the new value immediately
+        if (entry) {
+          cache.set(configKey, { ...entry, value: envVal, updatedAt: new Date() });
+        }
+        synced++;
+        toLog.push(configKey);
+      } catch (err) {
+        logger.warn({ err, configKey }, "Failed to sync env var to DB");
+      }
+    }
+  }
+
+  if (synced > 0) {
+    logger.info({ synced, keys: toLog }, "Synced env vars → DB config (DB was empty; env var values written for admin visibility)");
+  }
+}
+
 export async function initConfig() {
   await seedDefaults();
   await loadCache();
+  await syncEnvToDB();   // mirror any env vars that haven't been written to DB yet
   logger.info({ keys: cache.size }, "Config service initialized");
 }
 
@@ -105,30 +180,8 @@ export async function getConfig(key: string): Promise<string> {
   const entry = cache.get(key);
   if (entry && entry.value !== "") return entry.value;
 
-  // Env var fallback mapping
-  const envMap: Record<string, string> = {
-    house_edge_shot: "HOUSE_EDGE_SHOT",
-    house_edge_penalty: "HOUSE_EDGE_PENALTY",
-    house_edge_minefield: "HOUSE_EDGE_MINEFIELD",
-    house_edge_freekick: "HOUSE_EDGE_FREEKICK",
-    striker_deposit_rate: "STRIKER_DEPOSIT_RATE",
-    striker_withdraw_rate: "STRIKER_WITHDRAW_RATE",
-    min_deposit_ton: "MIN_DEPOSIT_TON",
-    min_withdraw_striker: "MIN_WITHDRAW_STRIKER",
-    wager_requirement_multiplier: "WAGER_REQUIREMENT_MULTIPLIER",
-    jackpot_percentage: "JACKPOT_PERCENTAGE",
-    jackpot_min_pool: "JACKPOT_MIN_POOL",
-    jackpot_seed_amount: "JACKPOT_SEED_AMOUNT",
-    session_secret: "SESSION_SECRET",
-    admin_username: "ADMIN_USERNAME",
-    admin_password: "ADMIN_PASSWORD",
-    gamebot_token: "GAMEBOT_TOKEN",
-    groupbot_token: "GROUPBOT_TOKEN",
-    cryptobot_token: "CRYPTOBOT_API_TOKEN",
-    mini_app_link: "MINI_APP_LINK",
-    welcome_bonus_striker: "WELCOME_BONUS_STRIKER",
-  };
-  const envKey = envMap[key];
+  // Env var fallback — fires if DB row is empty (e.g. wiped) or key not yet seeded
+  const envKey = ENV_MAP[key];
   if (envKey && process.env[envKey]) return process.env[envKey]!;
 
   // Return default value
