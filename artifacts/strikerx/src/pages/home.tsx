@@ -299,6 +299,32 @@ export function Home() {
           </div>
         </div>
 
+        {/* ── Ways to Earn ── */}
+        <div>
+          <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30 mb-2.5">Ways to Earn TON</div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { icon: TrendingUp, color: "#00ff88", title: "Play & Win",     sub: "All 4 games earn STRIKER" },
+              { icon: Gift,       color: "#f59e0b", title: "Refer Squad",    sub: "10% of friends' wins forever" },
+              { icon: Zap,        color: "#3b82f6", title: "Daily Streak",   sub: "Bonus STRIKER every day" },
+              { icon: Trophy,     color: "#a855f7", title: "VIP Cashback",   sub: "Up to 15% back on losses" },
+            ].map(({ icon: Icon, color, title, sub }) => (
+              <Link key={title} href="/loyalty">
+                <div className="flex items-start gap-2.5 rounded-xl border border-white/6 bg-white/3 p-3 cursor-pointer hover:border-white/15 transition-colors">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                    style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
+                    <Icon className="w-3.5 h-3.5" style={{ color }} />
+                  </div>
+                  <div>
+                    <div className="font-display font-bold text-xs text-white">{title}</div>
+                    <div className="text-[9px] font-mono text-white/35 mt-0.5">{sub}</div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         {/* ── Referral CTA ── */}
         <div className="relative overflow-hidden rounded-xl border border-[#00ff88]/20 bg-[#00ff88]/5 p-4">
           <div className="absolute right-0 top-0 w-24 h-24 bg-[#00ff88]/8 rounded-full blur-2xl" />

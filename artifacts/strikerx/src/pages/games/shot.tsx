@@ -5,9 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, Users, Zap, Clock } from "lucide-react";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { TrendingUp, Users, Zap, Clock, Target } from "lucide-react";
 
 type RoundStatus = "waiting" | "running" | "crashed";
 
@@ -28,18 +26,35 @@ interface LiveBet {
   winAmount?: number;
 }
 
-// ─── Multiplier chart point ───────────────────────────────────────────────────
 interface ChartPoint { x: number; y: number; }
 
 const QUICK_BETS = [50, 100, 500, 1000];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function getCrashColor(mult: number, crashed: boolean) {
+  if (crashed) return "#ef4444";
+  if (mult >= 10) return "#f59e0b";
+  if (mult >= 5)  return "#f97316";
+  if (mult >= 2)  return "#22c55e";
+  return "#00ff88";
+}
+
+function HistoryPill({ value }: { value: number }) {
+  const color = value < 2 ? "#ef4444" : value < 5 ? "#22c55e" : "#f59e0b";
+  return (
+    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full flex-shrink-0 border"
+      style={{ background: `${color}12`, color, borderColor: `${color}30` }}>
+      {value.toFixed(2)}x
+    </span>
+  );
+}
+
 export function TheShot() {
   const { token, player } = useAuth();
   const { toast } = useToast();
 
   const wsRef = useRef<WebSocket | null>(null);
-  const chartRef = useRef<SVGSVGElement>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartSize, setChartSize] = useState({ w: 340, h: 200 });
 
   const [wsReady, setWsReady] = useState(false);
   const [round, setRound] = useState<RoundState | null>(null);
@@ -47,62 +62,28 @@ export function TheShot() {
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([]);
   const [myBet, setMyBet] = useState<{ placed: boolean; cashedOut: boolean; winAmount?: number; multiplier?: number } | null>(null);
 
-  const [betAmount, setBetAmount] = useState<string>("100");
-  const [autoCashout, setAutoCashout] = useState<string>("");
+  const [betAmount, setBetAmount] = useState("100");
+  const [autoCashout, setAutoCashout] = useState("");
   const [waitCountdown, setWaitCountdown] = useState(5);
   const [crashHistory, setCrashHistory] = useState<number[]>([]);
+  const [justCrashed, setJustCrashed] = useState(false);
 
   const startTimeRef = useRef<number | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ─── WebSocket Setup ────────────────────────────────────────────────────────
-  const send = useCallback((msg: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
+  // Responsive chart
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e) setChartSize({ w: e.contentRect.width, h: e.contentRect.height });
+    });
+    ro.observe(chartRef.current);
+    return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${proto}//${window.location.host}/ws`;
-    let destroyed = false;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const connect = () => {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setWsReady(true);
-        if (token) ws.send(JSON.stringify({ type: "auth", token }));
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          const { event, data } = JSON.parse(e.data) as { event: string; data: unknown };
-          handleEvent(event, data);
-        } catch {}
-      };
-
-      ws.onclose = () => {
-        setWsReady(false);
-        if (!destroyed) {
-          reconnectTimer = setTimeout(connect, 2000);
-        }
-      };
-
-      ws.onerror = () => {};
-    };
-
-    connect();
-
-    return () => {
-      destroyed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      wsRef.current?.close();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  const send = useCallback((msg: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(msg));
+  }, []);
 
   const handleEvent = useCallback((event: string, data: unknown) => {
     const d = data as Record<string, unknown>;
@@ -112,15 +93,14 @@ export function TheShot() {
       setRound(rs);
       setBets(new Map());
       setChartPoints([]);
+      setJustCrashed(false);
       startTimeRef.current = rs.startedAt ? new Date(rs.startedAt).getTime() : null;
 
       if (rs.status === "waiting") {
         setMyBet(null);
         setWaitCountdown(5);
         if (countdownRef.current) clearInterval(countdownRef.current);
-        countdownRef.current = setInterval(() => {
-          setWaitCountdown(p => Math.max(0, p - 1));
-        }, 1000);
+        countdownRef.current = setInterval(() => setWaitCountdown(p => Math.max(0, p - 1)), 1000);
       } else if (rs.status === "running") {
         if (countdownRef.current) clearInterval(countdownRef.current);
         startTimeRef.current = rs.startedAt ? new Date(rs.startedAt).getTime() : Date.now();
@@ -128,26 +108,22 @@ export function TheShot() {
     }
 
     if (event === "multiplier") {
-      const { multiplier } = d as { multiplier: number; roundId: number };
+      const { multiplier } = d as { multiplier: number };
       setRound(prev => prev ? { ...prev, multiplier } : prev);
       setChartPoints(prev => {
         const elapsed = startTimeRef.current ? (Date.now() - startTimeRef.current) / 1000 : 0;
-        const newPts = [...prev, { x: elapsed, y: multiplier }];
-        return newPts.slice(-120); // keep last 120 points
+        return [...prev, { x: elapsed, y: multiplier }].slice(-300);
       });
     }
 
-    if (event === "bet_placed") {
-      const bet = d as unknown as LiveBet;
-      setBets(prev => new Map(prev).set(bet.playerId, bet));
-    }
+    if (event === "bet_placed") setBets(prev => new Map(prev).set((d as unknown as LiveBet).playerId, d as unknown as LiveBet));
 
     if (event === "player_cashout") {
-      const { playerId, multiplier, winAmount, username } = d as { playerId: number; username: string; multiplier: number; winAmount: number; roundId: number };
+      const { playerId, multiplier, winAmount } = d as { playerId: number; multiplier: number; winAmount: number; username: string; roundId: number };
       setBets(prev => {
         const m = new Map(prev);
-        const existing = m.get(playerId);
-        if (existing) m.set(playerId, { ...existing, cashoutMultiplier: multiplier, winAmount });
+        const b = m.get(playerId);
+        if (b) m.set(playerId, { ...b, cashoutMultiplier: multiplier, winAmount });
         return m;
       });
     }
@@ -156,7 +132,9 @@ export function TheShot() {
       const { crashPoint } = d as { crashPoint: number };
       setRound(prev => prev ? { ...prev, status: "crashed", multiplier: crashPoint, crashPoint } : prev);
       if (countdownRef.current) clearInterval(countdownRef.current);
-      setCrashHistory(prev => [crashPoint, ...prev].slice(0, 10));
+      setCrashHistory(prev => [crashPoint, ...prev].slice(0, 20));
+      setJustCrashed(true);
+      setTimeout(() => setJustCrashed(false), 800);
     }
 
     if (event === "bet_accepted") {
@@ -167,244 +145,379 @@ export function TheShot() {
     if (event === "cashout_confirmed") {
       const { winAmount, multiplier } = d as { winAmount: number; multiplier: number };
       setMyBet({ placed: true, cashedOut: true, winAmount, multiplier });
-      toast({ title: `Cashed out at ${multiplier.toFixed(2)}x`, description: `Won ${winAmount.toFixed(0)} STRIKER` });
+      toast({ title: `Cashed out at ${multiplier.toFixed(2)}x`, description: `+${winAmount.toFixed(0)} STRIKER` });
     }
 
-    if (event === "error") {
-      toast({ title: "Error", description: (d.message as string), variant: "destructive" });
-    }
-
-    if (event === "balance_update") {
-      // Will refresh via react-query invalidation; balance shown from auth context
-    }
+    if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
   }, [toast]);
 
-  // ─── Actions ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${proto}//${window.location.host}/ws`;
+    let destroyed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onopen = () => {
+        setWsReady(true);
+        if (token) ws.send(JSON.stringify({ type: "auth", token }));
+      };
+      ws.onmessage = (e) => {
+        try {
+          const { event, data } = JSON.parse(e.data) as { event: string; data: unknown };
+          handleEvent(event, data);
+        } catch {}
+      };
+      ws.onclose = () => {
+        setWsReady(false);
+        if (!destroyed) reconnectTimer = setTimeout(connect, 2000);
+      };
+      ws.onerror = () => {};
+    };
+
+    connect();
+    return () => {
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      wsRef.current?.close();
+    };
+  }, [token, handleEvent]);
+
   const handleBet = () => {
     const amount = parseFloat(betAmount);
     if (!amount || amount <= 0) return;
-    send({
-      type: "place_bet",
-      payload: {
-        betStriker: amount,
-        autoCashout: autoCashout ? parseFloat(autoCashout) : undefined,
-      },
-    });
+    send({ type: "place_bet", payload: { betStriker: amount, autoCashout: autoCashout ? parseFloat(autoCashout) : undefined } });
   };
 
-  const handleCashout = () => {
-    send({ type: "cashout" });
-  };
+  const handleCashout = () => send({ type: "cashout" });
 
-  // ─── Chart SVG path ─────────────────────────────────────────────────────────
-  const chartPath = () => {
-    if (chartPoints.length < 2) return "";
-    const W = 340, H = 160;
+  // Build SVG chart path (smooth cubic bezier)
+  const buildPath = () => {
+    if (chartPoints.length < 2) return { line: "", fill: "" };
+    const W = chartSize.w, H = chartSize.h;
     const maxX = Math.max(...chartPoints.map(p => p.x), 1);
-    const maxY = Math.max(...chartPoints.map(p => p.y), 2);
-    const pts = chartPoints.map(p => ({
-      sx: (p.x / maxX) * W,
-      sy: H - (p.y / maxY) * H,
-    }));
-    return ["M", pts[0].sx, pts[0].sy, ...pts.slice(1).flatMap(p => ["L", p.sx.toFixed(1), p.sy.toFixed(1)])].join(" ");
+    const maxY = Math.max(...chartPoints.map(p => p.y), 2) * 1.1;
+    const toS = (p: ChartPoint) => ({
+      sx: (p.x / maxX) * (W - 12) + 6,
+      sy: H - 10 - ((p.y - 1) / (maxY - 1)) * (H - 24),
+    });
+    const pts = chartPoints.map(toS);
+    let d = `M ${pts[0].sx.toFixed(1)} ${pts[0].sy.toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1], curr = pts[i];
+      const cpx = (prev.sx + curr.sx) / 2;
+      d += ` C ${cpx.toFixed(1)} ${prev.sy.toFixed(1)} ${cpx.toFixed(1)} ${curr.sy.toFixed(1)} ${curr.sx.toFixed(1)} ${curr.sy.toFixed(1)}`;
+    }
+    const last = pts[pts.length - 1];
+    return { line: d, fill: `${d} L ${last.sx.toFixed(1)} ${H} L ${pts[0].sx.toFixed(1)} ${H} Z` };
+  };
+
+  const autoCashoutLineY = () => {
+    if (!autoCashout || chartPoints.length < 2) return null;
+    const target = parseFloat(autoCashout);
+    if (!target || target < 1.01) return null;
+    const maxY = Math.max(...chartPoints.map(p => p.y), target, 2) * 1.1;
+    const H = chartSize.h;
+    return H - 10 - ((target - 1) / (maxY - 1)) * (H - 24);
   };
 
   const isWaiting = round?.status === "waiting";
   const isRunning = round?.status === "running";
   const isCrashed = round?.status === "crashed";
-  const hasBet = myBet?.placed && !myBet.cashedOut;
+  const hasBet = !!myBet?.placed && !myBet.cashedOut;
   const mult = round?.multiplier ?? 1.0;
-  const multColor = isCrashed ? "#ef4444" : mult >= 5 ? "#f59e0b" : mult >= 2 ? "#22c55e" : "#00ff88";
+  const color = getCrashColor(mult, isCrashed);
+  const { line, fill } = buildPath();
+  const autoY = autoCashoutLineY();
+  const betArr = Array.from(bets.values());
+  const cashedOutBets = betArr.filter(b => b.cashoutMultiplier);
+  const activeBets = betArr.filter(b => !b.cashoutMultiplier);
+  const playerBalance = Number((player as Record<string, unknown>)?.strikerBalance ?? 0);
 
   return (
     <Layout>
-      <div className="flex flex-col h-[calc(100dvh-56px)] overflow-hidden bg-[#0a0e1a]">
+      <div className="flex flex-col h-[calc(100dvh-56px)] overflow-hidden bg-[#060a14]">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/5">
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#00ff88]" />
-            <span className="font-display font-bold text-sm tracking-widest text-white">THE SHOT</span>
+            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">THE SHOT</span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-white/40">
-            <Users className="w-3 h-3" />
-            <span>{round?.activePlayers ?? 0}</span>
-            <span className={`ml-2 w-1.5 h-1.5 rounded-full ${wsReady ? "bg-[#00ff88]" : "bg-white/20"} animate-pulse`} />
-          </div>
-        </div>
-
-        {/* ── Crash Display ── */}
-        <div className="relative flex-1 flex flex-col items-center justify-center px-4 min-h-0">
-
-          {/* SVG chart (running only) */}
-          {isRunning && chartPoints.length > 1 && (
-            <svg ref={chartRef} viewBox="0 0 340 160" className="absolute inset-0 w-full h-full opacity-30" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00ff88" stopOpacity="0.6" />
-                  <stop offset="100%" stopColor="#00ff88" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d={chartPath()} fill="none" stroke="#00ff88" strokeWidth="2" strokeLinecap="round" />
-              <path d={`${chartPath()} L340,160 L0,160 Z`} fill="url(#chartGrad)" />
-            </svg>
-          )}
-
-          {/* Multiplier */}
-          <AnimatePresence mode="wait">
-            {isWaiting && (
-              <motion.div key="waiting" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-3">
-                <div className="flex items-center gap-2 text-white/40">
-                  <Clock className="w-4 h-4" />
-                  <span className="font-display font-bold text-sm tracking-widest uppercase">Next Round In</span>
-                </div>
-                <div className="font-display font-black text-7xl text-white/60">{waitCountdown}s</div>
-              </motion.div>
-            )}
-
-            {isRunning && (
-              <motion.div key="running" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-1">
-                <motion.div
-                  className="font-display font-black tabular-nums leading-none"
-                  style={{ fontSize: "clamp(64px,18vw,96px)", color: multColor, textShadow: `0 0 40px ${multColor}88` }}
-                  animate={{ scale: [1, 1.02, 1] }}
-                  transition={{ repeat: Infinity, duration: 0.5 }}
-                >
-                  {mult.toFixed(2)}x
-                </motion.div>
-                <div className="text-xs font-mono text-white/30 uppercase tracking-widest">flying</div>
-              </motion.div>
-            )}
-
-            {isCrashed && (
-              <motion.div key="crashed" initial={{ scale: 1.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-2">
-                <motion.div
-                  className="font-display font-black text-[#ef4444] tabular-nums leading-none"
-                  style={{ fontSize: "clamp(56px,16vw,84px)", textShadow: "0 0 60px #ef444488" }}
-                >
-                  {round?.crashPoint?.toFixed(2)}x
-                </motion.div>
-                <div className="text-sm font-mono uppercase tracking-widest text-[#ef4444]/60">crashed</div>
-
-                {myBet?.cashedOut && (
-                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-2 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg px-4 py-2 text-center">
-                    <div className="text-[#00ff88] font-bold text-sm">+{myBet.winAmount?.toFixed(0)} STRIKER at {myBet.multiplier?.toFixed(2)}x</div>
-                  </motion.div>
-                )}
-                {myBet?.placed && !myBet.cashedOut && (
-                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-2 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg px-4 py-2">
-                    <div className="text-[#ef4444] font-bold text-sm text-center">Crashed out</div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Crash history */}
-          {crashHistory.length > 0 && (
-            <div className="absolute bottom-2 left-4 right-4 flex gap-1.5 flex-wrap justify-center">
-              {crashHistory.map((cp, i) => (
-                <span
-                  key={i}
-                  className="text-[10px] font-mono px-1.5 py-0.5 rounded"
-                  style={{
-                    background: cp < 2 ? "#ef444420" : cp < 5 ? "#22c55e20" : "#f59e0b20",
-                    color: cp < 2 ? "#ef4444" : cp < 5 ? "#22c55e" : "#f59e0b",
-                  }}
-                >
-                  {cp.toFixed(2)}x
-                </span>
-              ))}
+          <div className="flex items-center gap-3">
+            {round?.activePlayers ? (
+              <div className="flex items-center gap-1 text-[10px] text-white/35">
+                <Users className="w-3 h-3" />
+                <span>{round.activePlayers} live</span>
+              </div>
+            ) : null}
+            <div className={`flex items-center gap-1.5 text-[10px] ${wsReady ? "text-[#00ff88]" : "text-white/20"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${wsReady ? "bg-[#00ff88] animate-pulse" : "bg-white/15"}`} />
+              {wsReady ? "live" : "connecting…"}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* ── Live Bets List ── */}
+        {/* ── Crash History ── */}
+        {crashHistory.length > 0 && (
+          <div className="flex gap-1.5 px-3 py-1.5 overflow-x-auto border-b border-white/4 flex-shrink-0 [scrollbar-width:none]">
+            {crashHistory.map((cp, i) => <HistoryPill key={i} value={cp} />)}
+          </div>
+        )}
+
+        {/* ── Chart + Multiplier ── */}
+        <div className="relative flex-1 min-h-0" ref={chartRef}>
+
+          {/* Grid + curve */}
+          <svg
+            width={chartSize.w} height={chartSize.h}
+            viewBox={`0 0 ${chartSize.w} ${chartSize.h}`}
+            className="absolute inset-0"
+            style={{ opacity: isWaiting ? 0.12 : 1, transition: "opacity 0.5s" }}
+          >
+            <defs>
+              <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+                <stop offset="80%" stopColor={color} stopOpacity="0.03" />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+
+            {/* subtle grid lines */}
+            {[0.25, 0.5, 0.75].map(f => (
+              <line key={f}
+                x1={0} y1={chartSize.h * f}
+                x2={chartSize.w} y2={chartSize.h * f}
+                stroke="white" strokeOpacity="0.03" strokeWidth="1" />
+            ))}
+
+            {/* auto-cashout target line */}
+            {autoY !== null && isRunning && (
+              <>
+                <line x1={0} y1={autoY} x2={chartSize.w} y2={autoY}
+                  stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="1" strokeDasharray="5 4" />
+                <rect x={6} y={autoY - 11} width={62} height={12} rx={3} fill="#0a0e1a" fillOpacity="0.8" />
+                <text x={8} y={autoY - 2} fill="#f59e0b" fontSize="9" fontFamily="monospace" opacity="0.8">
+                  auto {parseFloat(autoCashout).toFixed(2)}x
+                </text>
+              </>
+            )}
+
+            {fill && <path d={fill} fill="url(#chartFill)" />}
+            {line && (
+              <path d={line} fill="none" stroke={color} strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"
+                filter="url(#glow)"
+                style={{ transition: isCrashed ? "none" : "stroke 0.3s" }} />
+            )}
+          </svg>
+
+          {/* Multiplier overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+            <AnimatePresence mode="wait">
+
+              {isWaiting && (
+                <motion.div key="waiting"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+                  className="flex flex-col items-center gap-2"
+                >
+                  <div className="flex items-center gap-1.5 text-white/25">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span className="font-mono text-[10px] tracking-[0.25em] uppercase">Next Round</span>
+                  </div>
+                  <div className="font-display font-black leading-none text-white/50 tabular-nums"
+                    style={{ fontSize: "clamp(72px,20vw,100px)" }}>
+                    {waitCountdown}<span className="text-4xl opacity-60">s</span>
+                  </div>
+                  <motion.div
+                    animate={{ opacity: [0.3, 0.7, 0.3] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="text-[10px] font-mono tracking-[0.3em] text-white/20 uppercase"
+                  >
+                    Place your bet
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {isRunning && (
+                <motion.div key="running"
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="flex flex-col items-center gap-1.5"
+                >
+                  <motion.div
+                    className="font-display font-black tabular-nums leading-none"
+                    style={{
+                      fontSize: "clamp(76px,22vw,112px)",
+                      color,
+                      textShadow: `0 0 60px ${color}44, 0 0 24px ${color}22`,
+                      transition: "color 0.3s, text-shadow 0.3s",
+                    }}
+                    animate={mult >= 5 ? { scale: [1, 1.03, 1] } : {}}
+                    transition={{ repeat: Infinity, duration: mult >= 10 ? 0.35 : 0.6 }}
+                  >
+                    {mult.toFixed(2)}x
+                  </motion.div>
+                  {hasBet && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm font-mono font-bold"
+                      style={{ color }}
+                    >
+                      +{(parseFloat(betAmount || "0") * mult).toFixed(0)} STRIKER
+                    </motion.div>
+                  )}
+                  <div className="text-[9px] font-mono tracking-[0.3em] text-white/20 uppercase">flying</div>
+                </motion.div>
+              )}
+
+              {isCrashed && (
+                <motion.div key="crashed"
+                  initial={{ scale: 1.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 18 }}
+                  className="flex flex-col items-center gap-2"
+                >
+                  <motion.div
+                    className="font-display font-black text-[#ef4444] tabular-nums leading-none"
+                    style={{
+                      fontSize: "clamp(64px,19vw,100px)",
+                      textShadow: "0 0 70px #ef444466",
+                    }}
+                    animate={justCrashed ? { x: [-4, 4, -3, 3, -1, 1, 0] } : {}}
+                    transition={{ duration: 0.35 }}
+                  >
+                    {round?.crashPoint?.toFixed(2)}x
+                  </motion.div>
+                  <div className="text-sm font-mono uppercase tracking-[0.35em] text-[#ef4444]/50">crashed</div>
+
+                  <AnimatePresence>
+                    {myBet?.cashedOut && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="mt-1 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-xl px-4 py-2 text-center">
+                        <div className="text-[#00ff88] font-bold text-sm">
+                          +{myBet.winAmount?.toFixed(0)} STRIKER at {myBet.multiplier?.toFixed(2)}x
+                        </div>
+                      </motion.div>
+                    )}
+                    {myBet?.placed && !myBet.cashedOut && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="mt-1 bg-[#ef4444]/10 border border-[#ef4444]/25 rounded-xl px-4 py-2">
+                        <div className="text-[#ef4444] text-sm font-bold text-center">Crashed out</div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* ── Live Players Strip ── */}
         {bets.size > 0 && (
-          <div className="px-4 mb-2 max-h-24 overflow-y-auto">
-            <div className="flex gap-1.5 flex-wrap">
-              {Array.from(bets.values()).map(bet => (
-                <div
-                  key={bet.playerId}
-                  className={`text-[10px] font-mono px-2 py-1 rounded-full border ${bet.cashoutMultiplier ? "border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88]" : "border-white/10 bg-white/5 text-white/50"}`}
-                >
-                  {bet.username} {bet.cashoutMultiplier ? `✓${bet.cashoutMultiplier.toFixed(2)}x` : `${bet.betStriker.toFixed(0)}S`}
-                </div>
-              ))}
-            </div>
+          <div className="flex gap-1.5 px-3 py-1.5 overflow-x-auto border-t border-white/4 flex-shrink-0 bg-black/20 [scrollbar-width:none]">
+            {cashedOutBets.map(b => (
+              <span key={b.playerId}
+                className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[#00ff88]/30 bg-[#00ff88]/8 text-[#00ff88] flex-shrink-0">
+                {b.username} {b.cashoutMultiplier?.toFixed(2)}x
+              </span>
+            ))}
+            {activeBets.map(b => (
+              <span key={b.playerId}
+                className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-white/8 bg-white/4 text-white/35 flex-shrink-0">
+                {b.username} {b.betStriker}S
+              </span>
+            ))}
           </div>
         )}
 
         {/* ── Bet Panel ── */}
-        <div className="border-t border-white/5 bg-[#0d1117] px-4 pt-3 pb-safe pb-4 flex flex-col gap-3">
+        <div className="border-t border-white/5 bg-[#0d1117]/95 px-4 pt-3 pb-4 flex-shrink-0 flex flex-col gap-2.5">
 
-          {/* Quick bet buttons */}
-          <div className="flex gap-2">
+          {/* Quick bet row */}
+          <div className="flex gap-1.5">
             {QUICK_BETS.map(q => (
-              <button
-                key={q}
-                onClick={() => setBetAmount(String(q))}
-                className={`flex-1 text-xs font-mono py-1.5 rounded border transition-all ${betAmount === String(q) ? "border-[#00ff88] text-[#00ff88] bg-[#00ff88]/10" : "border-white/10 text-white/40 hover:border-white/30"}`}
-              >
-                {q}
+              <button key={q} onClick={() => setBetAmount(String(q))}
+                className={`flex-1 text-[11px] font-mono py-1.5 rounded-lg border transition-all ${betAmount === String(q) ? "border-[#00ff88] text-[#00ff88] bg-[#00ff88]/10" : "border-white/8 text-white/30 hover:border-white/20"}`}>
+                {q >= 1000 ? `${q / 1000}k` : q}
               </button>
             ))}
+            <button
+              onClick={() => setBetAmount(String(Math.max(50, Math.floor(playerBalance / 2))))}
+              className="flex-1 text-[11px] font-mono py-1.5 rounded-lg border border-white/8 text-white/30 hover:border-white/20 transition-all">
+              ½
+            </button>
           </div>
 
-          {/* Bet + auto-cashout inputs */}
+          {/* Inputs */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider block mb-1">Bet (STRIKER)</label>
-              <Input
-                type="number"
-                value={betAmount}
-                onChange={e => setBetAmount(e.target.value)}
+              <label className="text-[9px] text-white/25 font-mono uppercase tracking-wider block mb-1">Bet (STRIKER)</label>
+              <Input type="number" value={betAmount} onChange={e => setBetAmount(e.target.value)}
                 className="bg-white/5 border-white/10 text-white font-mono font-bold h-9 text-sm"
-                disabled={isRunning}
-              />
+                disabled={isRunning} />
             </div>
             <div>
-              <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider block mb-1">Auto Cashout</label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="2.00"
-                value={autoCashout}
+              <label className="text-[9px] font-mono uppercase tracking-wider block mb-1"
+                style={{ color: autoCashout && parseFloat(autoCashout) > 1 ? "#f59e0b" : "rgba(255,255,255,0.25)" }}>
+                Auto Cashout {autoCashout && parseFloat(autoCashout) > 1 ? `(${parseFloat(autoCashout).toFixed(2)}x)` : ""}
+              </label>
+              <Input type="number" step="0.1" placeholder="2.00" value={autoCashout}
                 onChange={e => setAutoCashout(e.target.value)}
                 className="bg-white/5 border-white/10 text-white/70 font-mono h-9 text-sm"
-                disabled={isRunning}
-              />
+                disabled={isRunning} />
             </div>
           </div>
 
           {/* Action buttons */}
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={handleBet}
-              disabled={!isWaiting || myBet?.placed || !wsReady}
-              className="h-11 font-display font-bold tracking-widest text-sm bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#0a0e1a] disabled:opacity-30 disabled:bg-white/10 disabled:text-white/30"
-            >
+            <Button onClick={handleBet}
+              disabled={!isWaiting || !!myBet?.placed || !wsReady}
+              className="h-11 font-display font-bold tracking-widest text-sm bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#060a14] disabled:opacity-20 disabled:bg-white/5 disabled:text-white/20">
               <Zap className="w-4 h-4 mr-1" />
               {myBet?.placed ? "BET PLACED" : "PLACE BET"}
             </Button>
 
             <motion.div
               animate={hasBet && isRunning ? { scale: [1, 1.04, 1] } : {}}
-              transition={{ repeat: Infinity, duration: 0.8 }}
+              transition={{ repeat: Infinity, duration: 0.7 }}
             >
-              <Button
-                onClick={handleCashout}
+              <Button onClick={handleCashout}
                 disabled={!hasBet || !isRunning}
-                className="w-full h-11 font-display font-bold tracking-widest text-sm bg-[#f59e0b] hover:bg-[#f59e0b]/90 text-[#0a0e1a] disabled:opacity-30 disabled:bg-white/10 disabled:text-white/30"
-              >
-                CASHOUT {hasBet && isRunning ? `${mult.toFixed(2)}x` : ""}
+                className="w-full h-11 font-display font-bold tracking-widest text-sm disabled:opacity-20 disabled:bg-white/5 disabled:text-white/20"
+                style={hasBet && isRunning
+                  ? { background: color, color: "#060a14", boxShadow: `0 0 24px ${color}44` }
+                  : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.2)" }
+                }>
+                {hasBet && isRunning ? `CASHOUT ${mult.toFixed(2)}x` : "CASHOUT"}
               </Button>
             </motion.div>
           </div>
 
-          {/* Balance */}
-          <div className="text-center text-[10px] font-mono text-white/20">
-            Balance: <span className="text-white/50">{(player as Record<string,unknown>)?.strikerBalance?.toLocaleString?.() ?? "—"} STRIKER</span>
+          {/* Balance + auto-cashout note */}
+          <div className="flex items-center justify-between text-[9px] font-mono">
+            <span className="text-white/20">
+              Balance: <span className="text-white/35">{playerBalance.toLocaleString()} STRIKER</span>
+            </span>
+            {hasBet && isRunning && (
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ repeat: Infinity, duration: 1.2 }}
+                className="text-[#00ff88]/60"
+              >
+                <Target className="w-2.5 h-2.5 inline mr-1" />
+                Tap CASHOUT to lock in
+              </motion.span>
+            )}
           </div>
         </div>
       </div>

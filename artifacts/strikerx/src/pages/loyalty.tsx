@@ -20,11 +20,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
-const VIP_TIERS  = ["Sunday League", "Championship", "Premier League", "Champions League", "World Cup"];
+const VIP_TIERS  = ["Amateur", "Division 1", "Premier League", "Champions League", "World Cup"];
 const VIP_COLORS = ["#6b7280", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7"];
-const VIP_THRESHOLDS = [0, 10, 50, 200, 1000];
+const VIP_THRESHOLDS = [0, 5, 20, 50, 100];
 const VIP_CASHBACK   = ["0%", "2%", "5%", "10%", "15%"];
-const VIP_ICONS      = ["SL", "CH", "PL", "UCL", "WC"];
+const VIP_ICONS      = ["AM", "D1", "PL", "UCL", "WC"];
 
 const RARITY_COLORS: Record<string, string> = {
   common: "#6b7280", rare: "#3b82f6", epic: "#a855f7", legendary: "#f59e0b",
@@ -48,8 +48,8 @@ export function Loyalty() {
   const redeemBootMut = useRedeemBoot();
 
   const p        = player as Record<string, unknown> | null;
-  const vipTier  = p?.vipTier as string ?? "sunday_league";
-  const vipIdx   = ["sunday_league","championship","premier_league","champions_league","world_cup"].indexOf(vipTier);
+  const vipTier  = p?.vipTier as string ?? "amateur";
+  const vipIdx   = ["amateur","division_one","premier_league","champions_league","world_cup"].indexOf(vipTier);
   const vipName  = VIP_TIERS[vipIdx]  ?? "Sunday League";
   const vipColor = VIP_COLORS[vipIdx] ?? "#6b7280";
   const vipIcon  = VIP_ICONS[vipIdx]  ?? "SL";
