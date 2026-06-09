@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Trophy, User, Wallet, Star, Globe } from "lucide-react";
+import { Home, Trophy, User, Wallet, Gift, Globe } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
@@ -27,7 +27,7 @@ export function Layout({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
 
-  const pct = jackpot?.percentFull ?? 0;
+  const pct     = jackpot?.percentFull ?? 0;
   const isReady = jackpot?.status === "ready";
   const wcActive = wcTheme?.active ?? false;
 
@@ -38,7 +38,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
               <span className="font-mono font-bold text-xl text-primary tracking-tighter">
-                STRIKER<span className="text-secondary-foreground/30">X</span>
+                STRIKER<span className="text-white/20">X</span>
               </span>
               {wcActive && (
                 <motion.div
@@ -60,7 +60,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Jackpot live progress bar — pulses gold when ready */}
+        {/* Jackpot progress bar */}
         {jackpot && (
           <div
             className={`h-[3px] w-full relative overflow-hidden ${isReady ? "bg-[#f59e0b]/20" : "bg-white/5"}`}
@@ -69,17 +69,13 @@ export function Layout({ children }: { children: ReactNode }) {
             <motion.div
               className={`h-full ${isReady ? "bg-[#f59e0b]" : "bg-gradient-to-r from-[#f59e0b] to-[#00ff88]"}`}
               style={{ width: `${Math.min(pct, 100)}%` }}
-              animate={isReady
-                ? { opacity: [1, 0.4, 1] }
-                : { width: `${Math.min(pct, 100)}%` }}
-              transition={isReady
-                ? { duration: 0.9, repeat: Infinity }
-                : { duration: 0.5 }}
+              animate={isReady ? { opacity: [1, 0.4, 1] } : { width: `${Math.min(pct, 100)}%` }}
+              transition={isReady ? { duration: 0.9, repeat: Infinity } : { duration: 0.5 }}
             />
           </div>
         )}
 
-        {/* World Cup edition accent line */}
+        {/* World Cup accent line */}
         {wcActive && (
           <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#e63946]/50 to-transparent" />
         )}
@@ -90,11 +86,11 @@ export function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-card border-t border-border grid grid-cols-5 px-2 py-2 z-50">
-        <NavLink href="/" icon={<Home size={20} />} label="Home" active={location === "/"} />
-        <NavLink href="/leaderboard" icon={<Trophy size={20} />} label="Rank" active={location === "/leaderboard"} />
-        <NavLink href="/deposit" icon={<Wallet size={20} />} label="Wallet" active={location === "/deposit" || location === "/withdraw"} />
-        <NavLink href="/profile" icon={<User size={20} />} label="Profile" active={location === "/profile"} />
-        <NavLink href="/achievements" icon={<Star size={20} />} label="Badges" active={location === "/achievements"} />
+        <NavLink href="/"           icon={<Home    size={20} />} label="Home"    active={location === "/"} />
+        <NavLink href="/leaderboard" icon={<Trophy  size={20} />} label="Rank"    active={location === "/leaderboard"} />
+        <NavLink href="/deposit"     icon={<Wallet  size={20} />} label="Wallet"  active={location === "/deposit" || location === "/withdraw"} />
+        <NavLink href="/loyalty"     icon={<Gift    size={20} />} label="Loyalty" active={location === "/loyalty"} />
+        <NavLink href="/profile"     icon={<User    size={20} />} label="Profile" active={location === "/profile"} />
       </nav>
     </div>
   );

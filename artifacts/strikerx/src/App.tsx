@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
 import { NotificationsProvider } from "@/lib/ws-notifications";
+import { GlobalWinOverlay } from "@/components/big-win-overlay";
 import NotFound from "@/pages/not-found";
 
 import { Home } from "./pages/home";
@@ -11,6 +12,7 @@ import { Profile } from "./pages/profile";
 import { Deposit } from "./pages/deposit";
 import { Withdraw } from "./pages/withdraw";
 import { Leaderboard } from "./pages/leaderboard";
+import { Loyalty } from "./pages/loyalty";
 
 import { TheShot } from "./pages/games/shot";
 import { Penalty } from "./pages/games/penalty";
@@ -43,36 +45,37 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      
+
       {/* Player Pages */}
-      <Route path="/games/shot" component={TheShot} />
-      <Route path="/games/penalty" component={Penalty} />
+      <Route path="/games/shot"      component={TheShot} />
+      <Route path="/games/penalty"   component={Penalty} />
       <Route path="/games/minefield" component={Minefield} />
-      <Route path="/games/freekick" component={FreeKick} />
-      <Route path="/profile" component={Profile} />
-      <Route path="/deposit" component={Deposit} />
-      <Route path="/withdraw" component={Withdraw} />
-      <Route path="/leaderboard" component={Leaderboard} />
-      <Route path="/verify" component={Verify} />
-      <Route path="/achievements" component={Achievements} />
+      <Route path="/games/freekick"  component={FreeKick} />
+      <Route path="/profile"         component={Profile} />
+      <Route path="/deposit"         component={Deposit} />
+      <Route path="/withdraw"        component={Withdraw} />
+      <Route path="/leaderboard"     component={Leaderboard} />
+      <Route path="/verify"          component={Verify} />
+      <Route path="/achievements"    component={Achievements} />
+      <Route path="/loyalty"         component={Loyalty} />
 
       {/* Admin Pages */}
-      <Route path="/admin" component={AdminLogin} />
-      <Route path="/admin/dashboard" component={AdminDashboard} />
-      <Route path="/admin/players" component={AdminPlayers} />
-      <Route path="/admin/withdrawals" component={AdminWithdrawals} />
-      <Route path="/admin/config" component={AdminConfig} />
-      <Route path="/admin/analytics" component={AdminAnalytics} />
-      <Route path="/admin/audit-log" component={AdminAuditLog} />
-      <Route path="/admin/broadcast" component={AdminBroadcast} />
-      <Route path="/admin/tournaments" component={AdminTournaments} />
-      <Route path="/admin/rate-events" component={AdminRateEvents} />
-      <Route path="/admin/flagged" component={AdminFlagged} />
-      <Route path="/admin/match-events" component={AdminMatchEvents} />
-      <Route path="/admin/kyc" component={AdminKyc} />
-      <Route path="/admin/affiliates" component={AdminAffiliates} />
-      <Route path="/admin/jackpot" component={AdminJackpot} />
-      <Route path="/admin/inbox" component={AdminInbox} />
+      <Route path="/admin"                component={AdminLogin} />
+      <Route path="/admin/dashboard"      component={AdminDashboard} />
+      <Route path="/admin/players"        component={AdminPlayers} />
+      <Route path="/admin/withdrawals"    component={AdminWithdrawals} />
+      <Route path="/admin/config"         component={AdminConfig} />
+      <Route path="/admin/analytics"      component={AdminAnalytics} />
+      <Route path="/admin/audit-log"      component={AdminAuditLog} />
+      <Route path="/admin/broadcast"      component={AdminBroadcast} />
+      <Route path="/admin/tournaments"    component={AdminTournaments} />
+      <Route path="/admin/rate-events"    component={AdminRateEvents} />
+      <Route path="/admin/flagged"        component={AdminFlagged} />
+      <Route path="/admin/match-events"   component={AdminMatchEvents} />
+      <Route path="/admin/kyc"            component={AdminKyc} />
+      <Route path="/admin/affiliates"     component={AdminAffiliates} />
+      <Route path="/admin/jackpot"        component={AdminJackpot} />
+      <Route path="/admin/inbox"          component={AdminInbox} />
 
       <Route component={NotFound} />
     </Switch>
@@ -80,8 +83,8 @@ function Router() {
 }
 
 function App() {
-  if (typeof document !== 'undefined') {
-    document.documentElement.classList.add('dark');
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.add("dark");
   }
 
   return (
@@ -93,6 +96,7 @@ function App() {
               <Router />
             </WouterRouter>
             <Toaster />
+            <GlobalWinOverlay />
           </NotificationsProvider>
         </AuthProvider>
       </TooltipProvider>
