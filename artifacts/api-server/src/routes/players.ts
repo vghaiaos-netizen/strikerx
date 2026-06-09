@@ -197,15 +197,13 @@ router.get("/players/me/referral", requireAuth, async (req, res): Promise<void> 
   const tier2 = refs.filter((r) => r.tier === 2);
   const tier1Earnings = tier1.reduce((s, r) => s + r.earningsPaidStriker, 0);
   const tier2Earnings = tier2.reduce((s, r) => s + r.earningsPaidStriker, 0);
-  const appDomain =
-    process.env.WEBHOOK_DOMAIN ??
-    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ??
-    process.env.REPLIT_DEV_DOMAIN ??
-    `t.me/StrykkerXBot/StrikerX`;
+  // Always use the Telegram Mini App deep link, never the server domain.
+  // MINI_APP_LINK is "t.me/StrykkerXBot/StrikerX" — set as a shared env var.
+  const miniAppBase = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
 
   res.json({
     code: player.referralCode,
-    referralLink: `https://${appDomain}?startapp=${player.referralCode}`,
+    referralLink: `https://${miniAppBase}?startapp=${player.referralCode}`,
     totalReferred,
     totalEarned: tier1Earnings + tier2Earnings,
     tier1Earnings,
@@ -272,11 +270,8 @@ router.get("/players/me/referrals/detail", requireAuth, async (req, res): Promis
 
   const tier1 = refs.filter(r => r.tier === 1);
   const tier2 = refs.filter(r => r.tier === 2);
-  const appDomain2 =
-    process.env.WEBHOOK_DOMAIN ??
-    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ??
-    process.env.REPLIT_DEV_DOMAIN ??
-    `t.me/StrykkerXBot/StrikerX`;
+  // Always use the Telegram Mini App deep link, never the server domain.
+  const miniAppBase2 = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
 
   // Fire achievement check for referral count
   checkAndAward(playerId, {
@@ -286,7 +281,7 @@ router.get("/players/me/referrals/detail", requireAuth, async (req, res): Promis
 
   res.json({
     code: player.referralCode,
-    referralLink: `https://${appDomain2}?startapp=${player.referralCode}`,
+    referralLink: `https://${miniAppBase2}?startapp=${player.referralCode}`,
     totalReferred: refs.length,
     totalEarned: refs.reduce((s, r) => s + r.earningsPaidStriker, 0),
     tier1Earnings: tier1.reduce((s, r) => s + r.earningsPaidStriker, 0),

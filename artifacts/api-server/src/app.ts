@@ -139,10 +139,16 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     initGroupBotScheduler().catch((err) => logger.error({ err }, "GroupBot init failed")),
   ]);
 
-  // Resolve the effective domain: WEBHOOK_DOMAIN > REPLIT_DOMAINS > RAILWAY_PUBLIC_DOMAIN
+  // Resolve the effective domain for webhook registration.
+  // CRITICAL: Never use REPLIT_DOMAINS here. It is a Replit-managed var that is set in
+  // every Replit environment (dev and published). Using it would cause the dev server to
+  // call setWebhook on every restart, hijacking the Railway production webhooks and
+  // breaking the live bots. Only explicit overrides or Railway's own domain are valid.
+  //   WEBHOOK_DOMAIN  — manual override (set this to force a specific domain)
+  //   RAILWAY_PUBLIC_DOMAIN — auto-injected by Railway in production only
+  // In Replit dev, neither is set, so webhook registration is intentionally skipped.
   const effectiveDomain =
     process.env.WEBHOOK_DOMAIN ??
-    replitDomains?.split(",")[0]?.trim() ??
     railwayDomain;
 
   if (effectiveDomain) {
@@ -186,7 +192,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       );
     }
   } else {
-    logger.warn("No WEBHOOK_DOMAIN or REPLIT_DOMAINS set — Telegram and CryptoBot webhooks not registered");
+    logger.warn("No WEBHOOK_DOMAIN or RAILWAY_PUBLIC_DOMAIN set — Telegram webhooks not registered (expected in Replit dev)");
   }
 })();
 
