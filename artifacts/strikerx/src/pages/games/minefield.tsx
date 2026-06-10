@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useStartMinefield, usePickMinefield, useCashoutMinefield } from "@workspace/api-client-react";
+import { useStartMinefield, usePickMinefield, useCashoutMinefield, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bomb, CheckCircle2, Zap } from "lucide-react";
 
@@ -52,6 +53,7 @@ function multColor(m: number) {
 
 export function Minefield() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const startMine = useStartMinefield();
   const pickMine  = usePickMinefield();
   const cashoutMine = useCashoutMinefield();
@@ -118,6 +120,7 @@ export function Minefield() {
           ...prev, minePositions: res.minePositions ?? [],
           status: "lost", currentMultiplier: 0,
         } : prev);
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         toast({ title: "BOOM! Mine hit!", variant: "destructive" });
       } else {
         newStates[pos] = "safe";
@@ -162,6 +165,7 @@ export function Minefield() {
       const res = await cashoutMine.mutateAsync({ id: session.id });
       toast({ title: `+${res.winAmount?.toFixed(0)} STRIKER`, description: `${res.multiplier?.toFixed(2)}×` });
       setSession(p => p ? { ...p, status: "won" } : p);
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     } catch (e: unknown) {
       toast({ title: "Cashout failed", description: (e as { message?: string })?.message, variant: "destructive" });
     } finally {

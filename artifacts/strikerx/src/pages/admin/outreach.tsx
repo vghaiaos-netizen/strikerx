@@ -764,8 +764,9 @@ function SchedulerTab({
   async function handleRunTick() {
     setTicking(true);
     try {
-      const res = await fetch(`${window.location.protocol}//${window.location.hostname}:8001/tick`, {
+      const res = await fetch(`/api/admin/outreach/tick`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       toast({ title: `Tick completed`, description: `Joined: ${res.joined ?? 0} · Posted: ${res.posted ?? 0}` });
       onChange();

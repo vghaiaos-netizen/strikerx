@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { usePlayPenalty } from "@workspace/api-client-react";
+import { usePlayPenalty, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, ChevronUp, RotateCcw, Trophy } from "lucide-react";
 
@@ -73,6 +74,7 @@ function Keeper({ cx, diveDir }: { cx: number; diveDir: Zone | null }) {
 
 export function Penalty() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const playPenalty = usePlayPenalty();
 
   const [betAmount, setBetAmount] = useState("100");
@@ -115,6 +117,7 @@ export function Penalty() {
         }
         setHistory(prev => [r.win, ...prev].slice(0, 14));
         setKicking(false);
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       }, 460);
     } catch (e: unknown) {
       toast({ title: "Error", description: (e as { message?: string })?.message, variant: "destructive" });

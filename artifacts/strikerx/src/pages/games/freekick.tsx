@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { usePlayFreekick } from "@workspace/api-client-react";
+import { usePlayFreekick, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 
@@ -87,6 +88,7 @@ interface FKResult { slot: number; multiplier: number; winAmount: number; }
 
 export function FreeKick() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const playFk = usePlayFreekick();
 
   const [betAmount, setBetAmount] = useState("100");
@@ -139,6 +141,7 @@ export function FreeKick() {
         winAmount: res.winAmount ?? 0,
       };
       setResult(fkResult);
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       if (res.winAmount && res.winAmount > 0) {
         toast({ title: `+${res.winAmount.toFixed(0)} STRIKER`, description: `${res.multiplier}× · slot ${slot + 1}` });
       } else {

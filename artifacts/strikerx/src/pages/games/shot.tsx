@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, Users, Zap, Clock, Target } from "lucide-react";
 
@@ -63,6 +65,7 @@ function HistoryPill({ value }: { value: number }) {
 export function TheShot() {
   const { token, player } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const wsRef = useRef<WebSocket | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -175,6 +178,7 @@ export function TheShot() {
     if (event === "balance_update") {
       const { strikerBalance } = d as { strikerBalance: number | string };
       setLiveBalance(parseFloat(String(strikerBalance)));
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     }
 
     if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
