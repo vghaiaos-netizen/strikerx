@@ -53,6 +53,15 @@ const DEFAULT_CONFIG: Array<Omit<ConfigEntry, "updatedAt">> = [
   { key: "welcome_bonus_striker", value: "500", category: "platform", label: "Welcome Bonus (STRIKER)", description: "STRIKER tokens given to new players on first login", isSecret: false, isRestartRequired: false },
   { key: "maintenance_mode", value: "false", category: "platform", label: "Maintenance Mode", description: "When true, all game endpoints return 503. Admin still accessible.", isSecret: false, isRestartRequired: false },
   { key: "max_players_per_round", value: "100", category: "platform", label: "Max Players Per Round", description: "Maximum concurrent players in a crash round", isSecret: false, isRestartRequired: false },
+  // Outreach
+  { key: "outreach_enabled", value: "false", category: "outreach", label: "Outreach Enabled", description: "Master toggle for the community outreach scheduler", isSecret: false, isRestartRequired: false },
+  { key: "outreach_join_max_per_day", value: "3", category: "outreach", label: "Max Group Joins Per Day", description: "Maximum number of groups to join per 24-hour window", isSecret: false, isRestartRequired: false },
+  { key: "outreach_join_delay_min_hours", value: "2", category: "outreach", label: "Join Delay Min (hours)", description: "Minimum jitter delay between automated group joins", isSecret: false, isRestartRequired: false },
+  { key: "outreach_join_delay_max_hours", value: "8", category: "outreach", label: "Join Delay Max (hours)", description: "Maximum jitter delay between automated group joins", isSecret: false, isRestartRequired: false },
+  { key: "outreach_cold_period_hours", value: "24", category: "outreach", label: "Cold Period After Join (hours)", description: "Hours to wait before posting to a newly joined group", isSecret: false, isRestartRequired: false },
+  { key: "outreach_post_cooldown_hours", value: "48", category: "outreach", label: "Post Cooldown (hours)", description: "Minimum hours between posts to the same group", isSecret: false, isRestartRequired: false },
+  { key: "outreach_platform_name", value: "StrikerX", category: "outreach", label: "Platform Name Variable", description: "Value substituted for {platform} in post templates", isSecret: false, isRestartRequired: false },
+  { key: "outreach_promo_url", value: "t.me/StrykkerXBot/StrikerX", category: "outreach", label: "Promo URL Variable", description: "Value substituted for {promo_url} in post templates", isSecret: false, isRestartRequired: false },
 ];
 
 /**

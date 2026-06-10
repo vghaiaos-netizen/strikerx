@@ -12,6 +12,7 @@ import affiliatesRouter from "./affiliates";
 import kycRouter from "./kyc";
 import publicRouter from "./public";
 import rateEventsRouter from "./rateEvents";
+import outreachRouter from "./outreach";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(affiliatesRouter);
 router.use(kycRouter);
 router.use(publicRouter);
 router.use(rateEventsRouter);
+router.use(outreachRouter);
 
 export default router;
