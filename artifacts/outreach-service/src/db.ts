@@ -6,12 +6,15 @@ import {
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set");
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.warn("[outreach] DATABASE_URL not set — database features disabled. Set DATABASE_URL in Railway to enable scheduling.");
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool);
+export const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
+export const db = databaseUrl ? drizzle(pool!) : null;
+export const dbAvailable = !!databaseUrl;
 
 export const appConfigTable = pgTable("app_config", {
   key: text("key").primaryKey(),

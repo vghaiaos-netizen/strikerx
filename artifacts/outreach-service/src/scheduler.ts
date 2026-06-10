@@ -1,5 +1,6 @@
 import {
   db,
+  dbAvailable,
   outreachGroupsTable,
   outreachTemplatesTable,
   outreachPostsTable,
@@ -226,6 +227,7 @@ async function processPostQueue(): Promise<number> {
 }
 
 export async function runSchedulerTick(): Promise<{ joined: number; posted: number }> {
+  if (!dbAvailable || !db) return { joined: 0, posted: 0 };
   if (!isConnected()) return { joined: 0, posted: 0 };
 
   const enabled = await getConfig("outreach_enabled");

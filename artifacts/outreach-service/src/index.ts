@@ -2,6 +2,7 @@ import express from "express";
 import type { Request, Response } from "express";
 import pino from "pino";
 import { initClient, isConnected } from "./client.js";
+import { dbAvailable } from "./db.js";
 import { searchGroups, joinGroupByIdentifier, sendMessageToGroup } from "./discovery.js";
 import { startScheduler, runSchedulerTick, getSchedulerStatus } from "./scheduler.js";
 
@@ -12,7 +13,7 @@ app.use(express.json());
 const PORT = parseInt(process.env.PORT ?? "8001", 10);
 
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ ok: true, connected: isConnected(), ...getSchedulerStatus() });
+  res.json({ ok: true, connected: isConnected(), dbAvailable, ...getSchedulerStatus() });
 });
 
 app.post("/search", async (req: Request, res: Response): Promise<void> => {
