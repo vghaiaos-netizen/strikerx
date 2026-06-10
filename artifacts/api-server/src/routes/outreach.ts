@@ -217,6 +217,19 @@ router.delete("/admin/outreach/templates/:id", requireAdmin, async (req, res): P
   res.json({ ok: true });
 });
 
+// ── SCHEDULER TICK ────────────────────────────────────────────────────────
+
+router.post("/admin/outreach/tick", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const result = await proxyOutreach("/tick", {});
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err }, "Outreach tick proxy failed");
+    res.status(502).json({ error: message });
+  }
+});
+
 // ── POST HISTORY ──────────────────────────────────────────────────────────
 
 router.get("/admin/outreach/posts", requireAdmin, async (req, res): Promise<void> => {
