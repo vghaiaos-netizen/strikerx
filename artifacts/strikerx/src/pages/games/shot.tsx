@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,17 @@ interface LiveBet {
 interface ChartPoint { x: number; y: number; }
 
 const QUICK_BETS = [50, 100, 500, 1000];
+
+// Static particle config (outside component — never recreated)
+const PARTICLES = Array.from({ length: 16 }, (_, i) => ({
+  id: i,
+  left: `${((i / 16) * 100 + (i % 3) * 2).toFixed(1)}%`,
+  w: i % 5 === 0 ? 3 : 1.5,
+  baseDur: 2.1 + (i % 5) * 0.38,
+  delay: -((i * 0.31) % 2.8),
+  opacity: 0.06 + (i % 4) * 0.025,
+  gold: i % 7 === 0,
+}));
 
 function getCrashColor(mult: number, crashed: boolean) {
   if (crashed) return "#ef4444";
@@ -70,6 +81,10 @@ export function TheShot() {
   const [crashHistory, setCrashHistory] = useState<number[]>([]);
   const [crashFlash, setCrashFlash] = useState(false);
 
+  // Milestone tracking
+  const milestonesHitRef = useRef<Set<number>>(new Set());
+  const [activeMilestone, setActiveMilestone] = useState<number | null>(null);
+
   const startTimeRef = useRef<number | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -100,6 +115,8 @@ export function TheShot() {
 
       if (rs.status === "waiting") {
         setMyBet(null);
+        milestonesHitRef.current = new Set();
+        setActiveMilestone(null);
         if (countdownRef.current) clearInterval(countdownRef.current);
         const WAIT_DURATION = 8;
         const elapsed = rs.waitingStartedAt
@@ -126,7 +143,7 @@ export function TheShot() {
     if (event === "bet_placed") setBets(prev => new Map(prev).set((d as unknown as LiveBet).playerId, d as unknown as LiveBet));
 
     if (event === "player_cashout") {
-      const { playerId, multiplier, winAmount } = d as { playerId: number; multiplier: number; winAmount: number; username: string; roundId: number };
+      const { playerId, multiplier, winAmount } = d as { playerId: number; multiplier: number; winAmount: number };
       setBets(prev => {
         const m = new Map(prev);
         const b = m.get(playerId);
@@ -198,6 +215,48 @@ export function TheShot() {
     };
   }, [token, handleEvent]);
 
+  const roundStatus = round?.status;
+  const currentMult = round?.multiplier ?? 1.0;
+
+  // Milestone detection (runs on every render while running — intentional)
+  useEffect(() => {
+    if (roundStatus !== "running") return;
+    const milestones = [2, 5, 10];
+    for (const m of milestones) {
+      if (currentMult >= m && !milestonesHitRef.current.has(m)) {
+        milestonesHitRef.current.add(m);
+        setActiveMilestone(m);
+        const t = setTimeout(() => setActiveMilestone(null), 750);
+        return () => clearTimeout(t);
+      }
+    }
+    return undefined;
+  });
+
+  // Particle CSS keyframe injection
+  useEffect(() => {
+    if (roundStatus !== "running") return;
+    const styleId = "shot-particles-keyframe";
+    let el = document.getElementById(styleId);
+    if (!el) {
+      el = document.createElement("style");
+      el.id = styleId;
+      document.head.appendChild(el);
+    }
+    el.textContent = `
+      @keyframes pRise {
+        0%   { transform: translateY(0px);    opacity: 0; }
+        8%   { opacity: var(--p-op); }
+        92%  { opacity: var(--p-op); }
+        100% { transform: translateY(-${chartSize.h + 50}px); opacity: 0; }
+      }
+    `;
+    return () => {
+      const existing = document.getElementById(styleId);
+      if (existing) existing.remove();
+    };
+  }, [roundStatus, chartSize.h]);
+
   const handleBet = () => {
     const amount = parseFloat(betAmount);
     if (!amount || amount <= 0) return;
@@ -206,16 +265,14 @@ export function TheShot() {
 
   const handleCashout = () => send({ type: "cashout" });
 
-  // ── Chart geometry ────────────────────────────────────────────────────────
+  // ── Chart geometry ────────────────────────────────────────────────────────────
   const PAD = { left: 32, right: 10, top: 12, bottom: 12 };
 
   const buildChart = () => {
     if (chartPoints.length < 2) return { line: "", fill: "", rocketX: null, rocketY: null, refLines: [] as { y: number; label: string; color: string }[] };
-    const W = chartSize.w;
-    const H = chartSize.h;
+    const W = chartSize.w, H = chartSize.h;
     const innerW = W - PAD.left - PAD.right;
     const innerH = H - PAD.top - PAD.bottom;
-
     const maxX = Math.max(...chartPoints.map(p => p.x), 1);
     const maxY = Math.max(...chartPoints.map(p => p.y), 2) * 1.15;
 
@@ -234,7 +291,6 @@ export function TheShot() {
     const last = pts[pts.length - 1];
     const fill = `${d} L ${last.sx.toFixed(1)} ${PAD.top + innerH} L ${pts[0].sx.toFixed(1)} ${PAD.top + innerH} Z`;
 
-    // Reference lines at meaningful multipliers
     const refTargets = [
       { val: 2, label: "2×", color: "#22c55e" },
       { val: 5, label: "5×", color: "#f97316" },
@@ -273,34 +329,30 @@ export function TheShot() {
   const activeBets = betArr.filter(b => !b.cashoutMultiplier);
   const playerBalance = liveBalance ?? Number((player as Record<string, unknown>)?.strikerBalance ?? 0);
 
-  // Pulse speed scales with multiplier for tension
-  const pulseDuration = mult >= 10 ? 0.25 : mult >= 5 ? 0.45 : 0.7;
+  const pulseDuration = mult >= 10 ? 0.22 : mult >= 5 ? 0.4 : 0.68;
+  const speedFactor = useMemo(() => mult >= 10 ? 3.8 : mult >= 5 ? 2.4 : mult >= 2 ? 1.55 : 1, [mult]);
 
-  // Countdown progress ring (0→1 = full→empty)
-  const WAIT_TOTAL = 8;
-  const ringProgress = waitCountdown / WAIT_TOTAL;
   const ringR = 36;
   const ringCirc = 2 * Math.PI * ringR;
+  const ringProgress = waitCountdown / 8;
 
   return (
     <Layout>
-      {/* ── Crash flash overlay ── */}
+      {/* Crash flash overlay */}
       <AnimatePresence>
         {crashFlash && (
-          <motion.div
-            key="flash"
+          <motion.div key="flash"
             className="fixed inset-0 z-50 pointer-events-none"
             initial={{ opacity: 0.7 }}
             animate={{ opacity: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            style={{ background: "radial-gradient(ellipse at center, #ef444444 0%, #ef444400 70%)" }}
-          />
+            style={{ background: "radial-gradient(ellipse at center, #ef444444 0%, #ef444400 70%)" }} />
         )}
       </AnimatePresence>
 
       <div className="flex flex-col h-[calc(100dvh-56px)] overflow-hidden bg-[#060a14]">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#00ff88]" />
@@ -320,23 +372,21 @@ export function TheShot() {
           </div>
         </div>
 
-        {/* ── Crash History ── */}
+        {/* Crash History */}
         {crashHistory.length > 0 && (
           <div className="flex gap-1.5 px-3 py-1.5 overflow-x-auto border-b border-white/4 flex-shrink-0 [scrollbar-width:none]">
             {crashHistory.map((cp, i) => <HistoryPill key={i} value={cp} />)}
           </div>
         )}
 
-        {/* ── Chart + Multiplier ── */}
+        {/* Chart */}
         <div className="relative flex-1 min-h-0" ref={chartRef}>
 
-          {/* SVG chart */}
-          <svg
-            width={chartSize.w} height={chartSize.h}
+          {/* SVG */}
+          <svg width={chartSize.w} height={chartSize.h}
             viewBox={`0 0 ${chartSize.w} ${chartSize.h}`}
             className="absolute inset-0"
-            style={{ opacity: isWaiting ? 0.1 : 1, transition: "opacity 0.5s" }}
-          >
+            style={{ opacity: isWaiting ? 0.1 : 1, transition: "opacity 0.5s" }}>
             <defs>
               <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -347,7 +397,7 @@ export function TheShot() {
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
               <filter id="rocketGlow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feGaussianBlur stdDeviation="6" result="blur" />
                 <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
               </filter>
               <radialGradient id="rocketPulse" cx="50%" cy="50%" r="50%">
@@ -356,20 +406,18 @@ export function TheShot() {
               </radialGradient>
             </defs>
 
-            {/* Reference lines: 2×, 5×, 10× */}
+            {/* Reference lines */}
             {refLines.map((rl) => (
               <g key={rl.label}>
-                <line
-                  x1={PAD.left} y1={rl.y} x2={chartSize.w - PAD.right} y2={rl.y}
-                  stroke={rl.color} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="4 5"
-                />
-                <text x={4} y={rl.y + 4} fill={rl.color} fontSize="9" fontFamily="monospace" opacity="0.45">
+                <line x1={PAD.left} y1={rl.y} x2={chartSize.w - PAD.right} y2={rl.y}
+                  stroke={rl.color} strokeOpacity="0.2" strokeWidth="1" strokeDasharray="4 5" />
+                <text x={4} y={rl.y + 4} fill={rl.color} fontSize="9" fontFamily="monospace" opacity="0.5">
                   {rl.label}
                 </text>
               </g>
             ))}
 
-            {/* Auto-cashout target line */}
+            {/* Auto-cashout line */}
             {autoY !== null && isRunning && (
               <>
                 <line x1={PAD.left} y1={autoY} x2={chartSize.w - PAD.right} y2={autoY}
@@ -381,10 +429,7 @@ export function TheShot() {
               </>
             )}
 
-            {/* Fill area */}
             {fill && <path d={fill} fill="url(#chartFill)" />}
-
-            {/* Main curve */}
             {line && (
               <path d={line} fill="none" stroke={color} strokeWidth="2.5"
                 strokeLinecap="round" strokeLinejoin="round"
@@ -392,33 +437,67 @@ export function TheShot() {
                 style={{ transition: isCrashed ? "none" : "stroke 0.3s" }} />
             )}
 
-            {/* Rocket dot at curve tip */}
+            {/* Rocket dot */}
             {rocketX !== null && rocketY !== null && isRunning && (
               <g>
-                {/* Outer pulse ring */}
-                <circle cx={rocketX} cy={rocketY} r="14" fill="url(#rocketPulse)" />
-                {/* Inner dot */}
-                <circle cx={rocketX} cy={rocketY} r="5.5" fill={color} filter="url(#rocketGlow)"
-                  style={{ transition: "cx 0.1s, cy 0.1s" }} />
+                <circle cx={rocketX} cy={rocketY} r="16" fill="url(#rocketPulse)" />
+                <circle cx={rocketX} cy={rocketY} r="5.5" fill={color} filter="url(#rocketGlow)" />
                 <circle cx={rocketX} cy={rocketY} r="3" fill="white" opacity="0.9" />
               </g>
             )}
 
-            {/* Crashed X marker at tip */}
+            {/* Crashed X */}
             {rocketX !== null && rocketY !== null && isCrashed && (
               <g>
-                <circle cx={rocketX} cy={rocketY} r="10" fill="#ef444420" />
-                <line x1={rocketX - 5} y1={rocketY - 5} x2={rocketX + 5} y2={rocketY + 5} stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
-                <line x1={rocketX + 5} y1={rocketY - 5} x2={rocketX - 5} y2={rocketY + 5} stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+                <circle cx={rocketX} cy={rocketY} r="12" fill="#ef444428" />
+                <line x1={rocketX - 6} y1={rocketY - 6} x2={rocketX + 6} y2={rocketY + 6} stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
+                <line x1={rocketX + 6} y1={rocketY - 6} x2={rocketX - 6} y2={rocketY + 6} stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
               </g>
             )}
           </svg>
+
+          {/* Particle field — only while running */}
+          {isRunning && PARTICLES.map(p => (
+            <div key={p.id} style={{
+              position: "absolute",
+              bottom: 0,
+              left: p.left,
+              width: `${p.w}px`,
+              height: `${p.w}px`,
+              borderRadius: "50%",
+              background: p.gold && mult >= 5 ? "#f59e0b" : color,
+              "--p-op": String(p.opacity),
+              animationName: "pRise",
+              animationDuration: `${p.baseDur / speedFactor}s`,
+              animationDelay: `${p.delay}s`,
+              animationIterationCount: "infinite",
+              animationTimingFunction: "linear",
+              pointerEvents: "none",
+              opacity: 0,
+            } as React.CSSProperties} />
+          ))}
+
+          {/* Milestone expanding ring */}
+          <AnimatePresence>
+            {activeMilestone && (
+              <motion.div key={activeMilestone}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              >
+                <motion.div
+                  className="rounded-full border-2"
+                  style={{ borderColor: getCrashColor(activeMilestone, false) }}
+                  initial={{ width: 48, height: 48, opacity: 1 }}
+                  animate={{ width: 260, height: 260, opacity: 0 }}
+                  transition={{ duration: 0.65, ease: "easeOut" }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Multiplier overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
             <AnimatePresence mode="wait">
 
-              {/* ── WAITING ── */}
               {isWaiting && (
                 <motion.div key="waiting"
                   initial={{ opacity: 0, scale: 0.85 }}
@@ -426,24 +505,17 @@ export function TheShot() {
                   exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
                   className="flex flex-col items-center gap-3"
                 >
-                  {/* SVG countdown ring */}
                   <div className="relative flex items-center justify-center" style={{ width: 96, height: 96 }}>
                     <svg width="96" height="96" className="absolute inset-0 -rotate-90">
-                      {/* Track */}
                       <circle cx="48" cy="48" r={ringR} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
-                      {/* Progress */}
                       <circle cx="48" cy="48" r={ringR} fill="none"
-                        stroke="#00ff88" strokeWidth="3"
-                        strokeLinecap="round"
+                        stroke="#00ff88" strokeWidth="3" strokeLinecap="round"
                         strokeDasharray={ringCirc}
                         strokeDashoffset={ringCirc * (1 - ringProgress)}
-                        style={{ transition: "stroke-dashoffset 0.9s linear" }}
-                      />
+                        style={{ transition: "stroke-dashoffset 0.9s linear" }} />
                     </svg>
-                    {/* Number */}
                     <div className="relative flex flex-col items-center">
-                      <span className="font-display font-black text-white tabular-nums leading-none"
-                        style={{ fontSize: 38 }}>
+                      <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 38 }}>
                         {waitCountdown}
                       </span>
                       <span className="text-[9px] font-mono tracking-[0.25em] text-white/25 uppercase -mt-0.5">sec</span>
@@ -453,17 +525,13 @@ export function TheShot() {
                     <Clock className="w-3 h-3" />
                     <span className="font-mono text-[9px] tracking-[0.25em] uppercase">Next Round</span>
                   </div>
-                  <motion.div
-                    animate={{ opacity: [0.25, 0.6, 0.25] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="text-[9px] font-mono tracking-[0.3em] text-[#00ff88]/40 uppercase"
-                  >
+                  <motion.div animate={{ opacity: [0.25, 0.65, 0.25] }} transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="text-[9px] font-mono tracking-[0.3em] text-[#00ff88]/40 uppercase">
                     Place your bet
                   </motion.div>
                 </motion.div>
               )}
 
-              {/* ── RUNNING ── */}
               {isRunning && (
                 <motion.div key="running"
                   initial={{ scale: 0.6, opacity: 0 }}
@@ -478,17 +546,18 @@ export function TheShot() {
                       textShadow: `0 0 60px ${color}55, 0 0 24px ${color}28`,
                       transition: "color 0.3s, text-shadow 0.3s",
                     }}
-                    animate={mult >= 5 ? { scale: [1, 1.04, 1] } : {}}
-                    transition={{ repeat: Infinity, duration: pulseDuration }}
+                    animate={activeMilestone
+                      ? { scale: [1, 1.18, 1] }
+                      : mult >= 5
+                        ? { scale: [1, 1.04, 1] }
+                        : {}}
+                    transition={{ repeat: activeMilestone ? 0 : Infinity, duration: activeMilestone ? 0.4 : pulseDuration }}
                   >
                     {mult.toFixed(2)}x
                   </motion.div>
                   {hasBet && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col items-center gap-0.5"
-                    >
+                    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                      className="flex flex-col items-center gap-0.5">
                       <span className="text-sm font-mono font-bold" style={{ color }}>
                         +{(parseFloat(betAmount || "0") * mult).toFixed(0)} STRIKER
                       </span>
@@ -499,7 +568,6 @@ export function TheShot() {
                 </motion.div>
               )}
 
-              {/* ── CRASHED ── */}
               {isCrashed && (
                 <motion.div key="crashed"
                   initial={{ scale: 1.4, opacity: 0 }}
@@ -509,12 +577,9 @@ export function TheShot() {
                 >
                   <motion.div
                     className="font-display font-black text-[#ef4444] tabular-nums leading-none"
-                    style={{
-                      fontSize: "clamp(64px,19vw,96px)",
-                      textShadow: "0 0 70px #ef444466, 0 0 120px #ef444422",
-                    }}
+                    style={{ fontSize: "clamp(64px,19vw,96px)", textShadow: "0 0 70px #ef444466, 0 0 120px #ef444422" }}
                     animate={{ x: [-5, 5, -4, 4, -2, 2, 0] }}
-                    transition={{ duration: 0.4 }}
+                    transition={{ duration: 0.42 }}
                   >
                     {round?.crashPoint?.toFixed(2)}x
                   </motion.div>
@@ -524,12 +589,8 @@ export function TheShot() {
                     {myBet?.cashedOut && (
                       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         className="mt-1 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-xl px-5 py-2.5 text-center">
-                        <div className="text-[#00ff88] font-bold text-sm">
-                          +{myBet.winAmount?.toFixed(0)} STRIKER
-                        </div>
-                        <div className="text-[#00ff88]/50 text-[10px] font-mono mt-0.5">
-                          cashed at {myBet.multiplier?.toFixed(2)}x
-                        </div>
+                        <div className="text-[#00ff88] font-bold text-sm">+{myBet.winAmount?.toFixed(0)} STRIKER</div>
+                        <div className="text-[#00ff88]/50 text-[10px] font-mono mt-0.5">cashed at {myBet.multiplier?.toFixed(2)}x</div>
                       </motion.div>
                     )}
                     {myBet?.placed && !myBet.cashedOut && (
@@ -548,7 +609,7 @@ export function TheShot() {
           </div>
         </div>
 
-        {/* ── Live Players Strip ── */}
+        {/* Live Players Strip */}
         {bets.size > 0 && (
           <div className="flex gap-1.5 px-3 py-1.5 overflow-x-auto border-t border-white/4 flex-shrink-0 bg-black/20 [scrollbar-width:none]">
             {cashedOutBets.map(b => (
@@ -566,10 +627,8 @@ export function TheShot() {
           </div>
         )}
 
-        {/* ── Bet Panel ── */}
+        {/* Bet Panel */}
         <div className="border-t border-white/5 bg-[#0d1117]/95 px-4 pt-3 pb-4 flex-shrink-0 flex flex-col gap-2.5">
-
-          {/* Quick bet row */}
           <div className="flex gap-1.5">
             {QUICK_BETS.map(q => (
               <button key={q} onClick={() => setBetAmount(String(q))}
@@ -584,7 +643,6 @@ export function TheShot() {
             </button>
           </div>
 
-          {/* Inputs */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[9px] text-white/25 font-mono uppercase tracking-wider block mb-1">Bet (STRIKER)</label>
@@ -604,7 +662,6 @@ export function TheShot() {
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={handleBet}
               disabled={!isWaiting || !!myBet?.placed || !wsReady}
@@ -614,7 +671,7 @@ export function TheShot() {
             </Button>
 
             <motion.div
-              animate={hasBet && isRunning ? { scale: [1, 1.04, 1] } : {}}
+              animate={hasBet && isRunning ? { scale: [1, 1.05, 1] } : {}}
               transition={{ repeat: Infinity, duration: pulseDuration }}
             >
               <Button onClick={handleCashout}
@@ -629,17 +686,13 @@ export function TheShot() {
             </motion.div>
           </div>
 
-          {/* Balance + hint */}
           <div className="flex items-center justify-between text-[9px] font-mono">
             <span className="text-white/20">
               Balance: <span className="text-white/35">{playerBalance.toLocaleString()} STRIKER</span>
             </span>
             {hasBet && isRunning && (
-              <motion.span
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ repeat: Infinity, duration: 1.1 }}
-                className="text-[#00ff88]/55"
-              >
+              <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.1 }}
+                className="text-[#00ff88]/55">
                 <Target className="w-2.5 h-2.5 inline mr-1" />
                 Tap CASHOUT to lock in
               </motion.span>

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useStartMinefield, usePickMinefield, useCashoutMinefield } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bomb, CheckCircle2, TrendingUp } from "lucide-react";
+import { Bomb, CheckCircle2, Zap } from "lucide-react";
 
 type CellState = "hidden" | "safe" | "mine";
 
@@ -21,34 +21,53 @@ interface MineSession {
 }
 
 const PRESETS = [
-  { label: "3 mines", mineCount: 3, gridSize: 5, risk: "Easy" },
-  { label: "5 mines", mineCount: 5, gridSize: 5, risk: "Medium" },
+  { label: "3 mines",  mineCount: 3,  gridSize: 5, risk: "Easy" },
+  { label: "5 mines",  mineCount: 5,  gridSize: 5, risk: "Medium" },
   { label: "10 mines", mineCount: 10, gridSize: 5, risk: "Hard" },
   { label: "20 mines", mineCount: 20, gridSize: 5, risk: "Insane" },
 ];
 const QUICK_BETS = [50, 100, 500, 1000];
+const BURST_ANGLES = [0, 60, 120, 180, 240, 300];
+
+// Replicate server formula for next-pick multiplier preview
+function nextMultiplier(gridSize: number, mineCount: number, safePicks: number): number {
+  const houseEdge = 0.04;
+  const total = gridSize * gridSize;
+  let mult = 1.0;
+  for (let i = 0; i < safePicks; i++) {
+    const remaining = total - i;
+    const safe = remaining - mineCount;
+    if (safe <= 0) break;
+    mult *= (remaining / safe) * (1 - houseEdge);
+  }
+  return parseFloat(mult.toFixed(3));
+}
 
 function multColor(m: number) {
   if (m >= 10) return "#f59e0b";
-  if (m >= 5) return "#f97316";
-  if (m >= 2) return "#22c55e";
+  if (m >= 5)  return "#f97316";
+  if (m >= 2)  return "#22c55e";
   return "#00ff88";
 }
 
 export function Minefield() {
   const { toast } = useToast();
   const startMine = useStartMinefield();
-  const pickMine = usePickMinefield();
+  const pickMine  = usePickMinefield();
   const cashoutMine = useCashoutMinefield();
 
   const [betAmount, setBetAmount] = useState("100");
   const [preset, setPreset] = useState(0);
+  const [autoCashoutAt, setAutoCashoutAt] = useState("");
   const [session, setSession] = useState<MineSession | null>(null);
   const [cellStates, setCellStates] = useState<CellState[]>([]);
   const [cashingOut, setCashingOut] = useState(false);
   const [explodedCell, setExplodedCell] = useState<number | null>(null);
   const [mineFlash, setMineFlash] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [lastSafePick, setLastSafePick] = useState<number | null>(null);
+  const gridShakeRef = useRef(0); // bump to trigger shake
+  const [gridShake, setGridShake] = useState(0);
 
   const handleStart = async () => {
     const amount = parseFloat(betAmount);
@@ -56,18 +75,15 @@ export function Minefield() {
     const { mineCount, gridSize } = PRESETS[preset];
     try {
       const res = await startMine.mutateAsync({ data: { betStriker: amount, gridSize, mineCount } });
-      const sess: MineSession = {
-        id: res.id,
-        gridSize: res.gridSize,
-        mineCount: res.mineCount,
+      setSession({
+        id: res.id, gridSize: res.gridSize, mineCount: res.mineCount,
         revealedPositions: res.revealedPositions ?? [],
-        minePositions: null,
-        status: "active",
+        minePositions: null, status: "active",
         currentMultiplier: res.currentMultiplier ?? 1.0,
         betStriker: amount,
-      };
-      setSession(sess);
+      });
       setExplodedCell(null);
+      setLastSafePick(null);
       setCellStates(Array(res.gridSize * res.gridSize).fill("hidden" as CellState));
     } catch (e: unknown) {
       toast({ title: "Failed to start", description: (e as { message?: string })?.message, variant: "destructive" });
@@ -82,43 +98,55 @@ export function Minefield() {
       const newStates = [...cellStates];
 
       if (res.status === "lost") {
-        // Mark the clicked cell first
         newStates[pos] = "mine";
         setCellStates([...newStates]);
         setExplodedCell(pos);
         setMineFlash(true);
         setTimeout(() => setMineFlash(false), 700);
+        gridShakeRef.current += 1;
+        setGridShake(gridShakeRef.current);
 
-        // Reveal other mines with staggered delay
         if (res.minePositions) {
-          const otherMines = (res.minePositions as number[]).filter(mp => mp !== pos);
-          otherMines.forEach((mp, i) => {
+          const others = (res.minePositions as number[]).filter(mp => mp !== pos);
+          others.forEach((mp, i) => {
             setTimeout(() => {
-              setCellStates(prev => {
-                const s = [...prev];
-                s[mp] = "mine";
-                return s;
-              });
-            }, 120 + i * 70);
+              setCellStates(prev => { const s = [...prev]; s[mp] = "mine"; return s; });
+            }, 100 + i * 65);
           });
         }
-
         setSession(prev => prev ? {
-          ...prev,
-          minePositions: res.minePositions ?? [],
-          status: "lost",
-          currentMultiplier: 0,
+          ...prev, minePositions: res.minePositions ?? [],
+          status: "lost", currentMultiplier: 0,
         } : prev);
         toast({ title: "BOOM! Mine hit!", variant: "destructive" });
       } else {
         newStates[pos] = "safe";
         setCellStates(newStates);
+        setLastSafePick(pos);
+        setTimeout(() => setLastSafePick(null), 420);
+
+        const newMult = res.currentMultiplier ?? session.currentMultiplier;
         setSession(prev => prev ? {
           ...prev,
           revealedPositions: res.revealedPositions ?? prev.revealedPositions,
-          currentMultiplier: res.currentMultiplier ?? prev.currentMultiplier,
+          currentMultiplier: newMult,
           status: res.status as MineSession["status"],
         } : prev);
+
+        // Auto-cashout check
+        const autoTarget = parseFloat(autoCashoutAt);
+        if (!isNaN(autoTarget) && autoTarget > 1 && newMult >= autoTarget && res.status === "active") {
+          const sid = session.id;
+          setTimeout(async () => {
+            try {
+              setCashingOut(true);
+              const co = await cashoutMine.mutateAsync({ id: sid });
+              toast({ title: `Auto cashed out! +${co.winAmount?.toFixed(0)} STRIKER`, description: `${co.multiplier?.toFixed(2)}×` });
+              setSession(p => p ? { ...p, status: "won" } : p);
+            } catch { /* manual cashout still possible */ }
+            finally { setCashingOut(false); }
+          }, 60);
+        }
       }
     } catch (e: unknown) {
       toast({ title: "Error", description: (e as { message?: string })?.message, variant: "destructive" });
@@ -132,8 +160,8 @@ export function Minefield() {
     setCashingOut(true);
     try {
       const res = await cashoutMine.mutateAsync({ id: session.id });
-      toast({ title: `Cashed out! +${res.winAmount?.toFixed(0)} STRIKER`, description: `${res.multiplier?.toFixed(2)}×` });
-      setSession(prev => prev ? { ...prev, status: "won" } : prev);
+      toast({ title: `+${res.winAmount?.toFixed(0)} STRIKER`, description: `${res.multiplier?.toFixed(2)}×` });
+      setSession(p => p ? { ...p, status: "won" } : p);
     } catch (e: unknown) {
       toast({ title: "Cashout failed", description: (e as { message?: string })?.message, variant: "destructive" });
     } finally {
@@ -144,23 +172,25 @@ export function Minefield() {
   const isActive = session?.status === "active";
   const safeCount = session?.revealedPositions.length ?? 0;
   const mult = session?.currentMultiplier ?? 1.0;
-  const potentialWin = session ? (session.betStriker * mult).toFixed(0) : "0";
   const totalCells = session ? session.gridSize * session.gridSize : 25;
+  const safeCellsLeft = session ? totalCells - session.mineCount - safeCount : 0;
+  const hiddenLeft = session ? totalCells - safeCount : 0;
+  const safeProb = hiddenLeft > 0 ? Math.round((safeCellsLeft / hiddenLeft) * 100) : 0;
+  const nextMult = session
+    ? nextMultiplier(session.gridSize, session.mineCount, safeCount + 1)
+    : 0;
+  const potentialWin = session ? (session.betStriker * mult).toFixed(0) : "0";
   const color = multColor(mult);
+  const tensionAlpha = isActive && mult >= 3 ? Math.min(0.12, (mult - 3) * 0.02) : 0;
 
   return (
     <Layout>
-      {/* Mine explosion flash */}
+      {/* Explosion flash */}
       <AnimatePresence>
         {mineFlash && (
-          <motion.div
-            key="mineflash"
-            className="fixed inset-0 z-50 pointer-events-none"
-            initial={{ opacity: 0.9 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: 0.65, ease: "easeOut" }}
-            style={{ background: "radial-gradient(ellipse at center, #ef444455 0%, transparent 70%)" }}
-          />
+          <motion.div key="mf" className="fixed inset-0 z-50 pointer-events-none"
+            initial={{ opacity: 0.85 }} animate={{ opacity: 0 }} transition={{ duration: 0.65 }}
+            style={{ background: "radial-gradient(ellipse at center, #ef444455 0%, transparent 70%)" }} />
         )}
       </AnimatePresence>
 
@@ -172,92 +202,102 @@ export function Minefield() {
           <span className="font-display font-bold text-xs tracking-[0.2em] text-white">MINEFIELD</span>
           {session && isActive && (
             <div className="ml-auto flex items-center gap-3">
-              <span className="text-[10px] font-mono text-white/35">{safeCount} safe</span>
-              <span className="text-[11px] font-mono font-bold" style={{ color }}>
-                {mult.toFixed(2)}×
-              </span>
+              <span className="text-[10px] font-mono text-white/25">{safeProb}% safe next</span>
+              <span className="text-[11px] font-mono font-bold" style={{ color }}>{mult.toFixed(3)}×</span>
             </div>
           )}
         </div>
 
         {!session ? (
-          /* ── Setup screen ── */
+          /* ── Setup ── */
           <div className="flex-1 flex flex-col items-center justify-center px-4 gap-5">
             <div className="text-center">
               <div className="w-14 h-14 rounded-2xl bg-red-400/10 border border-red-400/20 flex items-center justify-center mx-auto mb-3">
-                <Bomb className="w-7 h-7 text-red-400/70" />
+                <Bomb className="w-7 h-7 text-red-400/65" />
               </div>
-              <div className="font-display font-bold text-base text-white/70">Click safe squares</div>
-              <div className="text-[11px] font-mono text-white/30 mt-1">Cash out before hitting a mine</div>
+              <div className="font-display font-bold text-base text-white/65">Click safe squares</div>
+              <div className="text-[11px] font-mono text-white/28 mt-1">Cash out before hitting a mine</div>
             </div>
 
-            {/* Mine preset selector */}
-            <div className="grid grid-cols-2 gap-2 w-full max-w-[280px]">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-[288px]">
               {PRESETS.map((p, i) => (
                 <button key={i} onClick={() => setPreset(i)}
                   className={`py-3 px-3 rounded-xl border font-mono transition-all text-left ${
                     preset === i
                       ? "border-red-400/60 bg-red-400/10 text-red-400"
-                      : "border-white/10 text-white/40 hover:border-white/20"
+                      : "border-white/10 text-white/38 hover:border-white/22"
                   }`}>
                   <div className="text-xs font-bold">{p.label}</div>
-                  <div className="text-[9px] opacity-60 mt-0.5">{p.risk} risk · 5×5</div>
+                  <div className="text-[9px] opacity-55 mt-0.5">{p.risk} risk · 5×5</div>
                 </button>
               ))}
             </div>
 
             {/* Mine ratio preview */}
-            <div className="flex gap-1 flex-wrap justify-center max-w-[200px]">
+            <div className="flex gap-1 flex-wrap justify-center max-w-[186px]">
               {Array.from({ length: 25 }).map((_, i) => {
                 const isMine = i < PRESETS[preset].mineCount;
                 return (
                   <div key={i} className={`w-6 h-6 rounded flex items-center justify-center ${
-                    isMine ? "bg-red-400/20 border border-red-400/30" : "bg-white/5 border border-white/8"
+                    isMine ? "bg-red-400/18 border border-red-400/28" : "bg-white/4 border border-white/8"
                   }`}>
-                    {isMine && <Bomb className="w-3 h-3 text-red-400/60" />}
+                    {isMine && <Bomb className="w-3 h-3 text-red-400/55" />}
                   </div>
                 );
               })}
             </div>
-            <div className="text-[10px] font-mono text-white/25">
+            <div className="text-[10px] font-mono text-white/22">
               {PRESETS[preset].mineCount} mines · {25 - PRESETS[preset].mineCount} safe squares
+            </div>
+
+            {/* Auto-cashout setting */}
+            <div className="w-full max-w-[288px]">
+              <label className="text-[9px] font-mono uppercase tracking-widest text-white/25 block mb-1.5">
+                Auto cash out at × (optional)
+              </label>
+              <Input
+                type="number" step="0.1" placeholder="e.g. 3.00"
+                value={autoCashoutAt}
+                onChange={e => setAutoCashoutAt(e.target.value)}
+                className="bg-white/5 border-white/10 text-white/80 font-mono h-9 text-sm"
+              />
             </div>
           </div>
         ) : (
-          /* ── Active game ── */
-          <div className="flex-1 flex flex-col px-3 py-3 min-h-0 gap-2">
+          /* ── Active / ended game ── */
+          <div className="flex-1 flex flex-col px-3 py-2 min-h-0 gap-2">
 
-            {/* Multiplier / result display */}
+            {/* Multiplier row */}
             <AnimatePresence mode="wait">
               {isActive ? (
                 <motion.div key="mult"
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between px-1"
+                  className="flex items-end justify-between px-1"
                 >
                   <div>
-                    <div className="text-[9px] font-mono text-white/25 uppercase tracking-wider">Multiplier</div>
+                    <div className="text-[8px] font-mono text-white/22 uppercase tracking-wider">Multiplier</div>
                     <motion.div
-                      className="font-display font-black text-2xl leading-none"
-                      style={{ color, textShadow: `0 0 20px ${color}44`, transition: "color 0.3s" }}
-                      animate={safeCount > 0 ? { scale: [1, 1.06, 1] } : {}}
-                      transition={{ duration: 0.35 }}
+                      className="font-display font-black leading-none"
+                      style={{ fontSize: "clamp(28px,10vw,40px)", color, textShadow: `0 0 22px ${color}38`, transition: "color 0.3s" }}
+                      animate={safeCount > 0 ? { scale: [1, 1.07, 1] } : {}}
+                      transition={{ duration: 0.3 }}
                     >
                       {mult.toFixed(3)}×
                     </motion.div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[9px] font-mono text-white/25 uppercase tracking-wider">Potential win</div>
-                    <div className="font-display font-bold text-xl leading-none text-white/80">
-                      {potentialWin} <span className="text-sm text-white/30">STRK</span>
+                    <div className="text-[9px] font-mono text-white/20 mt-0.5">
+                      {session.betStriker.toFixed(0)} × {mult.toFixed(3)} = {potentialWin}
                     </div>
                   </div>
-                  {/* Safe progress bar */}
-                  <div className="hidden" />
+                  <div className="text-right">
+                    <div className="text-[8px] font-mono text-white/22 uppercase">Next pick</div>
+                    <div className="text-sm font-mono font-bold" style={{ color }}>→ {nextMult.toFixed(3)}×</div>
+                    <div className="text-[9px] font-mono text-white/20">{safeProb}% safe</div>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div key="ended"
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0, scale: 0.88 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className={`text-center px-4 py-2.5 rounded-xl border ${
                     session.status === "won"
@@ -271,7 +311,7 @@ export function Minefield() {
                     {session.status === "won" ? "CASHED OUT!" : "BOOM!"}
                   </div>
                   {session.status === "lost" && (
-                    <div className="text-[11px] font-mono text-red-400/60 mt-0.5">
+                    <div className="text-[11px] font-mono text-red-400/55 mt-0.5">
                       -{session.betStriker.toFixed(0)} STRIKER
                     </div>
                   )}
@@ -280,66 +320,68 @@ export function Minefield() {
             </AnimatePresence>
 
             {/* Grid */}
-            <div className="flex-1 flex items-center justify-center min-h-0">
-              <div
-                className="grid gap-1.5 w-full"
+            <div className="flex-1 flex items-center justify-center min-h-0 relative">
+              {/* Tension overlay — faint red background at high multipliers */}
+              {tensionAlpha > 0 && (
+                <div className="absolute inset-0 pointer-events-none rounded-xl"
+                  style={{ background: `radial-gradient(ellipse at center, rgba(239,68,68,${tensionAlpha}) 0%, transparent 80%)` }} />
+              )}
+
+              <motion.div
+                key={`grid-${gridShake}`}
+                animate={session.status === "lost"
+                  ? { x: [-6, 6, -5, 5, -3, 3, -1, 1, 0] }
+                  : { x: 0 }}
+                transition={{ duration: 0.48 }}
+                className="w-full"
                 style={{
-                  gridTemplateColumns: `repeat(${session.gridSize}, minmax(0, 1fr))`,
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${session.gridSize}, minmax(0,1fr))`,
+                  gap: "6px",
                   maxWidth: `${session.gridSize * 58}px`,
+                  margin: "0 auto",
                 }}
               >
                 {Array.from({ length: totalCells }).map((_, i) => {
                   const state = cellStates[i] ?? "hidden";
                   const isExploded = explodedCell === i;
-                  const mineRevealIdx = state === "mine" && !isExploded
-                    ? (session.minePositions ?? []).indexOf(i)
-                    : -1;
+                  const mineIdx = state === "mine" && !isExploded
+                    ? (session.minePositions ?? []).indexOf(i) : -1;
+                  const isBurst = lastSafePick === i;
 
                   return (
                     <motion.button
                       key={i}
                       onClick={() => handlePick(i)}
                       disabled={!isActive || state !== "hidden" || picking}
-                      whileTap={state === "hidden" && isActive ? { scale: 0.85 } : {}}
-                      animate={
-                        isExploded ? { x: [-4, 4, -3, 3, -1, 1, 0] } : {}
-                      }
-                      transition={isExploded ? { duration: 0.45, delay: 0.05 } : {}}
+                      whileTap={state === "hidden" && isActive ? { scale: 0.82 } : {}}
+                      animate={isExploded ? { x: [-4, 4, -3, 3, -1, 1, 0] } : {}}
+                      transition={isExploded ? { duration: 0.42, delay: 0.04 } : {}}
                       className={`
                         aspect-square rounded-xl border flex items-center justify-center
-                        transition-colors duration-200 relative overflow-hidden
-                        ${state === "hidden" && isActive
-                          ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/25 cursor-pointer"
-                          : ""}
-                        ${state === "safe"
-                          ? "bg-[#00ff88]/15 border-[#00ff88]/40 cursor-default"
-                          : ""}
-                        ${state === "mine"
-                          ? "bg-red-400/15 border-red-400/40 cursor-default"
-                          : ""}
-                        ${state === "hidden" && !isActive
-                          ? "bg-white/3 border-white/5 opacity-30 cursor-not-allowed"
-                          : ""}
+                        relative overflow-visible transition-colors duration-200
+                        ${state === "hidden" && isActive ? "bg-white/5 border-white/10 hover:bg-[#00ff88]/8 hover:border-[#00ff88]/25 cursor-pointer" : ""}
+                        ${state === "safe"  ? "bg-[#00ff88]/14 border-[#00ff88]/38" : ""}
+                        ${state === "mine"  ? "bg-red-400/14 border-red-400/38" : ""}
+                        ${state === "hidden" && !isActive ? "bg-white/3 border-white/5 opacity-25 cursor-not-allowed" : ""}
                       `}
                     >
                       <AnimatePresence>
                         {state === "safe" && (
                           <motion.div key="safe"
                             initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: [0, 1.4, 1], opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                            className="text-[#00ff88]"
-                          >
+                            animate={{ scale: [0, 1.5, 1], opacity: 1 }}
+                            transition={{ duration: 0.28 }}
+                            className="text-[#00ff88]">
                             <CheckCircle2 className="w-4 h-4" />
                           </motion.div>
                         )}
                         {state === "mine" && isExploded && (
                           <motion.div key="mine-explode"
                             initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: [0, 2.2, 1.1, 1], opacity: 1 }}
-                            transition={{ duration: 0.45 }}
-                            className="text-red-400"
-                          >
+                            animate={{ scale: [0, 2.4, 1.1, 1], opacity: 1 }}
+                            transition={{ duration: 0.42 }}
+                            className="text-red-400">
                             <Bomb className="w-5 h-5" />
                           </motion.div>
                         )}
@@ -347,25 +389,37 @@ export function Minefield() {
                           <motion.div key={`mine-${i}`}
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            transition={{
-                              duration: 0.25,
-                              delay: mineRevealIdx >= 0 ? 0.12 + mineRevealIdx * 0.07 : 0,
-                            }}
-                            className="text-red-400/80"
-                          >
-                            <Bomb className="w-4 h-4" />
+                            transition={{ duration: 0.22, delay: mineIdx >= 0 ? 0.1 + mineIdx * 0.065 : 0 }}
+                            className="text-red-400/75">
+                            <Bomb className="w-3.5 h-3.5" />
                           </motion.div>
                         )}
                       </AnimatePresence>
+
+                      {/* Safe pick particle burst */}
+                      {isBurst && BURST_ANGLES.map(angle => (
+                        <motion.div
+                          key={angle}
+                          className="absolute w-1.5 h-1.5 rounded-full bg-[#00ff88] pointer-events-none"
+                          style={{ top: "calc(50% - 3px)", left: "calc(50% - 3px)", zIndex: 20 }}
+                          initial={{ x: 0, y: 0, opacity: 1 }}
+                          animate={{
+                            x: Math.cos(angle * Math.PI / 180) * 20,
+                            y: Math.sin(angle * Math.PI / 180) * 20,
+                            opacity: 0,
+                          }}
+                          transition={{ duration: 0.38, ease: "easeOut" }}
+                        />
+                      ))}
                     </motion.button>
                   );
                 })}
-              </div>
+              </motion.div>
             </div>
 
-            {/* Mine counter strip */}
-            <div className="flex items-center justify-between text-[9px] font-mono text-white/25 px-1">
-              <span>{session.mineCount} mines · {totalCells - session.mineCount} safe</span>
+            {/* Footer strip */}
+            <div className="flex items-center justify-between text-[9px] font-mono text-white/22 px-1">
+              <span>{session.mineCount} mines · {totalCells - session.mineCount} safe cells</span>
               <span>{safeCount} revealed</span>
             </div>
           </div>
@@ -391,30 +445,39 @@ export function Minefield() {
                 className="bg-white/5 border-white/10 text-white font-mono font-bold h-9 text-sm" />
               <Button onClick={handleStart} disabled={startMine.isPending}
                 className="h-11 font-display font-bold tracking-widest bg-red-500 hover:bg-red-400 text-white disabled:opacity-30">
-                {startMine.isPending ? "PLACING BET..." : "START GAME"}
+                {startMine.isPending ? "PLACING BET…" : "START GAME"}
               </Button>
             </>
           ) : isActive ? (
-            <div className="grid grid-cols-2 gap-2 items-center">
+            <div className="grid grid-cols-2 gap-2.5 items-center">
               <div>
-                <div className="text-[9px] font-mono text-white/25 uppercase">Bet</div>
-                <div className="font-mono font-bold text-white text-sm">{session.betStriker.toFixed(0)} STRIKER</div>
+                <div className="text-[8px] font-mono text-white/22 uppercase tracking-wider">Your bet</div>
+                <div className="font-mono font-bold text-white">{session.betStriker.toFixed(0)} STRIKER</div>
+                {autoCashoutAt && parseFloat(autoCashoutAt) > 1 && (
+                  <div className="text-[9px] font-mono text-yellow-400/55 mt-0.5">
+                    <Zap className="w-2.5 h-2.5 inline mr-0.5" />
+                    Auto at {parseFloat(autoCashoutAt).toFixed(2)}×
+                  </div>
+                )}
               </div>
               <motion.div
-                animate={safeCount > 0 ? { scale: [1, 1.03, 1] } : {}}
-                transition={{ repeat: Infinity, duration: 0.9 }}
+                animate={safeCount > 0
+                  ? { scale: [1, 1.04, 1] }
+                  : {}}
+                transition={{ repeat: Infinity, duration: mult >= 5 ? 0.5 : mult >= 2 ? 0.75 : 1.1 }}
               >
                 <Button onClick={handleCashout} disabled={safeCount === 0 || cashingOut}
-                  className="w-full h-11 font-display font-bold tracking-widest text-[#0a0e1a] disabled:opacity-30 disabled:bg-white/10 disabled:text-white/30"
+                  className="w-full h-11 font-display font-bold tracking-widest text-[#060a14] disabled:opacity-30 disabled:bg-white/8 disabled:text-white/25"
                   style={safeCount > 0
-                    ? { background: color, boxShadow: `0 0 22px ${color}44`, transition: "background 0.3s, box-shadow 0.3s" }
+                    ? { background: color, boxShadow: `0 0 24px ${color}44`, transition: "background 0.3s, box-shadow 0.3s" }
                     : {}}>
-                  {cashingOut ? "CASHING..." : safeCount === 0 ? "PICK FIRST" : `CASHOUT ${mult.toFixed(2)}×`}
+                  {cashingOut ? "CASHING…" : safeCount === 0 ? "PICK FIRST" : `${mult.toFixed(2)}× CASHOUT`}
                 </Button>
               </motion.div>
             </div>
           ) : (
-            <Button onClick={() => { setSession(null); setCellStates([]); setExplodedCell(null); }}
+            <Button
+              onClick={() => { setSession(null); setCellStates([]); setExplodedCell(null); setLastSafePick(null); }}
               className="h-11 font-display font-bold tracking-widest bg-white/8 hover:bg-white/12 text-white border border-white/10">
               PLAY AGAIN
             </Button>

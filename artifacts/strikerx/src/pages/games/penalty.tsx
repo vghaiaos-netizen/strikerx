@@ -5,30 +5,70 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { usePlayPenalty } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Target } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, RotateCcw, Trophy } from "lucide-react";
 
-type Direction = "left" | "center" | "right";
+type Zone = "left" | "center" | "right";
 
-const QUICK_BETS = [50, 100, 500, 1000];
-const ZONES: { dir: Direction; label: string }[] = [
-  { dir: "left", label: "LEFT" },
-  { dir: "center", label: "CENTRE" },
-  { dir: "right", label: "RIGHT" },
-];
-
-interface KickResult {
+interface Result {
   win: boolean;
-  direction: Direction;
-  keeperDirection: Direction;
+  keeperDirection: Zone;
+  playerDirection: Zone;
   multiplier: number;
   winAmount: number;
 }
 
-// x-center for each zone (SVG viewBox 0 0 320 180)
-function zoneX(d: Direction | null) {
-  if (d === "left") return 67;
-  if (d === "right") return 253;
-  return 160;
+const QUICK_BETS = [50, 100, 500, 1000];
+
+const SW = 320, SH = 190;
+const NX = 58, NW = 204, NY = 28, NH = 106;
+const BALL_SX = SW / 2, BALL_SY = NY + NH + 22;
+const ZONE_X: Record<Zone, number> = { left: NX + 36, center: NX + NW / 2, right: NX + NW - 36 };
+const ZONE_Y = NY + 30;
+const KEEPER_X = NX + NW / 2;
+const KEEPER_DIVE_X: Record<Zone, number> = { left: NX + 28, center: NX + NW / 2, right: NX + NW - 28 };
+const ARM = 22;
+
+function Keeper({ cx, diveDir }: { cx: number; diveDir: Zone | null }) {
+  const lean = diveDir === "left" ? -22 : diveDir === "right" ? 22 : 0;
+  const lArmRot = diveDir === "left" ? -50 : diveDir === "right" ? -8 : -28;
+  const rArmRot = diveDir === "right" ? 50 : diveDir === "left" ? 8 : 28;
+  const KY = NY + 56;
+  return (
+    <g transform={`translate(${cx}, ${KY})`}>
+      <g transform={`rotate(${lean})`}>
+        {/* Torso */}
+        <rect x="-9" y="-16" width="18" height="22" rx="5" fill="#00aa55" />
+        {/* Number */}
+        <text x="0" y="-4" textAnchor="middle" fontSize="9" fill="white" fontWeight="bold" opacity="0.7">1</text>
+        {/* Head */}
+        <circle cx="0" cy="-25" r="11" fill="#f5d17a" />
+        {/* Eyes */}
+        <circle cx="-3.5" cy="-26.5" r="1.5" fill="#444" />
+        <circle cx="3.5" cy="-26.5" r="1.5" fill="#444" />
+        {/* Left arm */}
+        <g transform={`rotate(${lArmRot})`}>
+          <rect x="-3" y="-3" width="6" height={ARM} rx="3" fill="#009944" />
+          <circle cx="0" cy={ARM - 2} r="5" fill="#f5d17a" />
+        </g>
+        {/* Right arm */}
+        <g transform={`rotate(${rArmRot})`}>
+          <rect x="-3" y="-3" width="6" height={ARM} rx="3" fill="#009944" />
+          <circle cx="0" cy={ARM - 2} r="5" fill="#f5d17a" />
+        </g>
+        {/* Shorts */}
+        <rect x="-9" y="6" width="18" height="12" rx="3" fill="#007733" />
+        {/* Legs */}
+        <g transform={diveDir === "left" ? "rotate(-18, -4, 16)" : ""}>
+          <rect x="-8" y="16" width="7" height="15" rx="3" fill="#00aa55" />
+          <rect x="-7" y="28" width="7" height="7" rx="2" fill="#222" />
+        </g>
+        <g transform={diveDir === "right" ? "rotate(18, 4, 16)" : ""}>
+          <rect x="1" y="16" width="7" height="15" rx="3" fill="#00aa55" />
+          <rect x="2" y="28" width="7" height="7" rx="2" fill="#222" />
+        </g>
+      </g>
+    </g>
+  );
 }
 
 export function Penalty() {
@@ -36,272 +76,272 @@ export function Penalty() {
   const playPenalty = usePlayPenalty();
 
   const [betAmount, setBetAmount] = useState("100");
-  const [selected, setSelected] = useState<Direction | null>(null);
-  const [shotDir, setShotDir] = useState<Direction | null>(null);
-  const [result, setResult] = useState<KickResult | null>(null);
+  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+  const [result, setResult] = useState<Result | null>(null);
   const [kicking, setKicking] = useState(false);
+  const [ballPos, setBallPos] = useState({ x: BALL_SX, y: BALL_SY });
+  const [flashWin, setFlashWin] = useState(false);
+  const [flashLose, setFlashLose] = useState(false);
   const [history, setHistory] = useState<boolean[]>([]);
-  const [flash, setFlash] = useState<"goal" | "saved" | null>(null);
 
-  const handleKick = async () => {
-    if (!selected) { toast({ title: "Pick a zone first!", variant: "destructive" }); return; }
+  const handleKick = async (zone: Zone) => {
+    if (kicking) return;
     const amount = parseFloat(betAmount);
     if (!amount || amount <= 0) { toast({ title: "Invalid bet", variant: "destructive" }); return; }
-
-    setShotDir(selected);
+    setSelectedZone(zone);
     setKicking(true);
     setResult(null);
-    setFlash(null);
+    setBallPos({ x: BALL_SX, y: BALL_SY });
 
     try {
-      const res = await playPenalty.mutateAsync({ data: { betStriker: amount, direction: selected } });
-      const r: KickResult = {
-        win: res.outcome === "win",
-        direction: selected,
-        keeperDirection: ((res as unknown as Record<string, unknown>).keeperDirection as Direction) ?? "center",
+      const res = await playPenalty.mutateAsync({ data: { betStriker: amount, direction: zone } });
+      const raw = res as unknown as { win?: boolean; keeperDirection?: string; multiplier?: number; winAmount?: number };
+      const r: Result = {
+        win: raw.win ?? res.outcome === "win",
+        keeperDirection: (raw.keeperDirection as Zone) ?? "center",
+        playerDirection: zone,
         multiplier: res.multiplier ?? 1.92,
         winAmount: res.winAmount ?? 0,
       };
-      setResult(r);
-      setHistory(h => [r.win, ...h].slice(0, 10));
-      setFlash(r.win ? "goal" : "saved");
-      setTimeout(() => setFlash(null), 900);
+      setTimeout(() => setBallPos({ x: ZONE_X[zone], y: ZONE_Y + 6 }), 40);
+      setTimeout(() => {
+        setResult(r);
+        if (r.win) {
+          setFlashWin(true); setTimeout(() => setFlashWin(false), 900);
+          toast({ title: `GOAL! +${r.winAmount.toFixed(0)} STRIKER`, description: `${r.multiplier}× payout` });
+        } else {
+          setFlashLose(true); setTimeout(() => setFlashLose(false), 750);
+          toast({ title: "SAVED!", description: "Keeper dived the right way", variant: "destructive" });
+        }
+        setHistory(prev => [r.win, ...prev].slice(0, 14));
+        setKicking(false);
+      }, 460);
     } catch (e: unknown) {
-      toast({ title: "Error", description: (e as { message?: string })?.message ?? "Request failed", variant: "destructive" });
-    } finally {
+      toast({ title: "Error", description: (e as { message?: string })?.message, variant: "destructive" });
       setKicking(false);
     }
   };
 
   const handleReset = () => {
-    setResult(null);
-    setShotDir(null);
-    // keep selected zone for fast re-kick
+    setResult(null); setSelectedZone(null);
+    setBallPos({ x: BALL_SX, y: BALL_SY });
   };
 
-  // Ball: always rendered, animates on shot
-  const inFlight = kicking || !!result;
-  const ballX = inFlight ? zoneX(shotDir) : 160;
-  const ballY = inFlight ? 65 : 152;
-
-  // Keeper: offset from center (160) when result arrives
-  const keeperOffset = result
-    ? (result.keeperDirection === "left" ? -93 : result.keeperDirection === "right" ? 93 : 0)
-    : 0;
-  const keeperColor = result ? (result.win ? "#ef4444" : "#22c55e") : "#22c55e";
+  const hasResult = !!result;
 
   return (
     <Layout>
-      {/* Flash overlay */}
       <AnimatePresence>
-        {flash && (
-          <motion.div
-            key={flash}
-            className="fixed inset-0 z-50 pointer-events-none"
-            initial={{ opacity: 0.8 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: 0.85, ease: "easeOut" }}
-            style={{
-              background: flash === "goal"
-                ? "radial-gradient(ellipse at 50% 40%, #00ff8850 0%, transparent 68%)"
-                : "radial-gradient(ellipse at 50% 40%, #ef444450 0%, transparent 68%)",
-            }}
-          />
+        {flashWin && (
+          <motion.div key="fw" className="fixed inset-0 z-50 pointer-events-none"
+            initial={{ opacity: 0.7 }} animate={{ opacity: 0 }} transition={{ duration: 0.85 }}
+            style={{ background: "radial-gradient(ellipse at 50% 35%, #00ff8842 0%, transparent 68%)" }} />
+        )}
+        {flashLose && (
+          <motion.div key="fl" className="fixed inset-0 z-50 pointer-events-none"
+            initial={{ opacity: 0.65 }} animate={{ opacity: 0 }} transition={{ duration: 0.7 }}
+            style={{ background: "radial-gradient(ellipse at 50% 35%, #ef444438 0%, transparent 65%)" }} />
         )}
       </AnimatePresence>
 
       <div className="flex flex-col h-[calc(100dvh-56px)] bg-[#060a14] overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 pt-2.5 pb-2 border-b border-white/5">
-          <Target className="w-4 h-4 text-[#00ff88]" />
-          <span className="font-display font-bold text-xs tracking-[0.2em] text-white">PENALTY</span>
-          <span className="ml-auto text-[10px] font-mono text-white/25">1.92× payout</span>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-around px-4 py-2 min-h-0 gap-3">
-
-          {/* Goal + pitch SVG */}
-          <div className="w-full max-w-xs">
-            <svg viewBox="0 0 320 180" className="w-full">
-              <defs>
-                <linearGradient id="pg-grass" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0e2b0e" />
-                  <stop offset="100%" stopColor="#071507" />
-                </linearGradient>
-                <linearGradient id="pg-net" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0c1e0c" />
-                  <stop offset="100%" stopColor="#060c06" />
-                </linearGradient>
-                <filter id="pg-glow">
-                  <feGaussianBlur stdDeviation="3.5" result="b" />
-                  <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-                <filter id="pg-ballglow">
-                  <feGaussianBlur stdDeviation="5" result="b" />
-                  <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-              </defs>
-
-              {/* Grass */}
-              <rect x="0" y="122" width="320" height="58" fill="url(#pg-grass)" />
-              {[0, 1, 2, 3].map(i => (
-                <rect key={i} x={i * 80} y="122" width="80" height="58"
-                  fill={i % 2 === 0 ? "rgba(0,0,0,0.14)" : "transparent"} />
-              ))}
-              {/* 6-yard box */}
-              <rect x="95" y="122" width="130" height="18" fill="none" stroke="#ffffff09" strokeWidth="1" />
-
-              {/* Net back */}
-              <rect x="20" y="16" width="280" height="106" fill="url(#pg-net)" />
-              {/* Net mesh H */}
-              {Array.from({ length: 6 }).map((_, i) => (
-                <line key={`h${i}`} x1="20" y1={16 + (i + 1) * 106 / 7} x2="300" y2={16 + (i + 1) * 106 / 7}
-                  stroke="#ffffff09" strokeWidth="1" />
-              ))}
-              {/* Net mesh V */}
-              {Array.from({ length: 13 }).map((_, i) => (
-                <line key={`v${i}`}
-                  x1={20 + (i + 1) * 280 / 14} y1="16"
-                  x2={20 + (i + 1) * 280 / 14} y2="122"
-                  stroke="#ffffff07" strokeWidth="1" />
-              ))}
-
-              {/* Goal frame */}
-              <rect x="19" y="15" width="282" height="108" fill="none" stroke="#ffffffcc" strokeWidth="3" rx="1" />
-
-              {/* Zone dividers */}
-              <line x1="113" y1="16" x2="113" y2="122" stroke="#ffffff12" strokeWidth="1" strokeDasharray="5 5" />
-              <line x1="207" y1="16" x2="207" y2="122" stroke="#ffffff12" strokeWidth="1" strokeDasharray="5 5" />
-
-              {/* Zone selection / result highlights */}
-              {ZONES.map(({ dir }, i) => {
-                const xs = [20, 113, 207][i];
-                const ws = [93, 94, 93][i];
-                const isSel = selected === dir && !result;
-                const isShot = result?.direction === dir;
-                const win = isShot && result?.win;
-                const loss = isShot && !result?.win;
-                return (
-                  <rect key={dir} x={xs} y="16" width={ws} height="106"
-                    fill={win ? "#00ff8818" : loss ? "#ef444418" : isSel ? "#00ff8810" : "transparent"}
-                    stroke={win ? "#00ff8870" : loss ? "#ef444470" : isSel ? "#00ff8845" : "transparent"}
-                    strokeWidth="1.5"
-                    style={{ transition: "fill 0.2s, stroke 0.2s" }} />
-                );
-              })}
-
-              {/* Keeper — SVG silhouette (no emoji) */}
-              <motion.g
-                animate={{ x: keeperOffset }}
-                transition={{ type: "spring", stiffness: 480, damping: 28, delay: result ? 0.1 : 0 }}
-              >
-                {/* head */}
-                <circle cx="160" cy="73" r="10" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-                {/* body */}
-                <rect x="150" y="84" width="20" height="26" rx="4" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-                {/* left arm */}
-                <rect x="119" y="86" width="33" height="6" rx="3" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-                {/* right arm */}
-                <rect x="168" y="86" width="33" height="6" rx="3" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-                {/* shirt number */}
-                <text x="160" y="101" textAnchor="middle" fontSize="9" fontFamily="monospace"
-                  fontWeight="bold" fill="rgba(0,0,0,0.45)">1</text>
-                {/* left leg */}
-                <rect x="151" y="110" width="8" height="13" rx="3" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-                {/* right leg */}
-                <rect x="161" y="110" width="8" height="13" rx="3" fill={keeperColor}
-                  style={{ transition: "fill 0.2s" }} />
-              </motion.g>
-
-              {/* Ball — always visible, animates to target on kick */}
-              <motion.g
-                animate={{ x: ballX - 160, y: ballY - 152 }}
-                transition={{
-                  duration: kicking ? 0.38 : 0,
-                  ease: [0.2, 0.65, 0.35, 1.0],
-                }}
-              >
-                <circle cx="160" cy="152" r="9.5"
-                  fill={result?.win ? "#00ff88" : "white"}
-                  style={{ transition: "fill 0.25s" }}
-                  filter={result?.win ? "url(#pg-ballglow)" : undefined}
-                />
-                {/* ball inner mark */}
-                <circle cx="160" cy="152" r="4.5" fill="rgba(0,0,0,0.28)" />
-              </motion.g>
-
-              {/* Penalty spot */}
-              <circle cx="160" cy="148" r="2" fill="#ffffff25" />
-            </svg>
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-[#00ff88]" />
+            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">PENALTY</span>
+            <span className="text-[9px] font-mono text-white/20 ml-1">1.92× payout</span>
           </div>
-
-          {/* Result card or zone picker */}
-          <AnimatePresence mode="wait">
-            {result ? (
-              <motion.div key="result"
-                initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 380, damping: 22 }}
-                className={`w-full max-w-xs text-center px-6 py-4 rounded-2xl border ${
-                  result.win
-                    ? "border-[#00ff88]/35 bg-[#00ff88]/10"
-                    : "border-[#ef4444]/35 bg-[#ef4444]/10"
-                }`}>
-                <div className={`font-display font-black text-4xl tracking-wide leading-none ${
-                  result.win ? "text-[#00ff88]" : "text-[#ef4444]"
-                }`}>
-                  {result.win ? "GOAL!" : "SAVED!"}
-                </div>
-                <div className={`text-sm font-mono mt-2 opacity-70 ${
-                  result.win ? "text-[#00ff88]" : "text-[#ef4444]"
-                }`}>
-                  {result.win
-                    ? `+${result.winAmount.toFixed(0)} STRIKER @ ${result.multiplier}×`
-                    : `Keeper went ${result.keeperDirection}`}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="zones"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="grid grid-cols-3 gap-2 w-full max-w-xs"
-              >
-                {ZONES.map(({ dir, label }) => (
-                  <button key={dir} onClick={() => setSelected(dir)} disabled={kicking}
-                    className={`py-3.5 rounded-xl border-2 font-display font-bold text-xs tracking-widest transition-all disabled:opacity-40 ${
-                      selected === dir
-                        ? "border-[#00ff88] bg-[#00ff88]/15 text-[#00ff88] shadow-[0_0_20px_rgba(0,255,136,0.2)]"
-                        : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/65"
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* History dots */}
           {history.length > 0 && (
-            <div className="flex gap-1.5">
-              {history.map((w, i) => (
-                <div key={i} className={`w-5 h-5 rounded text-[9px] font-mono flex items-center justify-center font-bold ${
-                  w ? "bg-[#00ff88]/20 text-[#00ff88]" : "bg-[#ef4444]/20 text-[#ef4444]"
-                }`}>{w ? "G" : "S"}</div>
+            <div className="flex items-center gap-1">
+              {history.slice(0, 12).map((w, i) => (
+                <div key={i}
+                  className={`rounded-full transition-all ${w ? "bg-[#00ff88] w-2 h-2" : "bg-red-400/60 w-1.5 h-1.5"}`} />
               ))}
             </div>
           )}
         </div>
 
+        {/* Goal area */}
+        <div className="flex-1 flex items-center justify-center px-3 min-h-0">
+          <div className="w-full max-w-xs">
+            <svg viewBox={`0 0 ${SW} ${SH}`} className="w-full" style={{ maxHeight: "220px" }}>
+              <defs>
+                <filter id="bglow" x="-80%" y="-80%" width="260%" height="260%">
+                  <feGaussianBlur stdDeviation="5" result="b" />
+                  <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+                <pattern id="nh" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <line x1="0" y1="0" x2="10" y2="0" stroke="rgba(255,255,255,0.09)" strokeWidth="0.8" />
+                  <line x1="0" y1="5" x2="10" y2="5" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
+                </pattern>
+                <pattern id="nv" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(255,255,255,0.09)" strokeWidth="0.8" />
+                  <line x1="5" y1="0" x2="5" y2="10" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
+                </pattern>
+              </defs>
+
+              {/* Pitch */}
+              <rect x="0" y={NY + NH + 4} width={SW} height={SH - NY - NH - 4} fill="#091e0d" />
+              <ellipse cx={SW / 2} cy={NY + NH + 20} rx="55" ry="9" fill="#0d2914" />
+              <circle cx={BALL_SX} cy={NY + NH + 28} r="2.5" fill="rgba(255,255,255,0.22)" />
+              {/* Penalty arc */}
+              <path d={`M ${NX - 2} ${NY + NH + 4} Q ${SW / 2} ${NY + NH - 28} ${NX + NW + 2} ${NY + NH + 4}`}
+                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+
+              {/* Net */}
+              <rect x={NX} y={NY} width={NW} height={NH} fill="url(#nh)" />
+              <rect x={NX} y={NY} width={NW} height={NH} fill="url(#nv)" />
+              <rect x={NX} y={NY} width={NW} height={NH} fill="#00100500" opacity="0.6" />
+
+              {/* Goal frame glow */}
+              <rect x={NX} y={NY} width={NW} height={NH} fill="none"
+                stroke="rgba(255,255,255,0.1)" strokeWidth="8" strokeLinejoin="round" />
+              {/* Goal frame */}
+              <rect x={NX} y={NY} width={NW} height={NH} fill="none"
+                stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+
+              {/* Shot arc (appears after kick) */}
+              {result && (
+                <motion.path
+                  d={`M ${BALL_SX} ${BALL_SY - 4} Q ${(BALL_SX + ZONE_X[result.playerDirection]) / 2} ${NY - 18} ${ZONE_X[result.playerDirection]} ${ZONE_Y + 8}`}
+                  fill="none"
+                  stroke={result.win ? "#00ff88" : "#ef4444"}
+                  strokeWidth="1.5"
+                  strokeDasharray="5 4"
+                  initial={{ pathLength: 0, opacity: 0.75 }}
+                  animate={{ pathLength: 1, opacity: 0.2 }}
+                  transition={{ duration: 0.42 }}
+                />
+              )}
+
+              {/* Keeper */}
+              <AnimatePresence mode="wait">
+                {!result ? (
+                  <motion.g key="idle"
+                    animate={{ x: [0, -4, 4, -3, 3, 0] }}
+                    transition={{ repeat: Infinity, duration: 2.4, ease: "easeInOut" }}>
+                    <Keeper cx={KEEPER_X} diveDir={null} />
+                  </motion.g>
+                ) : (
+                  <motion.g key="dive"
+                    initial={{ x: KEEPER_X - KEEPER_DIVE_X[result.keeperDirection] }}
+                    animate={{ x: 0 }}
+                    transition={{ type: "spring", stiffness: 480, damping: 20 }}>
+                    <Keeper cx={KEEPER_DIVE_X[result.keeperDirection]} diveDir={result.keeperDirection} />
+                  </motion.g>
+                )}
+              </AnimatePresence>
+
+              {/* Ball */}
+              <motion.g
+                animate={{ x: ballPos.x - BALL_SX, y: ballPos.y - BALL_SY }}
+                transition={{ duration: 0.42, ease: [0.2, 0.0, 0.35, 1.0] }}
+              >
+                {/* Shadow */}
+                <ellipse cx={BALL_SX} cy={BALL_SY + 9} rx="8" ry="3" fill="black" opacity="0.35" />
+                {/* Ball */}
+                <circle cx={BALL_SX} cy={BALL_SY} r="9"
+                  fill={result ? (result.win ? "white" : "#ffc0c0") : "white"}
+                  filter="url(#bglow)" />
+                <circle cx={BALL_SX - 2.5} cy={BALL_SY - 2.5} r="3.2" fill="#2a2a2a" opacity="0.4" />
+                <circle cx={BALL_SX + 3} cy={BALL_SY - 1.5} r="2.2" fill="#2a2a2a" opacity="0.35" />
+                <circle cx={BALL_SX} cy={BALL_SY + 3.5} r="2" fill="#2a2a2a" opacity="0.3" />
+              </motion.g>
+
+              {/* Goal celebration rings */}
+              <AnimatePresence>
+                {result?.win && [1, 2, 3].map(n => (
+                  <motion.circle key={n}
+                    cx={ZONE_X[result.playerDirection]} cy={ZONE_Y + 6}
+                    r={12}
+                    fill="none" stroke="#00ff88" strokeWidth="2"
+                    initial={{ r: 12, opacity: 0.85 }}
+                    animate={{ r: 12 + n * 22, opacity: 0 }}
+                    transition={{ duration: 0.75, delay: n * 0.1, ease: "easeOut" }}
+                    style={{ transformOrigin: `${ZONE_X[result.playerDirection]}px ${ZONE_Y + 6}px` }}
+                  />
+                ))}
+              </AnimatePresence>
+            </svg>
+
+            {/* Result card */}
+            <AnimatePresence>
+              {result && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.78, y: -8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 440, damping: 24 }}
+                  className={`mx-2 text-center py-3 rounded-2xl border ${
+                    result.win
+                      ? "border-[#00ff88]/40 bg-[#00ff88]/10"
+                      : "border-red-400/30 bg-red-400/8"
+                  }`}
+                >
+                  <div className={`font-display font-black text-3xl leading-none tracking-wide ${
+                    result.win ? "text-[#00ff88]" : "text-red-400"
+                  }`}>
+                    {result.win ? "GOAL!" : "SAVED!"}
+                  </div>
+                  <div className={`text-sm font-mono mt-1.5 ${result.win ? "text-[#00ff88]/65" : "text-red-400/50"}`}>
+                    {result.win
+                      ? `+${result.winAmount.toFixed(0)} STRIKER · ${result.multiplier}×`
+                      : `Keeper went ${result.keeperDirection}`}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Zone picker / Reset */}
+        <div className="px-4 pb-3 flex flex-col gap-2.5">
+          <div className="grid grid-cols-3 gap-2">
+            {(["left", "center", "right"] as Zone[]).map(zone => {
+              const Icon = zone === "left" ? ChevronLeft : zone === "right" ? ChevronRight : ChevronUp;
+              const isShot = result?.playerDirection === zone;
+              const isKeeper = result?.keeperDirection === zone;
+              return (
+                <motion.button
+                  key={zone}
+                  whileTap={!hasResult ? { scale: 0.88 } : {}}
+                  onClick={() => !hasResult && handleKick(zone)}
+                  disabled={kicking || hasResult}
+                  className={`
+                    flex flex-col items-center gap-1.5 py-4 rounded-2xl border-2 font-display
+                    font-bold text-[11px] uppercase tracking-widest transition-all duration-150
+                    ${selectedZone === zone && kicking ? "border-[#00ff88] bg-[#00ff88]/18 text-[#00ff88]" : ""}
+                    ${isShot && result?.win ? "border-[#00ff88]/55 bg-[#00ff88]/14 text-[#00ff88]" : ""}
+                    ${isShot && !result?.win ? "border-red-400/45 bg-red-400/10 text-red-400" : ""}
+                    ${isKeeper && !isShot ? "border-yellow-400/35 bg-yellow-400/8 text-yellow-400/55" : ""}
+                    ${!hasResult && !kicking ? "border-white/12 bg-white/4 text-white/55 hover:border-white/28 hover:bg-white/8 hover:text-white/85 cursor-pointer" : ""}
+                    ${hasResult && !isShot && !isKeeper ? "border-white/5 text-white/18" : ""}
+                  `}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>
+                    {hasResult
+                      ? (isShot ? (result.win ? "goal" : "shot") : isKeeper ? "keeper" : zone)
+                      : zone}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          {hasResult && (
+            <Button onClick={handleReset}
+              className="h-10 font-display font-bold tracking-widest bg-white/8 hover:bg-white/12 text-white border border-white/10">
+              <RotateCcw className="w-3.5 h-3.5 mr-2" />
+              KICK AGAIN
+            </Button>
+          )}
+        </div>
+
         {/* Bet panel */}
-        <div className="border-t border-white/5 bg-[#0d1117]/95 px-4 pt-3 pb-4 flex flex-col gap-2.5">
+        <div className="border-t border-white/5 bg-[#0d1117]/95 px-4 pt-2.5 pb-4 flex flex-col gap-2">
           <div className="flex gap-1.5">
             {QUICK_BETS.map(q => (
               <button key={q} onClick={() => setBetAmount(String(q))}
@@ -317,17 +357,6 @@ export function Penalty() {
           <Input type="number" value={betAmount} onChange={e => setBetAmount(e.target.value)}
             className="bg-white/5 border-white/10 text-white font-mono font-bold h-9 text-sm"
             disabled={kicking} />
-          {result ? (
-            <Button onClick={handleReset}
-              className="h-11 font-display font-bold tracking-widest bg-white/8 hover:bg-white/12 text-white border border-white/10">
-              KICK AGAIN
-            </Button>
-          ) : (
-            <Button onClick={handleKick} disabled={!selected || kicking}
-              className="h-11 font-display font-bold tracking-widest bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#060a14] disabled:opacity-20 disabled:bg-white/5 disabled:text-white/20">
-              {kicking ? "SHOOTING..." : selected ? `SHOOT ${selected.toUpperCase()}` : "PICK A ZONE"}
-            </Button>
-          )}
         </div>
       </div>
     </Layout>
