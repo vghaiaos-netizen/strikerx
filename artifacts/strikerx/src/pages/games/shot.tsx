@@ -180,6 +180,18 @@ export function TheShot() {
     if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
   }, [toast]);
 
+  // Keep a ref to the latest token so the WS reconnect can always send current auth
+  // without the effect needing to re-run (which would create a new connection).
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+
+  // Send auth immediately if the WS is already open when the token arrives
+  useEffect(() => {
+    if (token && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "auth", token }));
+    }
+  }, [token]);
+
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${proto}//${window.location.host}/ws`;
@@ -191,7 +203,8 @@ export function TheShot() {
       wsRef.current = ws;
       ws.onopen = () => {
         setWsReady(true);
-        if (token) ws.send(JSON.stringify({ type: "auth", token }));
+        // Always read latest token from ref — avoids stale closure
+        if (tokenRef.current) ws.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
       };
       ws.onmessage = (e) => {
         try {
@@ -213,7 +226,8 @@ export function TheShot() {
       if (countdownRef.current) clearInterval(countdownRef.current);
       wsRef.current?.close();
     };
-  }, [token, handleEvent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleEvent]);
 
   const roundStatus = round?.status;
   const currentMult = round?.multiplier ?? 1.0;
