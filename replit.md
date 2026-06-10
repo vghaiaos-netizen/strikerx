@@ -20,11 +20,27 @@ A football-themed Telegram Mini App casino platform with four original games, th
 ## Production = Railway. Replit = Development only.
 
 **The Replit dev URL changes every restart — it cannot host bots reliably.**
-Railway is the permanent production host. The workflow is:
+Railway is the permanent production host.
+
+### Two-branch deploy model — mini app and outreach are fully isolated
+
+| What changed | Push command | Branch | Railway service deployed |
+|---|---|---|---|
+| Mini app / API server | `node scripts/github-push.mjs` | `main` | api-server only |
+| Outreach service | `node scripts/github-push-outreach.mjs` | `outreach` | outreach-service only |
+
+**Never push outreach changes with `github-push.mjs`** — that would push them to `main` and could trigger an unnecessary mini app redeploy.
 
 ```
-Edit on Replit  →  node scripts/github-push.mjs  →  Railway auto-deploys from main (~3 min)
+Outreach edit on Replit  →  node scripts/github-push-outreach.mjs  →  Railway redeploys outreach-service (~3 min)
+Mini app edit on Replit  →  node scripts/github-push.mjs           →  Railway redeploys api-server (~3 min)
 ```
+
+### One-time Railway setup (already done for main — do this for outreach-service)
+1. Railway dashboard → outreach-service → **Settings → Source**
+2. Change **Branch** from `main` to `outreach`
+3. Set **Root Directory** to `artifacts/outreach-service`
+4. Save — Railway will now only redeploy outreach when `outreach` branch changes
 
 - `github-push.mjs` pushes all files directly to **`main`** on GitHub — Railway watches main and deploys automatically
 - `promote.mjs` is an alternative staged workflow (merges a local `replit` branch → `main`) — use only if you want a staging gate
