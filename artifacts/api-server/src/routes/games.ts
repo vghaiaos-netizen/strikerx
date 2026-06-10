@@ -193,6 +193,7 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
 
   res.json({
     gameId: game.id, gameType: "penalty", betStriker, outcome,
+    win, keeperDirection,
     multiplier: win ? multiplier : 0, winAmount,
     newBalance: finalBalancePenalty,
     jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null,
@@ -429,7 +430,7 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
     sendLowBalanceReminder(player.telegramId, finalBalanceFK);
   }
 
-  res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, multiplier, winAmount, newBalance: finalBalanceFK, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
+  res.json({ gameId: game.id, gameType: "freekick", betStriker, outcome, slot, multiplier, winAmount, newBalance: finalBalanceFK, jackpotTriggered: !!jackpotResult, jackpotAmount: jackpotResult?.amountTon ?? null });
 });
 
 // ─── PROVABLY FAIR — round lookup ────────────────────────────────────────────
