@@ -38,6 +38,7 @@ import { AdminKyc } from "./pages/admin/kyc";
 import { AdminAffiliates } from "./pages/admin/affiliates";
 import { AdminJackpot } from "./pages/admin/jackpot";
 import { AdminInbox } from "./pages/admin/inbox";
+import { AdminOutreach } from "./pages/admin/outreach";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/admin/affiliates"     component={AdminAffiliates} />
       <Route path="/admin/jackpot"        component={AdminJackpot} />
       <Route path="/admin/inbox"          component={AdminInbox} />
+      <Route path="/admin/outreach"       component={AdminOutreach} />
 
       <Route component={NotFound} />
     </Switch>
