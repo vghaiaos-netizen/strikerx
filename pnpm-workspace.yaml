@@ -35,7 +35,8 @@ minimumReleaseAgeExclude:
   - stripe-replit-sync
 
 packages:
-  - artifacts/*
+  - 'artifacts/*'
+  - '!artifacts/outreach-service'
   - lib/*
   - lib/integrations/*
   - scripts
