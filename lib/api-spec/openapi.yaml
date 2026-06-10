@@ -1230,6 +1230,9 @@ components:
           type: number
         newBalance:
           type: number
+        slot:
+          type: integer
+          description: Plinko slot index (0-8) for freekick game type
         jackpotTriggered:
           type: boolean
         jackpotAmount:

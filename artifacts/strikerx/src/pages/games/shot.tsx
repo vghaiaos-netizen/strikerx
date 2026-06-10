@@ -80,6 +80,7 @@ export function TheShot() {
   const [betAmount, setBetAmount] = useState("100");
   const [autoCashout, setAutoCashout] = useState("");
   const [waitCountdown, setWaitCountdown] = useState(8);
+  const [wsAuthed, setWsAuthed] = useState(false);
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [crashHistory, setCrashHistory] = useState<number[]>([]);
   const [crashFlash, setCrashFlash] = useState(false);
@@ -181,6 +182,8 @@ export function TheShot() {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     }
 
+    if (event === "auth_ok") { setWsAuthed(true); return; }
+
     if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
   }, [toast]);
 
@@ -218,6 +221,7 @@ export function TheShot() {
       };
       ws.onclose = () => {
         setWsReady(false);
+        setWsAuthed(false);
         if (!destroyed) reconnectTimer = setTimeout(connect, 2000);
       };
       ws.onerror = () => {};
@@ -682,7 +686,7 @@ export function TheShot() {
 
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={handleBet}
-              disabled={!isWaiting || !!myBet?.placed || !wsReady}
+              disabled={!isWaiting || !!myBet?.placed || !wsAuthed}
               className="h-11 font-display font-bold tracking-widest text-sm bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#060a14] disabled:opacity-20 disabled:bg-white/5 disabled:text-white/20">
               <Zap className="w-4 h-4 mr-1" />
               {myBet?.placed ? "BET PLACED" : "PLACE BET"}
