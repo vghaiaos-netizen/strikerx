@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
 import { useGetMyReferral } from "@workspace/api-client-react";
@@ -12,6 +12,7 @@ import { useGetMyReferral } from "@workspace/api-client-react";
 interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 interface RecentWin { id: number; username: string; game: string; bet: number; win: number; mult: number; playedAt: string | null; }
+interface CommunityInfo { groupInviteLink: string | null; miniAppLink: string | null; botUsername: string; }
 
 function useDevAuth() {
   const { player, isLoading, setToken } = useAuth();
@@ -90,6 +91,11 @@ export function Home() {
     staleTime: 20_000,
   });
   const { data: referral } = useGetMyReferral();
+  const { data: community } = useQuery<CommunityInfo>({
+    queryKey: ["community"],
+    queryFn: async () => { const r = await fetch("/api/public/community"); return r.json() as Promise<CommunityInfo>; },
+    staleTime: 300_000,
+  });
 
   useEffect(() => {
     if (wcTheme?.countdown && wcTheme.kickOff) {
@@ -351,6 +357,30 @@ export function Home() {
             </Link>
           </div>
         </div>
+
+        {/* ── Community Card ── */}
+        {community?.groupInviteLink && (
+          <motion.a
+            href={community.groupInviteLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-xl border border-[#3b82f6]/25 bg-[#3b82f6]/5 p-4 flex items-center gap-3 cursor-pointer hover:border-[#3b82f6]/50 transition-all no-underline"
+          >
+            <div className="absolute right-0 top-0 w-20 h-20 bg-[#3b82f6]/8 rounded-full blur-2xl" />
+            <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/25 flex items-center justify-center flex-shrink-0">
+              <Users className="w-4 h-4 text-[#3b82f6]" />
+            </div>
+            <div className="flex-1 min-w-0 relative">
+              <div className="font-display font-bold text-sm text-white">Join the Community</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">Big-win alerts · jackpot updates · live chat</div>
+            </div>
+            <div className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-[#3b82f6]/70 relative">
+              Join <ChevronRight className="w-3 h-3" />
+            </div>
+          </motion.a>
+        )}
 
         {/* ── Recent Winners ── */}
         <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">

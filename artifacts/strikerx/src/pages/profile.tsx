@@ -3,13 +3,16 @@ import { useAuth } from "@/lib/auth";
 import { useGetMyStats, getGetMyStatsQueryKey, useRedeemBoot } from "@workspace/api-client-react";
 import {
   Trophy, LogOut, Zap, Target, TrendingUp, ShoppingBag,
-  ArrowRight, Loader2, ShieldCheck, Gift, ChevronRight
+  ArrowRight, Loader2, ShieldCheck, Gift, ChevronRight, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+
+interface CommunityInfo { groupInviteLink: string | null; miniAppLink: string | null; botUsername: string; }
 
 const VIP_TIERS  = ["Sunday League", "Championship", "Premier League", "Champions League", "World Cup"];
 const VIP_COLORS = ["#6b7280", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7"];
@@ -27,6 +30,11 @@ export function Profile() {
 
   const { data: stats }  = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey() } });
   const redeemBootMut    = useRedeemBoot();
+  const { data: community } = useQuery<CommunityInfo>({
+    queryKey: ["community"],
+    queryFn: async () => { const r = await fetch("/api/public/community"); return r.json() as Promise<CommunityInfo>; },
+    staleTime: 300_000,
+  });
 
   const p        = player as Record<string, unknown> | null;
   const vipTier  = p?.vipTier as string ?? "sunday_league";
@@ -119,6 +127,26 @@ export function Profile() {
             <ChevronRight className="w-4 h-4 text-white/30" />
           </motion.div>
         </Link>
+
+        {/* ── Community Channel ── */}
+        {community?.groupInviteLink && (
+          <motion.a
+            href={community.groupInviteLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            whileTap={{ scale: 0.98 }}
+            className="flex items-center gap-3 bg-[#3b82f6]/5 border border-[#3b82f6]/20 rounded-xl p-4 cursor-pointer hover:border-[#3b82f6]/40 transition-all no-underline"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/25 flex items-center justify-center flex-shrink-0">
+              <Users className="w-4 h-4 text-[#3b82f6]" />
+            </div>
+            <div className="flex-1">
+              <div className="font-display font-bold text-sm text-white">Community Channel</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">Big-win alerts · jackpot updates · live chat</div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/30" />
+          </motion.a>
+        )}
 
         {/* ── Token Balances ── */}
         <div className="grid grid-cols-3 gap-2">
