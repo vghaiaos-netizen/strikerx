@@ -43,12 +43,31 @@ export async function initGameBot(): Promise<void> {
       miniAppUrl += `?startapp=${startParam}`;
     }
 
+    // Read group invite link from config (non-fatal if unavailable)
+    let groupInviteLink: string | null = null;
+    try {
+      const { getConfig } = await import("./configService.js");
+      const link = await getConfig("telegram_group_invite_link");
+      if (link) groupInviteLink = link;
+    } catch {
+      // not fatal — community button simply won't appear
+    }
+
+    const buttons = [
+      [Markup.button.webApp("Open StrikerX", miniAppUrl)],
+      [Markup.button.callback("My Balance", "balance")],
+    ];
+    if (groupInviteLink) {
+      buttons.push([Markup.button.url("Join Community Channel", groupInviteLink)]);
+    }
+
+    const communityLine = groupInviteLink
+      ? `\n\nJoin the StrikerX community — live scores, big-win alerts and jackpot updates:`
+      : "";
+
     await ctx.reply(
-      `Welcome to StrikerX, ${username}!\n\nThe stadium is live — WC2026 edition.\n\n500 STRIKER welcome bonus is waiting for you inside.\n\nRefer friends and earn 10% of everything they win. Forever.\nYour referral link is in the Profile tab.`,
-      Markup.inlineKeyboard([
-        [Markup.button.webApp("Open StrikerX", miniAppUrl)],
-        [Markup.button.callback("My Balance", "balance")],
-      ])
+      `Welcome to StrikerX, ${username}!\n\nThe stadium is live — WC2026 edition.\n\n500 STRIKER welcome bonus is waiting for you inside.\n\nRefer friends and earn 10% of everything they win. Forever.\nYour referral link is in the Profile tab.${communityLine}`,
+      Markup.inlineKeyboard(buttons)
     );
   });
 

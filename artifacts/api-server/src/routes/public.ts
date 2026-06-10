@@ -118,4 +118,21 @@ router.get("/public/recent-wins", async (_req, res): Promise<void> => {
   }
 });
 
+// GET /public/community — group invite link + bot username (no auth required)
+router.get("/public/community", async (_req, res): Promise<void> => {
+  try {
+    const { getConfig } = await import("../lib/configService");
+    const groupInviteLink = await getConfig("telegram_group_invite_link").catch(() => "");
+    const miniAppLink = process.env.MINI_APP_LINK ?? "t.me/StrykkerXBot/StrikerX";
+    res.json({
+      groupInviteLink: groupInviteLink || null,
+      miniAppLink,
+      botUsername: "StrykkerXBot",
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to get community info");
+    res.json({ groupInviteLink: null, miniAppLink: null, botUsername: "StrykkerXBot" });
+  }
+});
+
 export default router;
