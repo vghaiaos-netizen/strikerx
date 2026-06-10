@@ -3,7 +3,18 @@ import { logger } from "./logger";
 
 let groupBot: Telegraf | null = null;
 let schedulerInitialized = false; // guard against double-init
-const GROUP_CHAT_ID = process.env.TELEGRAM_GROUP_ID ?? process.env.GROUP_CHAT_ID;
+
+/** Resolve the group chat ID — config table takes priority over env var so it can be corrected without a redeploy. */
+async function getGroupChatId(): Promise<string | null> {
+  try {
+    const { getConfig } = await import("./configService.js");
+    const fromConfig = await getConfig("telegram_group_id");
+    if (fromConfig) return fromConfig;
+  } catch {
+    // fall through to env var
+  }
+  return process.env.TELEGRAM_GROUP_ID ?? process.env.GROUP_CHAT_ID ?? null;
+}
 
 function getAppUrl(): string {
   const domain =
@@ -32,13 +43,14 @@ export function getGroupBot(): Telegraf | null {
 
 async function sendToGroup(text: string, inlineButton?: { text: string; url: string }): Promise<void> {
   const bot = getGroupBot();
-  if (!bot || !GROUP_CHAT_ID) return;
+  const chatId = await getGroupChatId();
+  if (!bot || !chatId) return;
 
   try {
     const extra = inlineButton
       ? { reply_markup: { inline_keyboard: [[{ text: inlineButton.text, url: inlineButton.url }]] } }
       : {};
-    await bot.telegram.sendMessage(GROUP_CHAT_ID, text, { parse_mode: "HTML", ...extra });
+    await bot.telegram.sendMessage(chatId, text, { parse_mode: "HTML", ...extra });
   } catch (err) {
     logger.error({ err }, "Failed to send GroupBot message");
   }
