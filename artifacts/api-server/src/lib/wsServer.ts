@@ -18,8 +18,10 @@ interface WsClient {
 const WS_RATE_LIMIT = 30;
 const WS_RATE_WINDOW_MS = 10_000;
 
-// Unauthenticated connections are closed after this many ms
-const WS_AUTH_TIMEOUT_MS = 30_000;
+// Unauthenticated connections are closed after this many ms.
+// 60 s gives mobile clients on slow connections time to complete Telegram auth
+// before the WS connection is dropped.
+const WS_AUTH_TIMEOUT_MS = 60_000;
 
 function isRateLimited(client: WsClient): boolean {
   const now = Date.now();
