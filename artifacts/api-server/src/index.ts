@@ -87,15 +87,67 @@ initWebSocketServer(server);
 server.listen(port, async () => {
   logger.info({ port }, "Server listening");
 
-  // Idempotent schema migrations — safe to run on every startup
-  try {
-    await pool.query(`
-      ALTER TABLE players
-        ADD COLUMN IF NOT EXISTS language_preference TEXT NOT NULL DEFAULT 'en';
-    `);
-    logger.info("Schema migration: language_preference column ensured");
-  } catch (err) {
-    logger.warn({ err }, "Schema migration warning (non-fatal)");
+  // Idempotent schema migrations — safe to run on every startup.
+  // Every column/table added after the initial Railway deploy must appear here
+  // so production auto-heals on the next container start without manual DDL.
+  const migrations: Array<{ name: string; sql: string }> = [
+    {
+      name: "players.language_preference",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS language_preference TEXT NOT NULL DEFAULT 'en'`,
+    },
+    {
+      name: "players.captain_balance",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS captain_balance REAL NOT NULL DEFAULT 0`,
+    },
+    {
+      name: "players.device_fingerprint",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS device_fingerprint TEXT`,
+    },
+    {
+      name: "players.affiliate_code",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS affiliate_code TEXT`,
+    },
+    {
+      name: "players.country",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS country TEXT`,
+    },
+    {
+      name: "players.group_member_status",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS group_member_status BOOLEAN NOT NULL DEFAULT FALSE`,
+    },
+    {
+      name: "players.first_withdrawal_reviewed",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS first_withdrawal_reviewed BOOLEAN NOT NULL DEFAULT FALSE`,
+    },
+    {
+      name: "players.striker_wagered_since_bonus",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS striker_wagered_since_bonus REAL NOT NULL DEFAULT 0`,
+    },
+    {
+      name: "players.ban_reason",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS ban_reason TEXT`,
+    },
+    {
+      name: "players.last_streak_claim",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS last_streak_claim TIMESTAMPTZ`,
+    },
+    {
+      name: "transactions.metadata",
+      sql: `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`,
+    },
+    {
+      name: "games.affiliate_commission_paid",
+      sql: `ALTER TABLE games ADD COLUMN IF NOT EXISTS affiliate_commission_paid BOOLEAN NOT NULL DEFAULT FALSE`,
+    },
+  ];
+
+  for (const { name, sql } of migrations) {
+    try {
+      await pool.query(sql);
+      logger.info({ column: name }, "Schema migration: column ensured");
+    } catch (err) {
+      logger.warn({ err, column: name }, "Schema migration warning (non-fatal)");
+    }
   }
 
   // Start crash engine after server is ready
