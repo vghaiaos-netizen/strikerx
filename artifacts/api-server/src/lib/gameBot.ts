@@ -53,7 +53,8 @@ export async function initGameBot(): Promise<void> {
       // not fatal — community button simply won't appear
     }
 
-    const buttons = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const buttons: any[][] = [
       [Markup.button.webApp("Open StrikerX", miniAppUrl)],
       [Markup.button.callback("My Balance", "balance")],
     ];
