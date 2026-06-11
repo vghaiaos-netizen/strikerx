@@ -1,16 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-
-import en from "./locales/en.json";
-import ru from "./locales/ru.json";
-import uk from "./locales/uk.json";
-import be from "./locales/be.json";
-import ro from "./locales/ro.json";
-import ar from "./locales/ar.json";
-import pl from "./locales/pl.json";
-import bg from "./locales/bg.json";
-import sr from "./locales/sr.json";
-import pt from "./locales/pt.json";
+import resourcesToBackend from "i18next-resources-to-backend";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English",     dir: "ltr" },
@@ -41,12 +31,17 @@ export function saveLangLocally(code: string) {
   try { localStorage.setItem(LANG_STORAGE_KEY, code); } catch {}
 }
 
-i18n.use(initReactI18next).init({
-  resources: { en, ru, uk, be, ro, ar, pl, bg, sr, pt },
-  lng: getSavedLang() ?? "en",
-  fallbackLng: "en",
-  interpolation: { escapeValue: false },
-  defaultNS: "translation",
-});
+i18n
+  .use(initReactI18next)
+  .use(resourcesToBackend((language: string) =>
+    import(`./locales/${language}.json`)
+  ))
+  .init({
+    lng: getSavedLang() ?? "en",
+    fallbackLng: "en",
+    interpolation: { escapeValue: false },
+    defaultNS: "translation",
+    react: { useSuspense: false },
+  });
 
 export default i18n;

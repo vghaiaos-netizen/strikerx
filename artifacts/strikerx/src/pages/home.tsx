@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check, Users, BookOpen } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check, Users, BookOpen, CheckCircle2, Circle, Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
 import { useGetMyReferral } from "@workspace/api-client-react";
@@ -13,6 +13,9 @@ interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMulti
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 interface RecentWin { id: number; username: string; game: string; bet: number; win: number; mult: number; playedAt: string | null; }
 interface CommunityInfo { groupInviteLink: string | null; miniAppLink: string | null; botUsername: string; }
+interface TonPrice { usd: number | null; cachedAt: number | null; stale?: boolean; }
+interface DailyMission { key: string; title: string; description: string; target: number; progress: number; completed: boolean; }
+interface DailyMissionsRow { id: number; missions: DailyMission[]; allCompleted: boolean; bonusClaimed: boolean; bonusStriker: number; date: string; }
 
 function useDevAuth() {
   const { player, isLoading, setToken } = useAuth();
@@ -64,7 +67,7 @@ function timeAgo(iso: string | null): string {
 
 export function Home() {
   useDevAuth();
-  const { player } = useAuth();
+  const { player, token } = useAuth();
   const { notifications } = useNotifications();
   const [wcCountdownSecs, setWcCountdownSecs] = useState(0);
   const wcTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,6 +98,27 @@ export function Home() {
     queryKey: ["community"],
     queryFn: async () => { const r = await fetch("/api/public/community"); return r.json() as Promise<CommunityInfo>; },
     staleTime: 300_000,
+  });
+
+  const { data: tonPrice } = useQuery<TonPrice>({
+    queryKey: ["ton-price"],
+    queryFn: async () => { const r = await fetch("/api/public/ton-price"); return r.json() as Promise<TonPrice>; },
+    refetchInterval: 90_000,
+    staleTime: 60_000,
+  });
+
+  const { data: missions } = useQuery<DailyMissionsRow>({
+    queryKey: ["daily-missions"],
+    queryFn: async () => {
+      const r = await fetch("/api/players/me/missions", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error("Not authed");
+      return r.json() as Promise<DailyMissionsRow>;
+    },
+    enabled: !!token,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -257,6 +281,25 @@ export function Home() {
           </div>
         </div>
 
+        {/* ── TON Price Ticker ── */}
+        {tonPrice?.usd != null && (
+          <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-1.5 bg-white/3 border border-white/6 rounded-full px-2.5 py-1">
+              <span className="text-[9px] font-mono font-bold text-white/30 uppercase tracking-widest">TON</span>
+              <span className="text-[11px] font-mono font-bold text-[#00ff88]">${tonPrice.usd.toFixed(2)}</span>
+              {tonPrice.stale && <span className="text-[8px] font-mono text-white/20">~</span>}
+            </div>
+            {player && (
+              <div className="flex items-center gap-1 text-[9px] font-mono text-white/20">
+                <span>≈</span>
+                <span className="text-white/35">
+                  ${(Number((player as Record<string,unknown>)?.strikerBalance ?? 0) / 100 * tonPrice.usd).toFixed(2)} USD
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Balance Strip ── */}
         {player && (
           <div className="grid grid-cols-3 gap-2">
@@ -272,6 +315,49 @@ export function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── Daily Missions ── */}
+        {missions && (
+          <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
+            <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+              <Flame className="w-3.5 h-3.5 text-[#f59e0b]" />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">Daily Missions</span>
+              {missions.allCompleted ? (
+                <span className="ml-auto text-[9px] font-mono bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/25 rounded-full px-2 py-0.5">
+                  {missions.bonusClaimed ? "Claimed" : `+${missions.bonusStriker} STRIKER`}
+                </span>
+              ) : (
+                <span className="ml-auto text-[9px] font-mono text-white/25">
+                  {missions.missions.filter((m: DailyMission) => m.completed).length}/3
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col divide-y divide-white/4 px-4 pb-3 gap-0">
+              {(missions.missions as DailyMission[]).map((m) => (
+                <div key={m.key} className="flex items-center gap-3 py-2">
+                  {m.completed
+                    ? <CheckCircle2 className="w-4 h-4 text-[#00ff88] flex-shrink-0" />
+                    : <Circle className="w-4 h-4 text-white/15 flex-shrink-0" />
+                  }
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`font-mono text-[11px] font-semibold ${m.completed ? "text-white/40 line-through" : "text-white"}`}>{m.title}</span>
+                    </div>
+                    <div className="text-[9px] font-mono text-white/25 mt-0.5">{m.description}</div>
+                  </div>
+                  {!m.completed && m.target > 1 && (
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-[10px] font-mono text-white/35">{m.progress}/{m.target}</div>
+                      <div className="w-14 h-1 bg-white/8 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-[#00ff88] rounded-full" style={{ width: `${(m.progress / m.target) * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

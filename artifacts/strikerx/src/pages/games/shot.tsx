@@ -75,6 +75,9 @@ export function TheShot() {
   const [chartSize, setChartSize] = useState({ w: 340, h: 200 });
 
   const [wsReady, setWsReady] = useState(false);
+  const [wsReconnecting, setWsReconnecting] = useState(false);
+  const [wsFailedPermanently, setWsFailedPermanently] = useState(false);
+  const reconnectAttempts = useRef(0);
   const [round, setRound] = useState<RoundState | null>(null);
   const [bets, setBets] = useState<Map<number, LiveBet>>(new Map());
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([]);
@@ -210,13 +213,17 @@ export function TheShot() {
     const wsUrl = `${proto}//${window.location.host}/ws`;
     let destroyed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    const MAX_RECONNECT = 8;
 
     const connect = () => {
+      if (destroyed) return;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.onopen = () => {
+        reconnectAttempts.current = 0;
         setWsReady(true);
-        // Always read latest token from ref — avoids stale closure
+        setWsReconnecting(false);
+        setWsFailedPermanently(false);
         if (tokenRef.current) ws.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
       };
       ws.onmessage = (e) => {
@@ -228,7 +235,17 @@ export function TheShot() {
       ws.onclose = () => {
         setWsReady(false);
         setWsAuthed(false);
-        if (!destroyed) reconnectTimer = setTimeout(connect, 2000);
+        if (!destroyed) {
+          reconnectAttempts.current += 1;
+          if (reconnectAttempts.current >= MAX_RECONNECT) {
+            setWsFailedPermanently(true);
+            setWsReconnecting(false);
+          } else {
+            setWsReconnecting(true);
+            const delay = Math.min(8000, 1000 * 2 ** (reconnectAttempts.current - 1));
+            reconnectTimer = setTimeout(connect, delay);
+          }
+        }
       };
       ws.onerror = () => {};
     };
@@ -259,6 +276,17 @@ export function TheShot() {
       }
     }
     return undefined;
+  });
+
+  // Accelerating heartbeat tick — faster and higher pitch as multiplier climbs
+  useEffect(() => {
+    if (roundStatus !== "running") return;
+    // Interval (ms): 2000ms at 1x → 400ms at 5x → 150ms above 10x
+    const intervalMs = Math.max(150, 2000 / Math.max(1, currentMult));
+    const id = setInterval(() => {
+      soundManager.playTick(currentMult);
+    }, intervalMs);
+    return () => clearInterval(id);
   });
 
   // Particle CSS keyframe injection
@@ -380,6 +408,27 @@ export function TheShot() {
 
       <div className="flex flex-col h-[calc(100dvh-56px)] overflow-hidden bg-[#060a14]">
 
+        {/* Reconnecting / Failed banner */}
+        <AnimatePresence>
+          {wsFailedPermanently && (
+            <motion.div key="ws-failed"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="bg-[#ef4444]/15 border-b border-[#ef4444]/30 px-4 py-2 flex items-center justify-between flex-shrink-0">
+              <span className="text-[11px] font-mono text-[#ef4444]">Connection lost — refresh to reconnect</span>
+              <button onClick={() => { reconnectAttempts.current = 0; setWsFailedPermanently(false); setWsReconnecting(true); wsRef.current?.close(); }}
+                className="text-[10px] font-mono text-[#ef4444]/70 underline hover:text-[#ef4444]">Retry</button>
+            </motion.div>
+          )}
+          {wsReconnecting && !wsFailedPermanently && (
+            <motion.div key="ws-reconnecting"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="bg-[#f59e0b]/10 border-b border-[#f59e0b]/20 px-4 py-1.5 flex items-center gap-2 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+              <span className="text-[10px] font-mono text-[#f59e0b]">Reconnecting… attempt {reconnectAttempts.current}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -393,9 +442,9 @@ export function TheShot() {
                 <span>{round.activePlayers} live</span>
               </div>
             ) : null}
-            <div className={`flex items-center gap-1.5 text-[10px] ${wsReady ? "text-[#00ff88]" : "text-white/20"}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${wsReady ? "bg-[#00ff88] animate-pulse" : "bg-white/15"}`} />
-              {wsReady ? "live" : "connecting…"}
+            <div className={`flex items-center gap-1.5 text-[10px] ${wsReady ? "text-[#00ff88]" : wsReconnecting ? "text-[#f59e0b]" : "text-white/20"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${wsReady ? "bg-[#00ff88] animate-pulse" : wsReconnecting ? "bg-[#f59e0b] animate-pulse" : "bg-white/15"}`} />
+              {wsReady ? "live" : wsReconnecting ? "reconnecting" : "offline"}
             </div>
           </div>
         </div>

@@ -58,6 +58,27 @@ class SoundManager {
     return this.enabled;
   }
 
+  /**
+   * Plays a single tick with pitch scaled by multiplier.
+   * 220Hz at 1x → 440Hz at 10x. Used for the accelerating heartbeat in The Shot.
+   */
+  public playTick(mult: number) {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const pitch = Math.min(440, 220 + (mult - 1) * (220 / 9));
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.frequency.setValueAtTime(pitch, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.06);
+    osc.start(now);
+    osc.stop(now + 0.06);
+  }
+
   public play(sound: SoundType) {
     if (!this.enabled) return;
     this.initContext();
