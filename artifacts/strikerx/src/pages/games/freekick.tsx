@@ -175,7 +175,7 @@ export function FreeKick() {
           <span className="ml-auto text-[10px] font-mono text-white/22">Plinko · 9 slots</span>
         </div>
 
-        <div className="flex-1 flex flex-col items-center min-h-0 px-4 py-3 gap-3 overflow-hidden">
+        <div className="flex-1 flex flex-col items-center min-h-0 px-4 py-3 gap-3 overflow-y-auto">
 
           {/* Risk selector */}
           <div className="flex gap-2 w-full max-w-xs">
@@ -196,7 +196,7 @@ export function FreeKick() {
             <svg
               viewBox={`0 0 ${SVG_W} ${SVG_H}`}
               className="w-full"
-              style={{ maxHeight: "340px" }}
+              style={{ maxHeight: "min(300px, 42vh)" }}
             >
               <defs>
                 <filter id="fk-ball-glow" x="-80%" y="-80%" width="260%" height="260%">

@@ -214,7 +214,7 @@ export function Minefield() {
 
         {!session ? (
           /* ── Setup ── */
-          <div className="flex-1 flex flex-col items-center justify-center px-4 gap-5">
+          <div className="flex-1 flex flex-col items-center px-4 py-4 gap-4 overflow-y-auto">
             <div className="text-center">
               <div className="w-14 h-14 rounded-2xl bg-red-400/10 border border-red-400/20 flex items-center justify-center mx-auto mb-3">
                 <Bomb className="w-7 h-7 text-red-400/65" />
