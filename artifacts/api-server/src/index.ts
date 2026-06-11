@@ -4,6 +4,7 @@ import { logger } from "./lib/logger";
 import { initWebSocketServer } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
 import { startScheduler } from "./lib/scheduler";
+import { pool } from "@workspace/db";
 
 // ── Production secret validation ─────────────────────────────────────────────
 const isProd = process.env.NODE_ENV === "production";
@@ -85,6 +86,17 @@ initWebSocketServer(server);
 
 server.listen(port, async () => {
   logger.info({ port }, "Server listening");
+
+  // Idempotent schema migrations — safe to run on every startup
+  try {
+    await pool.query(`
+      ALTER TABLE players
+        ADD COLUMN IF NOT EXISTS language_preference TEXT NOT NULL DEFAULT 'en';
+    `);
+    logger.info("Schema migration: language_preference column ensured");
+  } catch (err) {
+    logger.warn({ err }, "Schema migration warning (non-fatal)");
+  }
 
   // Start crash engine after server is ready
   startCrashEngine().catch((err) => logger.error({ err }, "Crash engine failed to start"));

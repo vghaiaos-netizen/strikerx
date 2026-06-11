@@ -1,0 +1,151 @@
+{
+  "translation": {
+    "nav": {
+      "home": "HOME", "rank": "RANK", "wallet": "WALLET",
+      "loyalty": "LOYALTY", "profile": "PROFILE"
+    },
+    "common": {
+      "loading": "Loading…", "error": "Error", "back": "Back",
+      "save": "Save", "cancel": "Cancel", "close": "Close",
+      "copy": "Copy", "copied": "Copied!", "share": "Share",
+      "view": "View", "read": "Read", "join": "Join",
+      "balance": "Balance", "striker": "STRIKER", "strk": "STRK",
+      "ton": "TON", "confirm": "Confirm", "comingSoon": "COMING SOON"
+    },
+    "games": {
+      "common": {
+        "betLabel": "BET (STRIKER)", "autoCashout": "AUTO CASHOUT",
+        "placeBet": "PLACE BET", "cashOut": "CASH OUT",
+        "yourBalance": "Balance", "cancelBet": "CANCEL BET",
+        "waitForRound": "Wait for next round", "crashed": "CRASHED",
+        "win": "WIN", "loss": "LOSS"
+      },
+      "shot": {
+        "title": "THE SHOT", "subtitle": "Crash",
+        "nextRound": "NEXT ROUND", "placeYourBet": "PLACE YOUR BET",
+        "live": "live", "crashed": "CRASHED",
+        "cashOutAt": "CASH OUT {{mult}}×",
+        "betButton": "PLACE BET",
+        "autoCashoutLabel": "AUTO CASHOUT",
+        "waitingSec": "Next in {{sec}}s",
+        "notAuthenticated": "Connecting…"
+      },
+      "penalty": {
+        "title": "PENALTY", "subtitle": "1.92× payout",
+        "left": "LEFT", "center": "CENTER", "right": "RIGHT",
+        "goal": "GOAL!", "saved": "SAVED!",
+        "keeperWent": "Keeper went {{dir}}",
+        "chooseZone": "Choose where to shoot",
+        "result_goal": "You scored!",
+        "result_saved": "Keeper saved it!"
+      },
+      "freekick": {
+        "title": "FREE KICK", "subtitle": "Plinko · 9 slots",
+        "low": "LOW", "med": "MED", "high": "HIGH",
+        "kick": "KICK!", "flying": "FLYING…",
+        "risk": "Risk", "slotLabel": "{{mult}}×"
+      },
+      "minefield": {
+        "title": "MINEFIELD",
+        "setupTitle": "Click safe squares",
+        "setupSub": "Cash out before hitting a mine",
+        "easyRisk": "Easy risk", "mediumRisk": "Medium risk",
+        "hardRisk": "Hard risk", "insaneRisk": "Insane risk",
+        "grid": "5×5",
+        "minesCount": "{{count}} mines",
+        "safeSq": "{{count}} safe squares",
+        "minesSafe": "{{mines}} mines · {{safe}} safe squares",
+        "autoCashoutLabel": "AUTO CASH OUT",
+        "startGame": "START GAME",
+        "cashOutActive": "CASH OUT {{mult}}×",
+        "mineHit": "MINE!",
+        "danger": "DANGER",
+        "safe": "SAFE"
+      }
+    },
+    "home": {
+      "wc2026": "WORLD CUP 2026",
+      "goldenBoot": "GOLDEN BOOT",
+      "building": "BUILDING",
+      "buildingTo": "Building to {{target}} TON",
+      "wcOriginals": "WC ORIGINALS",
+      "earnSquad": "Earn with your Squad",
+      "referralDesc": "Get 10% of friends' wins forever",
+      "communityTitle": "Join the Community",
+      "communityDesc": "Big-win alerts · jackpot updates · live chat",
+      "howToPlay": "How to Play",
+      "howToPlayDesc": "Games guide · deposits · VIP · withdrawals",
+      "recentWinners": "Recent Winners"
+    },
+    "profile": {
+      "title": "Your Profile",
+      "language": "Language",
+      "settings": "Settings",
+      "verify": "VERIFY",
+      "withdraw": "WITHDRAW",
+      "deposit": "DEPOSIT",
+      "vipTier": "VIP Tier",
+      "totalWagered": "Total Wagered",
+      "referralLink": "Your Referral Link",
+      "referralCode": "Referral Code",
+      "changeLanguage": "Change Language"
+    },
+    "deposit": {
+      "title": "Deposit STRIKER",
+      "subtitle": "How much do you want to deposit?",
+      "payWith": "Pay with CryptoBot",
+      "minDeposit": "Min deposit",
+      "invoiceCreated": "Invoice created",
+      "openCryptoBot": "Open CryptoBot",
+      "processing": "Processing…"
+    },
+    "withdraw": {
+      "title": "Withdraw STRIKER",
+      "minNote": "Minimum {{amount}} STRIKER",
+      "processing": "Processing…",
+      "submit": "WITHDRAW",
+      "amount": "Amount",
+      "addressLabel": "TON Wallet Address",
+      "success": "Withdrawal requested!",
+      "insufficient": "Insufficient balance"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "allTime": "All Time",
+      "thisWeek": "This Week",
+      "earned": "STRIKER EARNED",
+      "rank": "Rank"
+    },
+    "loyalty": {
+      "title": "VIP Rewards",
+      "yourTier": "Your Tier",
+      "cashback": "Cashback",
+      "claimStreak": "Claim Daily Bonus",
+      "streakDays": "{{days}} day streak"
+    },
+    "guide": {
+      "title": "HOW TO PLAY",
+      "tagline": "Master the pitch and score big.",
+      "whatIsStriker": "WHAT IS STRIKER?",
+      "howToDeposit": "HOW TO DEPOSIT",
+      "gamesGuide": "GAMES GUIDE",
+      "vipTiers": "VIP TIERS",
+      "withdrawals": "WITHDRAWALS",
+      "referrals": "REFERRALS",
+      "jackpot": "JACKPOT"
+    },
+    "languagePicker": {
+      "title": "Choose Your Language",
+      "subtitle": "Select your preferred language. You can change this later in your profile.",
+      "continue": "Continue"
+    },
+    "errors": {
+      "notAuthenticated": "Not authenticated",
+      "insufficientBalance": "Insufficient balance",
+      "networkError": "Network error. Please try again.",
+      "betTooLow": "Bet amount too low",
+      "gameNotReady": "Game not ready. Please wait.",
+      "unknownError": "Something went wrong"
+    }
+  }
+}

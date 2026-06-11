@@ -34,6 +34,7 @@ router.get("/players/me", requireAuth, async (req, res): Promise<void> => {
     isBanned: player.isBanned,
     isFlagged: player.isFlagged,
     wagerProgress: Math.min(100, (player.strikerWageredSinceBonus / wagerRequirement) * 100),
+    languagePreference: player.languagePreference ?? "en",
     createdAt: player.createdAt.toISOString(),
   });
 });
@@ -340,6 +341,25 @@ router.post("/players/me/boot/redeem", requireAuth, async (req, res): Promise<vo
 
   const [updated] = await db.select({ strikerBalance: playersTable.strikerBalance, bootBalance: playersTable.bootBalance }).from(playersTable).where(eq(playersTable.id, playerId));
   res.json({ redeemedBoot: redeemAmount, newStrikerBalance: updated?.strikerBalance ?? 0, newBootBalance: updated?.bootBalance ?? 0 });
+});
+
+// PUT /players/me/language
+router.put("/players/me/language", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { language } = req.body;
+
+  const SUPPORTED = ["en","ru","uk","be","ro","ar","pl","bg","sr","pt"];
+  if (!language || !SUPPORTED.includes(language)) {
+    res.status(400).json({ error: "Unsupported language code" });
+    return;
+  }
+
+  await db
+    .update(playersTable)
+    .set({ languagePreference: language })
+    .where(eq(playersTable.id, playerId));
+
+  res.json({ ok: true, language });
 });
 
 export default router;

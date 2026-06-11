@@ -99,9 +99,26 @@ app.use("/api", router);
 if (isProd) {
   const distPath = path.resolve("artifacts/strikerx/dist/public");
   if (existsSync(distPath)) {
-    app.use(express.static(distPath, { maxAge: "1d", etag: true }));
-    // SPA fallback — everything that isn't /api gets index.html
+    // Content-hashed assets (e.g. /assets/index-HASH.js) — cache 1 year, immutable
+    app.use("/assets", express.static(path.join(distPath, "assets"), {
+      maxAge: "1y",
+      immutable: true,
+    }));
+    // All other static files — never cache (index.html must always be fresh)
+    app.use(express.static(distPath, {
+      maxAge: 0,
+      etag: false,
+      setHeaders: (res) => {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      },
+    }));
+    // SPA fallback — everything that isn't /api gets index.html (always fresh)
     app.get(/^(?!\/api).*$/, (_req: Request, res: Response) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(path.join(distPath, "index.html"));
     });
     logger.info({ distPath }, "Serving built frontend");

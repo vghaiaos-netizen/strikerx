@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useGetMyStats, getGetMyStatsQueryKey, useRedeemBoot } from "@workspace/api-client-react";
 import {
   Trophy, LogOut, Zap, Target, TrendingUp, ShoppingBag,
-  ArrowRight, Loader2, ShieldCheck, Gift, ChevronRight, Users
+  ArrowRight, Loader2, ShieldCheck, Gift, ChevronRight, Users, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -11,6 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
+import { SUPPORTED_LANGUAGES, saveLangLocally, getLangDir, type LangCode } from "@/i18n";
 
 interface CommunityInfo { groupInviteLink: string | null; miniAppLink: string | null; botUsername: string; }
 
@@ -35,6 +37,25 @@ export function Profile() {
     queryFn: async () => { const r = await fetch("/api/public/community"); return r.json() as Promise<CommunityInfo>; },
     staleTime: 300_000,
   });
+
+  const { i18n } = useTranslation();
+  const [showLangPicker, setShowLangPicker] = useState(false);
+
+  async function handleLangChange(code: LangCode) {
+    saveLangLocally(code);
+    await i18n.changeLanguage(code);
+    document.documentElement.dir = getLangDir(code);
+    document.documentElement.lang = code;
+    setShowLangPicker(false);
+    // Persist to server (best-effort)
+    if (token) {
+      fetch("/api/players/me/language", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ language: code }),
+      }).catch(() => {});
+    }
+  }
 
   const p        = player as Record<string, unknown> | null;
   const vipTier  = p?.vipTier as string ?? "sunday_league";
@@ -147,6 +168,57 @@ export function Profile() {
             <ChevronRight className="w-4 h-4 text-white/30" />
           </motion.a>
         )}
+
+        {/* ── Language ── */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setShowLangPicker(v => !v)}
+          className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-4 w-full hover:border-white/20 transition-all text-left"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+            <Globe className="w-4 h-4 text-white/50" />
+          </div>
+          <div className="flex-1">
+            <div className="font-display font-bold text-sm text-white">Language</div>
+            <div className="text-[10px] font-mono text-white/40 mt-0.5">
+              {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.label ?? "English"}
+            </div>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${showLangPicker ? "rotate-90" : ""}`} />
+        </motion.button>
+
+        <AnimatePresence>
+          {showLangPicker && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {SUPPORTED_LANGUAGES.map(({ code, label, dir }) => {
+                  const isActive = i18n.language === code;
+                  return (
+                    <motion.button
+                      key={code}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => handleLangChange(code as LangCode)}
+                      className={`py-3 px-4 rounded-xl border text-left transition-all ${
+                        isActive
+                          ? "border-[#00ff88] bg-[#00ff88]/10 text-white"
+                          : "border-white/8 bg-white/3 text-white/60 hover:border-white/20"
+                      }`}
+                      dir={dir}
+                    >
+                      <div className={`font-semibold text-sm ${isActive ? "text-[#00ff88]" : ""}`}>{label}</div>
+                      <div className="text-[10px] font-mono mt-0.5 opacity-40">{code.toUpperCase()}</div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Token Balances ── */}
         <div className="grid grid-cols-3 gap-2">

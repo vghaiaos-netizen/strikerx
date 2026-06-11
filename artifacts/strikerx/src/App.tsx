@@ -1,11 +1,15 @@
+import { useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { NotificationsProvider } from "@/lib/ws-notifications";
 import { GlobalWinOverlay } from "@/components/big-win-overlay";
 import NotFound from "@/pages/not-found";
+import LanguagePicker from "@/pages/language-picker";
+import { getSavedLang, saveLangLocally, getLangDir, type LangCode } from "@/i18n";
 
 import { Home } from "./pages/home";
 import { Profile } from "./pages/profile";
@@ -86,16 +90,41 @@ function Router() {
   );
 }
 
-function App() {
-  if (typeof document !== "undefined") {
+// Syncs the server's stored language preference to the client on first auth
+function LangSyncer() {
+  const { player, token } = useAuth();
+  const { i18n } = useTranslation();
+
+  useEffect(() => {
+    const serverLang = (player as Record<string, unknown>)?.languagePreference as string | undefined;
+    if (!serverLang || serverLang === i18n.language) return;
+    // Server preference wins over local storage when they first diverge
+    saveLangLocally(serverLang);
+    i18n.changeLanguage(serverLang);
+    document.documentElement.dir = getLangDir(serverLang);
+    document.documentElement.lang = serverLang;
+  }, [(player as Record<string, unknown>)?.languagePreference as string, token]);
+
+  return null;
+}
+
+function AppShell() {
+  const { i18n } = useTranslation();
+
+  // Apply RTL / LTR direction whenever language changes
+  useEffect(() => {
+    const dir = getLangDir(i18n.language);
+    document.documentElement.dir = dir;
+    document.documentElement.lang = i18n.language;
     document.documentElement.classList.add("dark");
-  }
+  }, [i18n.language]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
           <NotificationsProvider>
+            <LangSyncer />
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <Router />
             </WouterRouter>
@@ -106,6 +135,23 @@ function App() {
       </TooltipProvider>
     </QueryClientProvider>
   );
+}
+
+function App() {
+  const { i18n } = useTranslation();
+  const [langReady, setLangReady] = useState<boolean>(() => !!getSavedLang());
+
+  function handleLanguageSelect(code: LangCode) {
+    saveLangLocally(code);
+    i18n.changeLanguage(code);
+    setLangReady(true);
+  }
+
+  if (!langReady) {
+    return <LanguagePicker onSelect={handleLanguageSelect} />;
+  }
+
+  return <AppShell />;
 }
 
 export default App;

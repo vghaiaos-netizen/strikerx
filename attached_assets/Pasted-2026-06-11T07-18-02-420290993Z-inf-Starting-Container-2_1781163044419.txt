@@ -1,0 +1,224 @@
+2026-06-11T07:18:02.420290993Z [inf]  Starting Container
+2026-06-11T07:18:02.954752634Z [inf]  Weekly cashback scheduled
+2026-06-11T07:18:02.954764094Z [inf]  Crash round waiting
+2026-06-11T07:18:02.954769784Z [inf]  Synced env vars → DB config (DB was empty; env var values written for admin visibility)
+2026-06-11T07:18:02.954774424Z [inf]  Config service initialized
+2026-06-11T07:18:02.954778764Z [err]  (node:1) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-11T07:18:02.954784604Z [inf]  GroupBot scheduler initialized
+2026-06-11T07:18:02.954789893Z [inf]  GameBot initialized
+2026-06-11T07:18:02.954794903Z [inf]  Serving built frontend
+2026-06-11T07:18:02.954798763Z [inf]  Telegram webhook registered
+2026-06-11T07:18:02.954801883Z [err]  (node:1) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-06-11T07:18:02.954806043Z [err]  (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-11T07:18:02.954808613Z [inf]  Production startup
+2026-06-11T07:18:02.954811923Z [inf]  WebSocket server initialized at /ws
+2026-06-11T07:18:02.954814593Z [inf]  Server listening
+2026-06-11T07:18:02.954816983Z [inf]  Crash engine starting
+2026-06-11T07:18:02.954819913Z [inf]  Scheduler started
+2026-06-11T07:18:04.156055089Z [inf]  Telegram webhook registered
+2026-06-11T07:18:04.156058509Z [inf]  CryptoBot webhook URL (register manually via @CryptoBot → /setwebhook)
+2026-06-11T07:18:10.536549916Z [inf]  Crash round started
+2026-06-11T07:18:12.633392998Z [inf]  Crash round crashed
+2026-06-11T07:18:17.640262044Z [inf]  Crash round waiting
+2026-06-11T07:18:25.646617910Z [inf]  Crash round started
+2026-06-11T07:18:30.560661213Z [inf]  Crash round crashed
+2026-06-11T07:18:35.562757816Z [inf]  Crash round waiting
+2026-06-11T07:18:43.577993120Z [inf]  Crash round started
+2026-06-11T07:18:44.869403634Z [inf]  Crash round crashed
+2026-06-11T07:18:49.876295632Z [inf]  Crash round waiting
+2026-06-11T07:18:57.883805800Z [inf]  Crash round started
+2026-06-11T07:19:00.993120221Z [inf]  Crash round crashed
+2026-06-11T07:19:05.993679696Z [inf]  Crash round waiting
+2026-06-11T07:19:14.023926627Z [inf]  Crash round started
+2026-06-11T07:19:18.105941872Z [inf]  Crash round crashed
+2026-06-11T07:19:23.115565480Z [inf]  Crash round waiting
+2026-06-11T07:19:31.119306571Z [inf]  Crash round started
+2026-06-11T07:19:33.226771810Z [inf]  Crash round crashed
+2026-06-11T07:19:38.234322985Z [inf]  Crash round waiting
+2026-06-11T07:19:46.251282973Z [inf]  Crash round started
+2026-06-11T07:20:06.216474771Z [inf]  Crash round crashed
+2026-06-11T07:20:06.216477821Z [inf]  Crash round waiting
+2026-06-11T07:20:13.877856700Z [inf]  Crash round started
+2026-06-11T07:20:15.990183685Z [inf]  Crash round crashed
+2026-06-11T07:20:20.990366154Z [inf]  Crash round waiting
+2026-06-11T07:20:28.994333481Z [inf]  Crash round started
+2026-06-11T07:20:30.335562135Z [inf]  Crash round crashed
+2026-06-11T07:20:35.352932185Z [inf]  Crash round waiting
+2026-06-11T07:20:43.305210762Z [inf]  Crash round started
+2026-06-11T07:20:47.314136287Z [inf]  Crash round crashed
+2026-06-11T07:20:52.326671256Z [inf]  Crash round waiting
+2026-06-11T07:21:00.325286342Z [inf]  Crash round started
+2026-06-11T07:21:20.327782747Z [inf]  Crash round crashed
+2026-06-11T07:21:20.974522585Z [inf]  Crash round waiting
+2026-06-11T07:21:28.973403472Z [inf]  Crash round started
+2026-06-11T07:21:31.084187233Z [inf]  Crash round crashed
+2026-06-11T07:21:36.089179795Z [inf]  Crash round waiting
+2026-06-11T07:21:44.090536172Z [inf]  Crash round started
+2026-06-11T07:21:46.194538293Z [inf]  Crash round crashed
+2026-06-11T07:21:51.203284407Z [inf]  Crash round waiting
+2026-06-11T07:21:59.205149666Z [inf]  Crash round started
+2026-06-11T07:22:01.814648302Z [inf]  Crash round crashed
+2026-06-11T07:22:06.816600971Z [inf]  Crash round waiting
+2026-06-11T07:22:14.820227773Z [inf]  Crash round started
+2026-06-11T07:22:16.928862364Z [inf]  Crash round crashed
+2026-06-11T07:22:21.933961957Z [inf]  Crash round waiting
+2026-06-11T07:22:29.940698148Z [inf]  Crash round started
+2026-06-11T07:22:49.942235801Z [inf]  Crash round crashed
+2026-06-11T07:22:49.942239871Z [inf]  Crash round waiting
+2026-06-11T07:22:56.482639211Z [inf]  Crash round started
+2026-06-11T07:22:58.588577826Z [inf]  Crash round crashed
+2026-06-11T07:23:03.592009637Z [inf]  Crash round waiting
+2026-06-11T07:23:11.599471479Z [inf]  Crash round started
+2026-06-11T07:23:14.813473221Z [inf]  Crash round crashed
+2026-06-11T07:23:19.814618948Z [inf]  Crash round waiting
+2026-06-11T07:23:27.818364654Z [inf]  Crash round started
+2026-06-11T07:23:47.823879905Z [inf]  Crash round crashed
+2026-06-11T07:23:47.823882505Z [inf]  Crash round waiting
+2026-06-11T07:23:51.680865497Z [inf]  Crash round started
+2026-06-11T07:23:53.788282710Z [inf]  Crash round crashed
+2026-06-11T07:23:58.798022719Z [inf]  Crash round waiting
+2026-06-11T07:24:06.800974318Z [inf]  Crash round started
+2026-06-11T07:24:11.639383106Z [inf]  request completed
+2026-06-11T07:24:12.717358828Z [inf]  Crash round crashed
+2026-06-11T07:24:17.719752464Z [inf]  Crash round waiting
+2026-06-11T07:24:24.402560381Z [inf]  request completed
+2026-06-11T07:24:24.402562831Z [inf]  request completed
+2026-06-11T07:24:24.406613990Z [inf]  request completed
+2026-06-11T07:24:24.406617010Z [inf]  request completed
+2026-06-11T07:24:24.406620370Z [inf]  request completed
+2026-06-11T07:24:24.410446755Z [inf]  request completed
+2026-06-11T07:24:24.722616790Z [inf]  WebSocket client connected
+2026-06-11T07:24:25.612968623Z [inf]  request completed
+2026-06-11T07:24:25.723762633Z [inf]  Crash round started
+2026-06-11T07:24:28.162695809Z [inf]  request completed
+2026-06-11T07:24:30.031770163Z [inf]  Crash round crashed
+2026-06-11T07:24:32.402131382Z [inf]  request completed
+2026-06-11T07:24:34.027475680Z [inf]  request completed
+2026-06-11T07:24:34.470540525Z [inf]  WebSocket client connected
+2026-06-11T07:24:35.032423421Z [inf]  Crash round waiting
+2026-06-11T07:24:42.874925025Z [inf]  WebSocket client disconnected
+2026-06-11T07:24:42.894022894Z [inf]  request completed
+2026-06-11T07:24:42.898056475Z [inf]  request completed
+2026-06-11T07:24:42.898060415Z [inf]  request completed
+2026-06-11T07:24:42.911589005Z [inf]  request completed
+2026-06-11T07:24:43.036112761Z [inf]  Crash round started
+2026-06-11T07:24:43.144325207Z [inf]  request completed
+2026-06-11T07:24:44.115631668Z [inf]  request completed
+2026-06-11T07:24:44.817039946Z [inf]  request completed
+2026-06-11T07:24:45.120339688Z [inf]  WebSocket client connected
+2026-06-11T07:24:46.439056630Z [inf]  Crash round crashed
+2026-06-11T07:24:51.450511011Z [inf]  Crash round waiting
+2026-06-11T07:24:54.724704671Z [inf]  WS client failed to authenticate — closing
+2026-06-11T07:24:54.918365467Z [inf]  WebSocket client disconnected
+2026-06-11T07:24:59.450828313Z [inf]  Crash round started
+2026-06-11T07:25:00.464131637Z [inf]  WebSocket client connected
+2026-06-11T07:25:01.860482143Z [inf]  Crash round crashed
+2026-06-11T07:25:06.865824780Z [inf]  Crash round waiting
+2026-06-11T07:25:14.868253470Z [inf]  Crash round started
+2026-06-11T07:25:15.030859533Z [inf]  request completed
+2026-06-11T07:25:22.111475527Z [inf]  Crash round crashed
+2026-06-11T07:25:25.659030267Z [inf]  WebSocket client disconnected
+2026-06-11T07:25:25.663452831Z [inf]  request completed
+2026-06-11T07:25:25.663455351Z [inf]  request completed
+2026-06-11T07:25:25.667764418Z [inf]  request completed
+2026-06-11T07:25:25.668185721Z [inf]  request completed
+2026-06-11T07:25:25.672530667Z [inf]  request completed
+2026-06-11T07:25:27.111463805Z [inf]  Crash round waiting
+2026-06-11T07:25:28.125005789Z [inf]  request completed
+2026-06-11T07:25:33.750527779Z [inf]  request completed
+2026-06-11T07:25:35.126070367Z [inf]  Crash round started
+2026-06-11T07:25:39.496486815Z [inf]  request completed
+2026-06-11T07:25:39.500220200Z [inf]  Achievement unlocked
+2026-06-11T07:25:46.172959004Z [inf]  request completed
+2026-06-11T07:25:46.604007839Z [inf]  Crash round crashed
+2026-06-11T07:25:49.732496330Z [inf]  request completed
+2026-06-11T07:25:51.612803902Z [inf]  Crash round waiting
+2026-06-11T07:25:53.836845005Z [inf]  request completed
+2026-06-11T07:25:57.981088841Z [inf]  request completed
+2026-06-11T07:25:58.308989367Z [inf]  request completed
+2026-06-11T07:25:59.606542079Z [inf]  Crash round started
+2026-06-11T07:26:01.712222862Z [inf]  Crash round crashed
+2026-06-11T07:26:03.748873852Z [inf]  request completed
+2026-06-11T07:26:03.752892372Z [inf]  request completed
+2026-06-11T07:26:03.757131030Z [inf]  request completed
+2026-06-11T07:26:03.761134800Z [inf]  request completed
+2026-06-11T07:26:06.115411113Z [inf]  request completed
+2026-06-11T07:26:06.504883368Z [inf]  WebSocket client connected
+2026-06-11T07:26:06.722440784Z [inf]  Crash round waiting
+2026-06-11T07:26:14.719934644Z [inf]  Crash round started
+2026-06-11T07:26:16.827316355Z [inf]  Crash round crashed
+2026-06-11T07:26:20.161997071Z [inf]  request completed
+2026-06-11T07:26:20.171268004Z [inf]  request completed
+2026-06-11T07:26:20.175684060Z [inf]  request completed
+2026-06-11T07:26:20.195244650Z [inf]  WebSocket client disconnected
+2026-06-11T07:26:21.830166071Z [inf]  Crash round waiting
+2026-06-11T07:26:21.967421941Z [inf]  request completed
+2026-06-11T07:26:21.974776552Z [inf]  request completed
+2026-06-11T07:26:21.978491378Z [inf]  request completed
+2026-06-11T07:26:21.982228162Z [inf]  request completed
+2026-06-11T07:26:21.982231692Z [inf]  request completed
+2026-06-11T07:26:21.986510769Z [inf]  request completed
+2026-06-11T07:26:23.839117710Z [inf]  request completed
+2026-06-11T07:26:23.848647979Z [inf]  request completed
+2026-06-11T07:26:23.848652879Z [inf]  request completed
+2026-06-11T07:26:29.832009817Z [inf]  Crash round started
+2026-06-11T07:26:31.437684772Z [inf]  request completed
+2026-06-11T07:26:31.450083329Z [inf]  request completed
+2026-06-11T07:26:31.450087309Z [inf]  request completed
+2026-06-11T07:26:32.941756939Z [inf]  Crash round crashed
+2026-06-11T07:26:37.946922281Z [inf]  Crash round waiting
+2026-06-11T07:26:38.296293553Z [inf]  request completed
+2026-06-11T07:26:38.296297263Z [inf]  request completed
+2026-06-11T07:26:38.303864671Z [inf]  request completed
+2026-06-11T07:26:38.303868861Z [inf]  request completed
+2026-06-11T07:26:39.817209235Z [inf]  request completed
+2026-06-11T07:26:42.770246521Z [inf]  request completed
+2026-06-11T07:26:42.777917998Z [inf]  request completed
+2026-06-11T07:26:42.777921968Z [inf]  request completed
+2026-06-11T07:26:45.208011796Z [inf]  request completed
+2026-06-11T07:26:45.949489555Z [inf]  Crash round started
+2026-06-11T07:26:47.447877706Z [inf]  request completed
+2026-06-11T07:27:07.444565793Z [inf]  request completed
+2026-06-11T07:27:07.444571043Z [inf]  Crash round crashed
+2026-06-11T07:27:07.444576043Z [inf]  request completed
+2026-06-11T07:27:07.444580413Z [inf]  request completed
+2026-06-11T07:27:07.444589713Z [inf]  request completed
+2026-06-11T07:27:07.444593963Z [inf]  Crash round waiting
+2026-06-11T07:27:07.444598203Z [inf]  request completed
+2026-06-11T07:27:07.444602163Z [inf]  request completed
+2026-06-11T07:27:08.009948663Z [inf]  WebSocket client disconnected
+2026-06-11T07:27:11.780241479Z [inf]  Crash round started
+2026-06-11T07:27:13.882645348Z [inf]  Crash round crashed
+2026-06-11T07:27:18.890530727Z [inf]  Crash round waiting
+2026-06-11T07:27:26.893326449Z [inf]  Crash round started
+2026-06-11T07:27:30.102056875Z [inf]  Crash round crashed
+2026-06-11T07:27:35.125241131Z [inf]  Crash round waiting
+2026-06-11T07:27:43.126735618Z [inf]  Crash round started
+2026-06-11T07:27:50.646526420Z [inf]  Crash round crashed
+2026-06-11T07:27:55.653443664Z [inf]  Crash round waiting
+2026-06-11T07:28:03.655599634Z [inf]  Crash round started
+2026-06-11T07:28:05.759064441Z [inf]  Crash round crashed
+2026-06-11T07:28:10.763411093Z [inf]  Crash round waiting
+2026-06-11T07:28:18.770627090Z [inf]  Crash round started
+2026-06-11T07:28:20.877695821Z [inf]  Crash round crashed
+2026-06-11T07:28:25.882597605Z [inf]  Crash round waiting
+2026-06-11T07:28:33.881029746Z [inf]  Crash round started
+2026-06-11T07:28:53.879676610Z [inf]  Crash round crashed
+2026-06-11T07:28:53.879681340Z [inf]  Crash round waiting
+2026-06-11T07:28:59.221400971Z [inf]  Crash round started
+2026-06-11T07:29:19.223173116Z [inf]  Crash round crashed
+2026-06-11T07:29:19.223177316Z [inf]  Crash round waiting
+2026-06-11T07:29:24.359275105Z [inf]  Crash round started
+2026-06-11T07:29:26.475144225Z [inf]  Crash round crashed
+2026-06-11T07:29:31.470699960Z [inf]  Crash round waiting
+2026-06-11T07:29:39.479328201Z [inf]  Crash round started
+2026-06-11T07:29:41.583416616Z [inf]  Crash round crashed
+2026-06-11T07:29:46.592256018Z [inf]  Crash round waiting
+2026-06-11T07:29:54.602149941Z [inf]  Crash round started
+2026-06-11T07:29:56.700049358Z [inf]  Crash round crashed
+2026-06-11T07:30:01.706056287Z [inf]  Crash round waiting
+2026-06-11T07:30:09.710681400Z [inf]  Crash round started
+2026-06-11T07:30:11.833365777Z [inf]  Crash round crashed
+2026-06-11T07:30:16.845874376Z [inf]  Crash round waiting
+2026-06-11T07:30:24.859303930Z [inf]  Crash round started
+2026-06-11T07:30:29.435221536Z [inf]  Crash round crashed

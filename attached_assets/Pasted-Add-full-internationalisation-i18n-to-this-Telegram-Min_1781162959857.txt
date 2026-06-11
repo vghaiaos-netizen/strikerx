@@ -1,0 +1,34 @@
+Add full internationalisation (i18n) to this Telegram Mini App.
+Languages to support (10 total):
+English, Russian, Ukrainian, Belarusian, Romanian, Arabic, Polish, Bulgarian, Serbian, Portuguese
+Requirements:
+
+Choose whatever i18n framework best fits the existing stack — if it's React use i18next, if it's Vue use vue-i18n, if it's something else pick the most appropriate library. Install it properly, don't mock it.
+Create a translation file per language covering all visible UI strings — buttons, labels, error messages, onboarding copy, game UI. No hardcoded strings left in components.
+On first signup/onboarding, show a language selection screen before anything else. Display each language in its own script:
+
+
+English
+Русский
+Українська
+Беларуская
+Română
+العربية
+Polski
+Български
+Српски
+Português
+
+
+Save the user's language choice to their profile (database) AND localStorage as a fallback. On every subsequent visit, load their saved preference automatically — never ask again unless they change it.
+Add a language switcher in the app settings/profile screen. Changing language updates both the database record and localStorage immediately and re-renders the UI without a full page reload.
+Arabic must use RTL layout — flip the entire UI direction when Arabic is selected. All other languages are LTR.
+Fall back to English if a translation key is missing in any language.
+Do not use any paid translation APIs — use placeholder translations clearly marked with TODO comments so they can be replaced with proper translations later.
+
+Railway production compatibility:
+
+Translation files must be bundled at build time, not loaded from the filesystem at runtime — Railway's ephemeral filesystem means file reads after deploy are unreliable. All locale JSON files should be imported statically or bundled via the build tool (Vite/Webpack/etc).
+No hardcoded localhost URLs anywhere in the i18n config or language loader. All environment-dependent URLs must read from environment variables so they work identically on Replit (dev) and Railway (production).
+The language preference database column must be included in any existing migration files or a new migration — Railway runs migrations on deploy, so schema changes must be captured there, not applied manually.
+Test that the build compiles cleanly with npm run build before considering the task done — Railway deploys from the build output, not the dev server.
