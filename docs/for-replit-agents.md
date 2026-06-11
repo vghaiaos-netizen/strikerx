@@ -169,8 +169,9 @@ Do NOT manually set `WEBHOOK_DOMAIN`, `CORS_ORIGIN`, or `RAILWAY_PUBLIC_DOMAIN`.
 
 ### Railway connection string (for manual SQL only)
 ```
-postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway
+postgresql://postgres:PASSWORD@HOST:PORT/railway
 ```
+> ⚠️ Never commit the real connection string. Find it in Railway → your service → Variables → DATABASE_URL.
 
 ### Tables (16 total)
 
@@ -472,7 +473,7 @@ node scripts/github-push.mjs
 
 ```bash
 # Connect to Railway PostgreSQL from Replit bash
-psql "postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway"
+psql "postgresql://postgres:PASSWORD@HOST:PORT/railway"
 
 # Quick row count check
 psql "<connection_string>" -c "

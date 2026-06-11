@@ -69,7 +69,7 @@ After the first successful deploy (before any real players/data), you can use:
 
 ```bash
 # From Replit bash shell, using the Railway connection string
-psql "postgresql://postgres:kTjrtolNAndbfZlUqEJcveUfOMmhmwxI@zephyr.proxy.rlwy.net:53876/railway" \
+psql "postgresql://postgres:PASSWORD@HOST:PORT/railway" \
   -f <(DATABASE_URL="postgresql://..." node -e "require('./lib/db/src/schema')")
 ```
 
