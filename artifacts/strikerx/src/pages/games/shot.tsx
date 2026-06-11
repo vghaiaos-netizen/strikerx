@@ -193,7 +193,16 @@ export function TheShot() {
 
     if (event === "auth_ok") { setWsAuthed(true); return; }
 
-    if (event === "error") toast({ title: "Error", description: d.message as string, variant: "destructive" });
+    if (event === "error") {
+      const msg = String(d.message ?? "");
+      // Token errors: close silently — the WS will reconnect and home.tsx will
+      // have refreshed the token via Telegram initData by then.
+      if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
+        wsRef.current?.close();
+        return;
+      }
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
   }, [toast]);
 
   // Keep a ref to the latest token so the WS reconnect can always send current auth

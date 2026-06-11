@@ -55,6 +55,17 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // If server rejects our token, close and reconnect — home.tsx will have
+        // re-authed with fresh Telegram initData by then and localStorage will
+        // have a valid token on the next connect attempt.
+        if (event === "error") {
+          const msg = String(data.message ?? "");
+          if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
+            ws.close();
+            return;
+          }
+        }
+
         if (event === "big_win") {
           const mult = Number(data.multiplier ?? 0);
           const win  = Number(data.winAmount ?? 0);

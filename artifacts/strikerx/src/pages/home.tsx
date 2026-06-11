@@ -18,11 +18,14 @@ interface DailyMission { key: string; title: string; description: string; target
 interface DailyMissionsRow { id: number; missions: DailyMission[]; allCompleted: boolean; bonusClaimed: boolean; bonusStriker: number; date: string; }
 
 function useDevAuth() {
-  const { player, isLoading, setToken } = useAuth();
+  const { setToken } = useAuth();
   const telegramAuth = useTelegramAuth();
   const tried = useRef(false);
   useEffect(() => {
-    if (tried.current || player || isLoading || localStorage.getItem("strikerx_token")) return;
+    // Always re-auth with Telegram on every app open.
+    // Telegram's initData is always fresh; the server is idempotent (returns same player).
+    // This guarantees the stored token is valid after Railway restarts, JWT rotations, etc.
+    if (tried.current) return;
     tried.current = true;
     const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
     const initData = tg?.WebApp?.initData;
@@ -31,7 +34,7 @@ function useDevAuth() {
     } else if (import.meta.env.DEV) {
       telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
     }
-  }, [player, isLoading]);
+  }, []);
 }
 
 const GAMES = [
