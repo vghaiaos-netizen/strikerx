@@ -1,0 +1,19 @@
+{
+  "name": "StrikerX",
+  "short_name": "StrikerX",
+  "description": "Football casino — 4 games, instant crypto payouts",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#060a14",
+  "background_color": "#060a14",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"]
+}
