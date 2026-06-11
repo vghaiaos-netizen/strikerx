@@ -15,6 +15,7 @@ import {
 } from "./gameEngine";
 import { getMatchEventBonus } from "./matchEventBonus";
 import { creditAffiliateCommission } from "./affiliateCommission";
+import { progressMissions } from "./missionService";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -328,6 +329,9 @@ class CrashEngine {
     });
 
     this.broadcast("player_cashout", { playerId, username: bet.username, multiplier: cashoutMult, winAmount, roundId: this.currentRound.id });
+
+    // Progress daily missions (fire-and-forget)
+    progressMissions(playerId, ["play_any_3", ...(cashoutMult >= 2 ? ["shot_2x"] : [])]).catch(() => {});
 
     // Big win announcement
     const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");

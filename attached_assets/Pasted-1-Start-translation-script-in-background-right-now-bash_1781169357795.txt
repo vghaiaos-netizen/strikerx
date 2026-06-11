@@ -1,0 +1,82 @@
+1. Start translation script in background right now:
+bashcd artifacts/strikerx && node ../../scripts/translate.mjs > /tmp/translate.log 2>&1 &
+echo "Translation PID: $!"
+Note the PID. This takes 8-15 minutes (135 strings × 9 languages via MyMemory free API). Let it run the entire session. Do not wait for it — work on everything else while it runs.
+2. Orient yourself — read all .md files in the repo, then audit actual source code. Do not trust MD files over code. Where they conflict, the code is truth.
+
+CONTEXT: What the previous agent claimed to have done — verify each one in actual code before trusting it
+Previous agents across multiple sessions claimed to have shipped the following. Some landed, some partially landed, some are questionable. Audit every item by reading the actual file:
+
+Cache headers in artifacts/api-server/src/app.ts — index.html served with no-cache, no-store, must-revalidate, /assets/* with max-age=1y, immutable, SPA fallback app.get("*") also with no-cache. Plus three http-equiv meta tags in artifacts/strikerx/index.html. This is the most important item — Telegram was serving old versions because of caching. Verify it is exactly right.
+Graphics overhaul — all 4 games. The Shot: rocket SVG, stadium silhouette, glowing multiplier, particle trail. Penalty: human goalkeeper with skin tone/jersey/gloves, gradient turf, football with patches, crowd silhouette. Free Kick: textured ball, glowing pegs, risk-gradient slots. Minefield: 3D-lit cells, tension haze, DANGER badge, explosion flash. Read the actual component code — if any game still has basic rectangles or placeholder visuals, rebuild it fully.
+Sound system — src/lib/sound.ts with Web Audio API, 10 sounds, toggle in header persisting to localStorage. Wired into all 4 games. Accelerating heartbeat tick in The Shot (220Hz→440Hz, 2000ms→150ms interval scaling with multiplier).
+i18n system — src/i18n.ts with dynamic imports, 10 locale JSON files in src/locales/, language picker on first visit, RTL for Arabic, profile language switcher, DB column, API endpoint. Locale files currently contain English placeholders — the translation script running in background will fix this.
+Bundle optimisation — vite.config.ts with manualChunks splitting vendor-react, vendor-i18n, vendor-ui. Build should show no single chunk over 500KB, initial load under 400KB.
+Daily missions system — daily_missions DB table, GET /api/players/me/missions creates 3 missions on first daily login, progressMissions() service called after game completions, missions card on home screen with progress bars, streak counter with flame icon.
+TON price ticker — GET /api/public/ton-price from CoinGecko (no key needed), 60s cache in DB config, price chip on home screen showing live TON/USD.
+PWA manifest — artifacts/strikerx/public/manifest.json with StrikerX branding, linked in index.html.
+Reconnect handling — exponential backoff in shot.tsx (1s→2s→4s→8s, 8 attempts max), amber reconnecting banner, red failed banner with retry button. Server-side: bets unresolved after 30s auto-refund.
+How to Play guide — /guide route in App.tsx, accordion page covering all games, VIP tiers, deposits, withdrawals, referrals, jackpot. Accessible from home screen card.
+Live social layer on crash — real-time sidebar showing active players and cashout feed ("🇷🇴 Viktor cashed out at 4.2x"), player count badge on crash card.
+Country field — optional country column on player profile, flag emoji on leaderboard, top-by-country tab.
+Referral leaderboard — top 10 referrers by depositing referrals, crown badge on top referrer.
+Tournament bracket UI — countdown timer, live scores via WebSocket, initials avatars, prize pool display.
+Webhook fix — Telegram webhook registers correctly using RAILWAY_PUBLIC_DOMAIN env var on Railway startup.
+CryptoBot startup log — single clean line: [CryptoBot] Webhook: <URL> — register via @CryptoBot if not already done.
+
+
+OUTSTANDING — Not yet done, build these:
+1. Shot mission hook (small, do first)
+In crashEngine.ts, when a player cashes out at 2.0x or above, call progressMissions(playerId, ["play_any_3", "shot_2x"]). Import progressMissions the same way games.ts does it.
+2. Anything from the audit above that is missing or broken — fix it.
+
+NEW FEATURES — Build all of these if not already present:
+Read existing code patterns before implementing anything. Match existing conventions for DB schema, API routes, and component structure.
+Daily missions and streaks (if not confirmed above):
+3 missions per player per day from a randomised pool (play 3 games, win a penalty, reach 2x in The Shot, cash out of minefield, win a free kick). Completing all 3 awards a configurable TON bonus from DB config table. Streak counter for consecutive days. Flame icon + streak count on home screen. Missions reset at midnight UTC.
+Live social layer on crash game:
+Real-time sidebar via existing WebSocket showing active players in current round. Running feed: "🇷🇴 Viktor cashed out at 4.2x" — flag from country field if set, Striker#ID if not. Player count badge on crash game card on home screen.
+Referral leaderboard:
+Top 10 referrers by depositing referrals. Updates near real-time. Crown badge on top referrer profile. Accessible from community section on home screen.
+Tournament bracket UI:
+Read existing tournament scheduler code first. Bracket visualisation with countdown to next tournament, live scores via WebSocket, initials-based player avatars, prize pool prominent. Build a simple scheduler if none exists.
+TON price ticker:
+CoinGecko free API — https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd. No key required. Price chip near balance on home screen. Refresh every 60 seconds. Cache last known price in DB config so it shows instantly on load.
+Country field and flag leaderboard:
+Optional country dropdown on profile. Flag emoji next to name on leaderboard. Top by country tab on leaderboard page.
+PWA manifest (if not confirmed):
+artifacts/strikerx/public/manifest.json with StrikerX name, theme color, icons, display: standalone. Linked in index.html.
+Reconnect handling (if not confirmed):
+WebSocket drop → retry every 3s up to 5 attempts with exponential backoff. Amber "Reconnecting..." banner. Red "Connection lost" with retry button after all attempts fail. Server-side: unresolved bets auto-refund after 30s timeout.
+
+GRAPHICS — Non-negotiable standard
+If any game still has basic rectangles, plain colored divs, or placeholder-level visuals after the audit, rebuild it. Do not leave any game at school-project quality. Standards:
+The Shot: rocket SVG (body, fins, exhaust flame), stadium crowd silhouette at canvas bottom, multiplier text scaling and glowing amber→red as it climbs, particle trail, football pitch pattern in waiting state, accelerating heartbeat tick sound.
+Penalty: human goalkeeper (head, torso, arms, legs, skin tone, green jersey with number, yellow gloves), gradient turf with diagonal grass stripes, football with hexagonal patches and specular highlight, crowd silhouette behind goal, ball spin during flight, net ripple on goal.
+Free Kick: football texture on plinko ball, pegs glow and enlarge on hit, slot color gradient green center → red edges, diagonal field lines background, win slot pulse on land.
+Minefield: 3D-lit cells (gradient highlight top-left, shadow bottom-right), red tension haze intensifying with picks, DANGER badge above 5x, full-screen explosion flash on mine hit, pulsing preview grid during setup.
+
+TRANSLATIONS — Critical end-of-session step
+The translation script is running in background. At the end of the session, before pushing:
+bashtail -30 /tmp/translate.log
+Confirm it completed. Check src/locales/ru.json — strings should be Russian not English. If script failed or is still running, wait for it or re-run:
+bashcd artifacts/strikerx && node ../../scripts/translate.mjs
+Do not push until translations are confirmed. Commit the translated locale files as part of the final sync.
+
+BUNDLE — Confirm after any build
+After any pnpm --filter @workspace/strikerx run build:
+
+No single chunk over 500KB
+Initial load under 400KB
+Locale files appear as separate chunks in build output
+Sourcemap warnings for shadcn/ui components suppressed in vite.config.ts
+
+
+FINAL SYNC — Only after everything above is done
+
+Run pnpm --filter @workspace/strikerx run build — must pass cleanly
+Run pnpm --filter @workspace/api-server run build — must pass cleanly
+Zero TypeScript errors across monorepo
+Confirm translations completed
+Run bash scripts/SHELL_SYNC.sh using GITHUB_PERSONAL_ACCESS_TOKEN from Replit Secrets
+Report: final bundle sizes, which translations completed, anything needing operator input
