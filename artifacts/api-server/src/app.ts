@@ -11,6 +11,7 @@ import { logger } from "./lib/logger";
 import { initGameBot } from "./lib/gameBot";
 import { initGroupBotScheduler } from "./lib/groupBot";
 import { db, jackpotTable } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { initConfig } from "./lib/configService";
 import { deriveWebhookSecret } from "./routes/bots";
 
@@ -138,6 +139,28 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ── Startup: config, jackpot, bots, webhooks ──────────────────────────────────
 (async () => {
   await initConfig().catch((err) => logger.error({ err }, "Config service init failed"));
+
+  // Inline schema migration: create daily_missions if it doesn't exist yet.
+  // The table was added after the initial Railway deploy so it may be absent on production.
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS daily_missions (
+        id            SERIAL PRIMARY KEY,
+        player_id     INTEGER NOT NULL,
+        date          DATE NOT NULL,
+        missions      JSONB NOT NULL DEFAULT '[]',
+        all_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        bonus_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+        bonus_striker INTEGER NOT NULL DEFAULT 0,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT daily_missions_player_date_uidx UNIQUE (player_id, date)
+      )
+    `);
+    logger.info("Schema migration: daily_missions table ensured");
+  } catch (err) {
+    logger.warn({ err }, "Schema migration: daily_missions — skipped (may already exist)");
+  }
 
   try {
     const existing = await db.select().from(jackpotTable).limit(1);

@@ -398,79 +398,89 @@ function pickMissions(seed: number): DailyMission[] {
 
 // GET /players/me/missions
 router.get("/players/me/missions", requireAuth, async (req, res): Promise<void> => {
-  const { playerId } = req.player!;
-  const today = getTodayUtc();
+  try {
+    const { playerId } = req.player!;
+    const today = getTodayUtc();
 
-  const [row] = await db.select()
-    .from(dailyMissionsTable)
-    .where(and(
-      eq(dailyMissionsTable.playerId, playerId),
-      eq(dailyMissionsTable.date, today)
-    ));
+    const [row] = await db.select()
+      .from(dailyMissionsTable)
+      .where(and(
+        eq(dailyMissionsTable.playerId, playerId),
+        eq(dailyMissionsTable.date, today)
+      ));
 
-  if (row) {
-    res.json(row);
-    return;
+    if (row) {
+      res.json(row);
+      return;
+    }
+
+    const { getConfigFloat } = await import("../lib/configService");
+    const bonusStriker = await getConfigFloat("daily_mission_bonus", 200);
+    const missions = pickMissions(playerId + new Date().getDate());
+
+    const [newRow] = await db.insert(dailyMissionsTable)
+      .values({ playerId, date: today, missions, allCompleted: false, bonusClaimed: false, bonusStriker })
+      .returning();
+
+    res.json(newRow);
+  } catch (err) {
+    req.log.error({ err }, "Failed to load daily missions");
+    res.status(500).json({ error: "Could not load missions" });
   }
-
-  const { getConfigFloat } = await import("../lib/configService");
-  const bonusStriker = await getConfigFloat("daily_mission_bonus", 200);
-  const missions = pickMissions(playerId + new Date().getDate());
-
-  const [newRow] = await db.insert(dailyMissionsTable)
-    .values({ playerId, date: today, missions, allCompleted: false, bonusClaimed: false, bonusStriker })
-    .returning();
-
-  res.json(newRow);
 });
 
 // POST /players/me/missions/progress — called internally by game handlers on win
 // Also exposed as API so any game can POST { key, amount } to progress a mission
 router.post("/players/me/missions/progress", requireAuth, async (req, res): Promise<void> => {
-  const { playerId } = req.player!;
-  const { key, amount = 1 } = req.body as { key: string; amount?: number };
-  if (!key) { res.status(400).json({ error: "key required" }); return; }
+  try {
+    const { playerId } = req.player!;
+    const { key, amount = 1 } = req.body as { key: string; amount?: number };
+    if (!key) { res.status(400).json({ error: "key required" }); return; }
 
-  const today = getTodayUtc();
-  const [row] = await db.select()
-    .from(dailyMissionsTable)
-    .where(and(
-      eq(dailyMissionsTable.playerId, playerId),
-      eq(dailyMissionsTable.date, today)
-    ));
+    const today = getTodayUtc();
+    const [row] = await db.select()
+      .from(dailyMissionsTable)
+      .where(and(
+        eq(dailyMissionsTable.playerId, playerId),
+        eq(dailyMissionsTable.date, today)
+      ));
 
-  if (!row || row.allCompleted) { res.json({ ok: true, changed: false }); return; }
+    if (!row || row.allCompleted) { res.json({ ok: true, changed: false }); return; }
 
-  const updated = (row.missions as DailyMission[]).map(m => {
-    if (m.key !== key || m.completed) return m;
-    const progress = Math.min(m.target, m.progress + amount);
-    return { ...m, progress, completed: progress >= m.target };
-  });
+    const updated = (row.missions as DailyMission[]).map(m => {
+      if (m.key !== key || m.completed) return m;
+      const progress = Math.min(m.target, m.progress + amount);
+      return { ...m, progress, completed: progress >= m.target };
+    });
 
-  const allCompleted = updated.every(m => m.completed);
-  await db.update(dailyMissionsTable)
-    .set({ missions: updated, allCompleted })
-    .where(eq(dailyMissionsTable.id, row.id));
-
-  // Award bonus if all 3 just completed and not yet claimed
-  if (allCompleted && !row.bonusClaimed) {
+    const allCompleted = updated.every(m => m.completed);
     await db.update(dailyMissionsTable)
-      .set({ bonusClaimed: true })
+      .set({ missions: updated, allCompleted })
       .where(eq(dailyMissionsTable.id, row.id));
 
-    await db.update(playersTable)
-      .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${row.bonusStriker}` })
-      .where(eq(playersTable.id, playerId));
+    // Award bonus if all 3 just completed and not yet claimed
+    if (allCompleted && !row.bonusClaimed) {
+      await db.update(dailyMissionsTable)
+        .set({ bonusClaimed: true })
+        .where(eq(dailyMissionsTable.id, row.id));
 
-    await db.insert(transactionsTable).values({
-      playerId,
-      type: "bonus",
-      amountStriker: row.bonusStriker,
-      status: "completed",
-    });
+      await db.update(playersTable)
+        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${row.bonusStriker}` })
+        .where(eq(playersTable.id, playerId));
+
+      await db.insert(transactionsTable).values({
+        playerId,
+        type: "bonus",
+        amountStriker: row.bonusStriker,
+        status: "completed",
+      });
+    }
+
+    res.json({ ok: true, changed: true, allCompleted, bonusAwarded: allCompleted && !row.bonusClaimed });
+  } catch (err) {
+    req.log.error({ err }, "Failed to progress daily missions");
+    res.status(500).json({ error: "Could not update missions" });
   }
-
-  res.json({ ok: true, changed: true, allCompleted, bonusAwarded: allCompleted && !row.bonusClaimed });
 });
 
 export default router;
