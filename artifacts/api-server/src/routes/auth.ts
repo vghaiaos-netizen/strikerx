@@ -22,20 +22,39 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     return;
   }
 
-  const gamebotToken = await getConfig("gamebot_token");
+  // Always prefer env var for the bot token — DB value in getConfig can be stale/empty
+  // and would silently override a correctly-set env var via the DB-priority branch.
+  const gamebotToken = process.env.GAMEBOT_TOKEN ?? await getConfig("gamebot_token");
 
   let userData: Record<string, string> | null = null;
 
   if (process.env.NODE_ENV === "development" && initData.startsWith("dev:")) {
+    // Explicit dev bypass: "dev:<telegramId>:<username>"
     const parts = initData.split(":");
     userData = {
       user: JSON.stringify({ id: parseInt(parts[1] ?? "123456"), username: parts[2] ?? "testuser", first_name: "Test" }),
     };
-  } else {
+  } else if (gamebotToken) {
+    // Production path: full HMAC validation
     userData = validateTelegramInitData(initData, gamebotToken);
+    // Dev safety net: if HMAC fails in dev (token mismatch), parse user without HMAC
+    if (!userData && process.env.NODE_ENV === "development") {
+      try {
+        const params = new URLSearchParams(initData);
+        if (params.get("user")) userData = Object.fromEntries(params.entries());
+      } catch { /* fall through */ }
+    }
+  } else if (process.env.NODE_ENV === "development") {
+    // Dev mode with no bot token configured: parse user from initData without HMAC
+    // (safe — only active when NODE_ENV=development)
+    try {
+      const params = new URLSearchParams(initData);
+      if (params.get("user")) userData = Object.fromEntries(params.entries());
+    } catch { /* fall through */ }
   }
 
   if (!userData?.user) {
+    req.log.warn({ hasToken: !!gamebotToken, isDev: process.env.NODE_ENV === "development" }, "Telegram initData validation failed");
     res.status(401).json({ error: "Invalid Telegram init data" });
     return;
   }
