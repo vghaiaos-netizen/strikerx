@@ -114,7 +114,7 @@ if (isProd) {
     // All other static files — never cache
     app.use(express.static(distPath, { maxAge: 0, etag: false }));
     // SPA fallback — all unmatched routes serve index.html (always fresh)
-    app.get("*", (_req: Request, res: Response) => {
+    app.get("/{*path}", (_req: Request, res: Response) => {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
