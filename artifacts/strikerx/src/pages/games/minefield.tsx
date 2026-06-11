@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useStartMinefield, usePickMinefield, useCashoutMinefield, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bomb, CheckCircle2, Zap } from "lucide-react";
+import { soundManager } from "@/lib/sound";
 
 type CellState = "hidden" | "safe" | "mine";
 
@@ -105,6 +106,7 @@ export function Minefield() {
         setExplodedCell(pos);
         setMineFlash(true);
         setTimeout(() => setMineFlash(false), 700);
+        soundManager.play("crash");
         gridShakeRef.current += 1;
         setGridShake(gridShakeRef.current);
 
@@ -127,6 +129,7 @@ export function Minefield() {
         setCellStates(newStates);
         setLastSafePick(pos);
         setTimeout(() => setLastSafePick(null), 420);
+        soundManager.play("safe_pick");
 
         const newMult = res.currentMultiplier ?? session.currentMultiplier;
         setSession(prev => prev ? {
@@ -165,6 +168,7 @@ export function Minefield() {
       const res = await cashoutMine.mutateAsync({ id: session.id });
       toast({ title: `+${res.winAmount?.toFixed(0)} STRIKER`, description: `${res.multiplier?.toFixed(2)}×` });
       setSession(p => p ? { ...p, status: "won" } : p);
+      soundManager.play("cashout");
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     } catch (e: unknown) {
       toast({ title: "Cashout failed", description: (e as { message?: string })?.message, variant: "destructive" });
@@ -229,7 +233,7 @@ export function Minefield() {
 
         {!session ? (
           /* ── Setup ── */
-          <div className="flex-1 flex flex-col items-center px-4 py-4 gap-4 overflow-y-auto">
+          <div className="flex-1 flex flex-col items-center px-4 py-4 gap-4 overflow-y-auto min-h-0">
             <div className="text-center relative">
               <div className="relative w-20 h-20 mx-auto mb-4">
                 <motion.div

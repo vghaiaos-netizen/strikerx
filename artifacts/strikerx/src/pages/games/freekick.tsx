@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePlayFreekick, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
+import { soundManager } from "@/lib/sound";
 
 type Risk = "low" | "medium" | "high";
 
@@ -114,6 +115,7 @@ export function FreeKick() {
     setBallPath([]);
     setBallStep(-1);
     setLitRow(-1);
+    soundManager.play("kick");
 
     try {
       const res = await playFk.mutateAsync({ data: { betStriker: amount, riskLevel: risk } });
@@ -144,8 +146,10 @@ export function FreeKick() {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       if (res.winAmount && res.winAmount > 0) {
         toast({ title: `+${res.winAmount.toFixed(0)} STRIKER`, description: `${res.multiplier}× · slot ${slot + 1}` });
+        soundManager.play("win");
       } else {
         toast({ title: `${res.multiplier}×`, description: "Better luck next kick", variant: "destructive" });
+        soundManager.play("crash");
       }
     } catch (e: unknown) {
       toast({ title: "Error", description: (e as { message?: string })?.message, variant: "destructive" });

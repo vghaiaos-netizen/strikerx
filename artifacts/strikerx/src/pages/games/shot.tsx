@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, Users, Zap, Clock, Target } from "lucide-react";
+import { soundManager } from "@/lib/sound";
 
 type RoundStatus = "waiting" | "running" | "crashed";
 
@@ -165,17 +166,20 @@ export function TheShot() {
       setCrashHistory(prev => [crashPoint, ...prev].slice(0, 20));
       setCrashFlash(true);
       setTimeout(() => setCrashFlash(false), 600);
+      soundManager.play("crash");
     }
 
     if (event === "bet_accepted") {
       setMyBet({ placed: true, cashedOut: false });
       toast({ title: "Bet placed!", description: "Cash out before the crash!" });
+      soundManager.play("bet_placed");
     }
 
     if (event === "cashout_confirmed") {
       const { winAmount, multiplier } = d as { winAmount: number; multiplier: number };
       setMyBet({ placed: true, cashedOut: true, winAmount, multiplier });
       toast({ title: `Cashed out at ${multiplier.toFixed(2)}x`, description: `+${winAmount.toFixed(0)} STRIKER` });
+      soundManager.play("cashout");
     }
 
     if (event === "balance_update") {

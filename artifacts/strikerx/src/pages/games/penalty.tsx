@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePlayPenalty, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, ChevronUp, RotateCcw, Trophy } from "lucide-react";
+import { soundManager } from "@/lib/sound";
 
 type Zone = "left" | "center" | "right";
 
@@ -124,15 +125,18 @@ export function Penalty() {
         multiplier: res.multiplier ?? 1.92,
         winAmount: res.winAmount ?? 0,
       };
+      soundManager.play("kick");
       setTimeout(() => setBallPos({ x: ZONE_X[zone], y: ZONE_Y + 6 }), 40);
       setTimeout(() => {
         setResult(r);
         if (r.win) {
           setFlashWin(true); setTimeout(() => setFlashWin(false), 900);
           toast({ title: `GOAL! +${r.winAmount.toFixed(0)} STRIKER`, description: `${r.multiplier}× payout` });
+          soundManager.play("goal");
         } else {
           setFlashLose(true); setTimeout(() => setFlashLose(false), 750);
           toast({ title: "SAVED!", description: "Keeper dived the right way", variant: "destructive" });
+          soundManager.play("saved");
         }
         setHistory(prev => [r.win, ...prev].slice(0, 14));
         setKicking(false);
