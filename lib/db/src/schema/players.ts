@@ -27,6 +27,7 @@ export const playersTable = pgTable("players", {
   kycStatus: text("kyc_status").notNull().default("none"),
   groupMemberStatus: boolean("group_member_status").notNull().default(false),
   firstWithdrawalReviewed: boolean("first_withdrawal_reviewed").notNull().default(false),
+  country: text("country"),
   languagePreference: text("language_preference").notNull().default("en"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

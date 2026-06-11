@@ -8,3 +8,4 @@ export * from "./config";
 export * from "./achievements";
 export * from "./affiliates";
 export * from "./outreach";
+export * from "./missions";
