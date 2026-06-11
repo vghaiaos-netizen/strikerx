@@ -33,15 +33,17 @@ interface ChartPoint { x: number; y: number; }
 
 const QUICK_BETS = [50, 100, 500, 1000];
 
-// Static particle config (outside component — never recreated)
-const PARTICLES = Array.from({ length: 16 }, (_, i) => ({
+  // Static particle config (outside component — never recreated)
+const PARTICLES = Array.from({ length: 48 }, (_, i) => ({
   id: i,
-  left: `${((i / 16) * 100 + (i % 3) * 2).toFixed(1)}%`,
-  w: i % 5 === 0 ? 3 : 1.5,
+  left: `${((i / 48) * 100 + (i % 3) * 2).toFixed(1)}%`,
+  w: (i % 5) + 1,
   baseDur: 2.1 + (i % 5) * 0.38,
   delay: -((i * 0.31) % 2.8),
-  opacity: 0.06 + (i % 4) * 0.025,
+  opacity: 0.04 + (i % 4) * 0.02,
   gold: i % 7 === 0,
+  shape: i % 3 === 0 ? ("square" as const) : ("circle" as const),
+  dx: (i % 7) - 3,
 }));
 
 function getCrashColor(mult: number, crashed: boolean) {
@@ -267,10 +269,10 @@ export function TheShot() {
     }
     el.textContent = `
       @keyframes pRise {
-        0%   { transform: translateY(0px);    opacity: 0; }
+        0%   { transform: translate(0px, 0px);    opacity: 0; }
         8%   { opacity: var(--p-op); }
         92%  { opacity: var(--p-op); }
-        100% { transform: translateY(-${chartSize.h + 50}px); opacity: 0; }
+        100% { transform: translate(calc(var(--p-dx) * 1px * ${chartSize.w / 100}), -${chartSize.h + 50}px); opacity: 0; }
       }
     `;
     return () => {
@@ -404,6 +406,18 @@ export function TheShot() {
         {/* Chart */}
         <div className="relative flex-1 min-h-0" ref={chartRef}>
 
+          {/* Stadium Backdrop */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0" style={{ opacity: 0.12 }}>
+            <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
+              <rect x="0" y="195" width="400" height="5" fill="#00ff88" /> {/* Pitch line */}
+              <g fill="#ffffff">
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <path key={i} d={`M ${i * 20} 200 Q ${i * 20 + 10} 180 ${i * 20 + 20} 200`} />
+                ))}
+              </g>
+            </svg>
+          </div>
+
           {/* SVG */}
           <svg width={chartSize.w} height={chartSize.h}
             viewBox={`0 0 ${chartSize.w} ${chartSize.h}`}
@@ -453,18 +467,40 @@ export function TheShot() {
 
             {fill && <path d={fill} fill="url(#chartFill)" />}
             {line && (
-              <path d={line} fill="none" stroke={color} strokeWidth="2.5"
-                strokeLinecap="round" strokeLinejoin="round"
-                filter="url(#glow)"
-                style={{ transition: isCrashed ? "none" : "stroke 0.3s" }} />
+              <>
+                <path d={line} fill="none" stroke={color} strokeWidth="8"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  opacity="0.15" />
+                <path d={line} fill="none" stroke={color} strokeWidth="3.5"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  filter="url(#glow)"
+                  style={{ transition: isCrashed ? "none" : "stroke 0.3s" }} />
+              </>
             )}
 
             {/* Rocket dot */}
             {rocketX !== null && rocketY !== null && isRunning && (
-              <g>
-                <circle cx={rocketX} cy={rocketY} r="16" fill="url(#rocketPulse)" />
-                <circle cx={rocketX} cy={rocketY} r="5.5" fill={color} filter="url(#rocketGlow)" />
-                <circle cx={rocketX} cy={rocketY} r="3" fill="white" opacity="0.9" />
+              <g transform={`translate(${rocketX}, ${rocketY})`}>
+                <circle cx="0" cy="0" r="16" fill="url(#rocketPulse)" />
+                <g transform="rotate(-15) translate(-8, -8)">
+                  <path
+                    d="M15.5 2.5C15.5 2.5 14.5 1.5 12.5 1.5C10.5 1.5 8.5 3.5 7.5 5.5C6.5 7.5 6.5 10.5 6.5 10.5L1.5 13.5L4.5 14.5L5.5 19.5L8.5 14.5C8.5 14.5 11.5 14.5 13.5 13.5C15.5 12.5 17.5 10.5 17.5 8.5C17.5 6.5 16.5 5.5 15.5 2.5Z"
+                    fill={color}
+                    filter="url(#rocketGlow)"
+                  />
+                  <path
+                    d="M12.5 5.5C12.5 6.60457 11.6046 7.5 10.5 7.5C9.39543 7.5 8.5 6.60457 8.5 5.5C8.5 4.39543 9.39543 3.5 10.5 3.5C11.6046 3.5 12.5 4.39543 12.5 5.5Z"
+                    fill="white"
+                    opacity="0.9"
+                  />
+                  {/* Flame */}
+                  <motion.path
+                    d="M6.5 10.5L3.5 15.5L6.5 13.5L9.5 15.5L6.5 10.5Z"
+                    fill="#f59e0b"
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.7, 1, 0.7] }}
+                    transition={{ repeat: Infinity, duration: 0.2 }}
+                  />
+                </g>
               </g>
             )}
 
@@ -536,12 +572,21 @@ export function TheShot() {
                         strokeDashoffset={ringCirc * (1 - ringProgress)}
                         style={{ transition: "stroke-dashoffset 0.9s linear" }} />
                     </svg>
-                    <div className="relative flex flex-col items-center">
-                      <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 38 }}>
-                        {waitCountdown}
-                      </span>
-                      <span className="text-[9px] font-mono tracking-[0.25em] text-white/25 uppercase -mt-0.5">sec</span>
+                  <div className="relative flex flex-col items-center">
+                    <div className="absolute inset-0 z-[-1] opacity-10">
+                      <svg width="120" height="120" viewBox="0 0 100 100" fill="none" stroke="white" strokeWidth="0.5">
+                        <rect x="5" y="5" width="90" height="90" rx="2" />
+                        <line x1="50" y1="5" x2="50" y2="95" />
+                        <circle cx="50" cy="50" r="15" />
+                        <circle cx="50" cy="5" r="10" clipPath="inset(0 0 50% 0)" />
+                        <circle cx="50" cy="95" r="10" clipPath="inset(50% 0 0 0)" />
+                      </svg>
                     </div>
+                    <span className="font-display font-black text-white tabular-nums leading-none" style={{ fontSize: 38 }}>
+                      {waitCountdown}
+                    </span>
+                    <span className="text-[9px] font-mono tracking-[0.25em] text-white/25 uppercase -mt-0.5">sec</span>
+                  </div>
                   </div>
                   <div className="flex items-center gap-1.5 text-white/25">
                     <Clock className="w-3 h-3" />
@@ -563,9 +608,9 @@ export function TheShot() {
                   <motion.div
                     className="font-display font-black tabular-nums leading-none"
                     style={{
-                      fontSize: "clamp(76px,22vw,108px)",
+                      fontSize: `clamp(76px, ${76 + (mult - 1) * 2}px, 120px)`,
                       color,
-                      textShadow: `0 0 60px ${color}55, 0 0 24px ${color}28`,
+                      textShadow: `0 0 80px ${color}88, 0 0 40px ${color}44`,
                       transition: "color 0.3s, text-shadow 0.3s",
                     }}
                     animate={activeMilestone

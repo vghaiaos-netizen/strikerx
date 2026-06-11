@@ -46,7 +46,7 @@ const ROWS       = 8;        // peg rows → 9 final slots
 const ROW_H      = 28;       // vertical spacing
 const TOP_PAD    = 18;       // y offset for first peg row
 const SLOT_Y     = TOP_PAD + ROWS * ROW_H + 10;
-const SLOT_H     = 26;
+const SLOT_H     = 30;
 const SVG_H      = SLOT_Y + SLOT_H + 10;
 
 // Ball x-center for slot column c (0-indexed)
@@ -175,24 +175,38 @@ export function FreeKick() {
           <span className="ml-auto text-[10px] font-mono text-white/22">Plinko · 9 slots</span>
         </div>
 
-        <div className="flex-1 flex flex-col items-center min-h-0 px-4 py-3 gap-3 overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center min-h-0 px-4 py-3 gap-3 overflow-y-auto relative">
+          {/* Football field pattern background */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.04]" 
+               style={{ 
+                 backgroundImage: `repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 40px)`,
+                 maskImage: 'radial-gradient(circle, black, transparent 80%)'
+               }} 
+          />
 
           {/* Risk selector */}
-          <div className="flex gap-2 w-full max-w-xs">
+          <div className="flex gap-2 w-full max-w-xs z-10">
             {RISK_OPTS.map(({ r, label, color }) => (
               <button key={r}
                 onClick={() => { if (!animating) { setRisk(r); setResult(null); setBallPath([]); setBallStep(-1); } }}
-                className="flex-1 py-2.5 rounded-xl border-2 font-display font-bold text-xs tracking-widest transition-all"
+                className="flex-1 py-2.5 rounded-xl border-2 font-display font-bold text-xs tracking-widest transition-all relative"
                 style={risk === r
                   ? { color, borderColor: color, background: `${color}18` }
                   : { color: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.1)" }}>
                 {label}
+                {risk === r && (
+                  <motion.div 
+                    layoutId="risk-underline"
+                    className="absolute -bottom-1 left-1/4 right-1/4 h-[2px]"
+                    style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
+                  />
+                )}
               </button>
             ))}
           </div>
 
           {/* Plinko SVG */}
-          <div className="flex-1 flex items-center justify-center w-full min-h-0">
+          <div className="flex-1 flex items-center justify-center w-full min-h-0 z-10">
             <svg
               viewBox={`0 0 ${SVG_W} ${SVG_H}`}
               className="w-full"
@@ -207,18 +221,33 @@ export function FreeKick() {
                   <feGaussianBlur stdDeviation="3.5" result="b" />
                   <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
                 </filter>
+                <radialGradient id="slot-row-grad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.05" />
+                  <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                </radialGradient>
               </defs>
+
+              {/* Slot row background */}
+              <rect x={BOARD_PAD_X} y={SLOT_Y - 5} width={BOARD_W} height={SLOT_H + 10} fill="url(#slot-row-grad)" rx="10" />
 
               {/* Pegs */}
               {Array.from({ length: ROWS }).map((_, row) =>
                 pegPositions(row).map((peg, col) => {
                   const isLit = litRow === row;
                   return (
-                    <circle key={`${row}-${col}`}
-                      cx={peg.x} cy={peg.y} r="3.5"
-                      fill={isLit ? "rgba(255,240,180,0.75)" : "rgba(255,255,255,0.18)"}
-                      style={{ transition: "fill 0.12s" }}
-                    />
+                    <g key={`${row}-${col}`}>
+                      {isLit && (
+                        <circle cx={peg.x} cy={peg.y} r="10" fill="white" opacity="0.15" />
+                      )}
+                      <circle
+                        cx={peg.x} cy={peg.y} r={isLit ? 5 : 3.5}
+                        fill={isLit ? "#ffffff" : "rgba(255,255,255,0.28)"}
+                        style={{ transition: "all 0.12s" }}
+                      />
+                      {!isLit && (
+                        <circle cx={peg.x - 1} cy={peg.y - 1.5} r="1" fill="white" opacity="0.4" />
+                      )}
+                    </g>
                   );
                 })
               )}
@@ -232,23 +261,31 @@ export function FreeKick() {
                 return (
                   <g key={i}>
                     <motion.rect
-                      x={x} y={SLOT_Y} width={w} height={SLOT_H} rx="4"
+                      x={x} y={SLOT_Y} width={w} height={SLOT_H} rx="6"
                       fill={isWin ? c : `${c}1e`}
                       stroke={isWin ? c : `${c}40`}
-                      strokeWidth={isWin ? 1.5 : 0.8}
-                      animate={isWin ? { scale: [1, 1.12, 1.04, 1] } : { scale: 1 }}
-                      transition={{ duration: 0.42 }}
+                      strokeWidth={isWin ? 2 : 0.8}
+                      animate={isWin ? { 
+                        scale: [1, 1.15, 1],
+                        fill: [c, "#ffffff", c],
+                        filter: ["blur(0px)", "blur(2px)", "blur(0px)"]
+                      } : { scale: 1 }}
+                      transition={isWin ? { 
+                        duration: 0.6, 
+                        repeat: Infinity,
+                        repeatType: "reverse"
+                      } : { duration: 0.42 }}
                       filter={isWin ? "url(#fk-slot-glow)" : undefined}
                       style={{ transformOrigin: `${x + w / 2}px ${SLOT_Y + SLOT_H / 2}px` }}
                     />
                     <text
                       x={x + w / 2} y={SLOT_Y + SLOT_H * 0.65}
-                      textAnchor="middle" fontSize={m >= 2.5 ? "8.5" : "7.8"}
+                      textAnchor="middle" fontSize={m >= 2.5 ? "9" : "8"}
                       fontFamily="monospace" fontWeight="bold"
                       fill={isWin ? (m < 0.1 ? "#888" : "#000") : c}
-                      opacity={isWin ? 1 : 0.75}
+                      opacity={isWin ? 1 : 0.85}
                     >
-                      {m.toFixed(m >= 1 ? 2 : 2)}×
+                      {m.toFixed(m >= 1 ? 1 : 2)}×
                     </text>
 
                     {/* Landing burst ring */}
@@ -256,10 +293,10 @@ export function FreeKick() {
                       <motion.circle
                         cx={x + w / 2} cy={SLOT_Y + SLOT_H / 2}
                         r={10}
-                        fill="none" stroke={c} strokeWidth="2.5"
+                        fill="none" stroke={c} strokeWidth="3"
                         initial={{ scale: 0.5, opacity: 0.9 }}
-                        animate={{ scale: 3.5, opacity: 0 }}
-                        transition={{ duration: 0.7, ease: "easeOut" }}
+                        animate={{ scale: 4, opacity: 0 }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
                         style={{ transformOrigin: `${x + w / 2}px ${SLOT_Y + SLOT_H / 2}px` }}
                       />
                     )}
@@ -272,14 +309,14 @@ export function FreeKick() {
                 <circle
                   cx={slotCX(trail2)}
                   cy={ballStep >= 2 ? rowY(Math.max(0, ballStep - 2)) : SLOT_Y + SLOT_H / 2}
-                  r="4" fill="#f59e0b" opacity="0.18"
+                  r="4" fill="white" opacity="0.08"
                 />
               )}
               {ballVisible && animating && trail1 !== null && (
                 <circle
                   cx={slotCX(trail1)}
                   cy={ballStep >= 1 ? rowY(Math.max(0, ballStep - 1)) : SLOT_Y + SLOT_H / 2}
-                  r="5.5" fill="#f59e0b" opacity="0.38"
+                  r="5.5" fill="white" opacity="0.15"
                 />
               )}
 
@@ -288,13 +325,17 @@ export function FreeKick() {
                 <motion.g
                   key={`ball-${ballStep}`}
                   initial={{ cx: ballCX, cy: ballCY }}
-                  animate={{ scale: [1, 0.82, 1] }}
+                  animate={{ scale: [1, 0.85, 1] }}
                   transition={{ duration: 0.14 }}
                 >
                   <circle cx={ballCX} cy={ballCY} r="7.5"
-                    fill="#f59e0b" filter="url(#fk-ball-glow)" />
-                  <circle cx={ballCX - 2} cy={ballCY - 2.5} r="2.5" fill="rgba(255,255,255,0.35)" />
-                  <circle cx={ballCX + 2} cy={ballCY + 2} r="3.5" fill="rgba(0,0,0,0.25)" />
+                    fill="#f5f5f5" filter="url(#fk-ball-glow)" />
+                  {/* Football patches */}
+                  <circle cx={ballCX - 3} cy={ballCY - 3} r="2" fill="#111" opacity="0.7" />
+                  <circle cx={ballCX + 3} cy={ballCY} r="2" fill="#111" opacity="0.7" />
+                  <circle cx={ballCX} cy={ballCY + 3} r="2" fill="#111" opacity="0.7" />
+                  {/* Highlight */}
+                  <circle cx={ballCX - 2} cy={ballCY - 2.5} r="2" fill="white" opacity="0.4" />
                 </motion.g>
               )}
             </svg>

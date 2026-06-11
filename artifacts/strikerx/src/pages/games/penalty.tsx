@@ -30,42 +30,61 @@ const KEEPER_DIVE_X: Record<Zone, number> = { left: NX + 28, center: NX + NW / 2
 const ARM = 22;
 
 function Keeper({ cx, diveDir }: { cx: number; diveDir: Zone | null }) {
-  const lean = diveDir === "left" ? -22 : diveDir === "right" ? 22 : 0;
-  const lArmRot = diveDir === "left" ? -50 : diveDir === "right" ? -8 : -28;
-  const rArmRot = diveDir === "right" ? 50 : diveDir === "left" ? 8 : 28;
   const KY = NY + 56;
+  const isDiving = !!diveDir;
+  
+  // Animation variants
+  const lean = diveDir === "left" ? -22 : diveDir === "right" ? 22 : 0;
+  
   return (
     <g transform={`translate(${cx}, ${KY})`}>
       <g transform={`rotate(${lean})`}>
         {/* Torso */}
-        <rect x="-9" y="-16" width="18" height="22" rx="5" fill="#00aa55" />
-        {/* Number */}
-        <text x="0" y="-4" textAnchor="middle" fontSize="9" fill="white" fontWeight="bold" opacity="0.7">1</text>
+        <rect x="-10" y="-18" width="20" height="26" rx="8" fill="url(#jerseyGrad)" />
+        
+        {/* Number "1" */}
+        <text x="0" y="2" textAnchor="middle" fontSize="11" fill="white" fontWeight="900" opacity="0.9" style={{ userSelect: "none" }}>1</text>
+        
         {/* Head */}
-        <circle cx="0" cy="-25" r="11" fill="#f5d17a" />
-        {/* Eyes */}
-        <circle cx="-3.5" cy="-26.5" r="1.5" fill="#444" />
-        <circle cx="3.5" cy="-26.5" r="1.5" fill="#444" />
-        {/* Left arm */}
-        <g transform={`rotate(${lArmRot})`}>
-          <rect x="-3" y="-3" width="6" height={ARM} rx="3" fill="#009944" />
-          <circle cx="0" cy={ARM - 2} r="5" fill="#f5d17a" />
-        </g>
-        {/* Right arm */}
-        <g transform={`rotate(${rArmRot})`}>
-          <rect x="-3" y="-3" width="6" height={ARM} rx="3" fill="#009944" />
-          <circle cx="0" cy={ARM - 2} r="5" fill="#f5d17a" />
-        </g>
+        <circle cx="0" cy="-30" r="13" fill="#f5b87a" />
+        {/* Hair/Cap */}
+        <path d="M -13 -32 A 13 13 0 0 1 13 -32 L 13 -35 Q 0 -42 -13 -35 Z" fill="#222" />
+        
+        {/* Arms */}
+        {diveDir === "left" ? (
+          <>
+            <path d="M -10 -10 Q -25 -15 -35 -25" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="-35" cy="-25" r="7" fill="#f5c518" />
+            <path d="M 10 -10 Q 20 -5 25 5" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="25" cy="5" r="7" fill="#f5c518" />
+          </>
+        ) : diveDir === "right" ? (
+          <>
+            <path d="M 10 -10 Q 25 -15 35 -25" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="35" cy="-25" r="7" fill="#f5c518" />
+            <path d="M -10 -10 Q -20 -5 -25 5" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="-25" cy="5" r="7" fill="#f5c518" />
+          </>
+        ) : (
+          <>
+            <path d="M -10 -10 Q -18 0 -15 15" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="-15" cy="15" r="7" fill="#f5c518" />
+            <path d="M 10 -10 Q 18 0 15 15" stroke="#00cc55" strokeWidth="9" fill="none" strokeLinecap="round" />
+            <circle cx="15" cy="15" r="7" fill="#f5c518" />
+          </>
+        )}
+
         {/* Shorts */}
-        <rect x="-9" y="6" width="18" height="12" rx="3" fill="#007733" />
+        <rect x="-10" y="8" width="20" height="12" rx="4" fill="#007733" />
+        
         {/* Legs */}
-        <g transform={diveDir === "left" ? "rotate(-18, -4, 16)" : ""}>
-          <rect x="-8" y="16" width="7" height="15" rx="3" fill="#00aa55" />
-          <rect x="-7" y="28" width="7" height="7" rx="2" fill="#222" />
+        <g transform={diveDir === "left" ? "rotate(-30, -5, 18)" : ""}>
+          <path d="M -8 18 L -10 32 Q -10 38 -4 38" stroke="#00cc55" strokeWidth="8" fill="none" strokeLinecap="round" />
+          <rect x="-11" y="34" width="10" height="6" rx="2" fill="#111" />
         </g>
-        <g transform={diveDir === "right" ? "rotate(18, 4, 16)" : ""}>
-          <rect x="1" y="16" width="7" height="15" rx="3" fill="#00aa55" />
-          <rect x="2" y="28" width="7" height="7" rx="2" fill="#222" />
+        <g transform={diveDir === "right" ? "rotate(30, 5, 18)" : ""}>
+          <path d="M 8 18 L 10 32 Q 10 38 4 38" stroke="#00cc55" strokeWidth="8" fill="none" strokeLinecap="round" />
+          <rect x="1" y="34" width="10" height="6" rx="2" fill="#111" />
         </g>
       </g>
     </g>
@@ -175,6 +194,17 @@ export function Penalty() {
                   <feGaussianBlur stdDeviation="5" result="b" />
                   <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
                 </filter>
+                <linearGradient id="pitchGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#0d2914" />
+                  <stop offset="100%" stopColor="#091909" />
+                </linearGradient>
+                <linearGradient id="jerseyGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00cc55" />
+                  <stop offset="100%" stopColor="#009944" />
+                </linearGradient>
+                <pattern id="grassStripes" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="20" height="40" fill="rgba(255,255,255,0.03)" />
+                </pattern>
                 <pattern id="nh" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
                   <line x1="0" y1="0" x2="10" y2="0" stroke="rgba(255,255,255,0.09)" strokeWidth="0.8" />
                   <line x1="0" y1="5" x2="10" y2="5" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
@@ -185,14 +215,34 @@ export function Penalty() {
                 </pattern>
               </defs>
 
-              {/* Pitch */}
-              <rect x="0" y={NY + NH + 4} width={SW} height={SH - NY - NH - 4} fill="#091e0d" />
-              <ellipse cx={SW / 2} cy={NY + NH + 20} rx="55" ry="9" fill="#0d2914" />
-              <circle cx={BALL_SX} cy={NY + NH + 28} r="2.5" fill="rgba(255,255,255,0.22)" />
-              {/* Penalty arc */}
-              <path d={`M ${NX - 2} ${NY + NH + 4} Q ${SW / 2} ${NY + NH - 28} ${NX + NW + 2} ${NY + NH + 4}`}
-                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+              {/* Stadium Atmosphere */}
+              <g opacity="0.06">
+                {Array.from({ length: 24 }).map((_, i) => (
+                  <ellipse 
+                    key={i} 
+                    cx={(SW / 24) * i + (SW / 48)} 
+                    cy={5 + Math.random() * 5} 
+                    rx="5" 
+                    ry={6 + Math.random() * 4} 
+                    fill="white" 
+                  />
+                ))}
+              </g>
 
+              {/* Pitch */}
+              <rect x="0" y={NY + NH + 4} width={SW} height={SH - NY - NH - 4} fill="url(#pitchGrad)" />
+              <rect x="0" y={NY + NH + 4} width={SW} height={SH - NY - NH - 4} fill="url(#grassStripes)" />
+              
+              <ellipse cx={SW / 2} cy={NY + NH + 20} rx="55" ry="9" fill="rgba(13, 41, 20, 0.6)" />
+              <circle cx={BALL_SX} cy={NY + NH + 28} r="2.5" fill="rgba(255,255,255,0.35)" />
+              
+              {/* Penalty arc */}
+              <path d={`M ${NX - 20} ${NY + NH + 4} Q ${SW / 2} ${NY + NH - 20} ${NX + NW + 20} ${NY + NH + 4}`}
+                fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
+
+              {/* Net background tint */}
+              <rect x={NX} y={NY} width={NW} height={NH} fill="#00080a" opacity="0.3" />
+              
               {/* Net */}
               <rect x={NX} y={NY} width={NW} height={NH} fill="url(#nh)" />
               <rect x={NX} y={NY} width={NW} height={NH} fill="url(#nv)" />
@@ -239,8 +289,16 @@ export function Penalty() {
 
               {/* Ball */}
               <motion.g
-                animate={{ x: ballPos.x - BALL_SX, y: ballPos.y - BALL_SY }}
-                transition={{ duration: 0.42, ease: [0.2, 0.0, 0.35, 1.0] }}
+                animate={{ 
+                  x: ballPos.x - BALL_SX, 
+                  y: ballPos.y - BALL_SY,
+                  rotate: kicking ? 360 : 0
+                }}
+                transition={{ 
+                  duration: 0.42, 
+                  ease: [0.2, 0.0, 0.35, 1.0],
+                  rotate: { duration: 0.42, ease: "linear" }
+                }}
               >
                 {/* Shadow */}
                 <ellipse cx={BALL_SX} cy={BALL_SY + 9} rx="8" ry="3" fill="black" opacity="0.35" />
@@ -248,21 +306,28 @@ export function Penalty() {
                 <circle cx={BALL_SX} cy={BALL_SY} r="9"
                   fill={result ? (result.win ? "white" : "#ffc0c0") : "white"}
                   filter="url(#bglow)" />
-                <circle cx={BALL_SX - 2.5} cy={BALL_SY - 2.5} r="3.2" fill="#2a2a2a" opacity="0.4" />
-                <circle cx={BALL_SX + 3} cy={BALL_SY - 1.5} r="2.2" fill="#2a2a2a" opacity="0.35" />
-                <circle cx={BALL_SX} cy={BALL_SY + 3.5} r="2" fill="#2a2a2a" opacity="0.3" />
+                
+                {/* Football Patches */}
+                <circle cx={BALL_SX} cy={BALL_SY - 4} r="1.8" fill="#111" opacity="0.8" />
+                <circle cx={BALL_SX - 4} cy={BALL_SY + 1} r="1.8" fill="#111" opacity="0.8" />
+                <circle cx={BALL_SX + 4} cy={BALL_SY + 1} r="1.8" fill="#111" opacity="0.8" />
+                <circle cx={BALL_SX - 2} cy={BALL_SY + 5} r="1.8" fill="#111" opacity="0.8" />
+                <circle cx={BALL_SX + 2} cy={BALL_SY + 5} r="1.8" fill="#111" opacity="0.8" />
+                
+                {/* Specular Highlight */}
+                <circle cx={BALL_SX - 3} cy={BALL_SY - 3} r="2.5" fill="white" opacity="0.6" />
               </motion.g>
 
               {/* Goal celebration rings */}
               <AnimatePresence>
-                {result?.win && [1, 2, 3].map(n => (
+                {result?.win && [1, 2, 3, 4, 5].map(n => (
                   <motion.circle key={n}
                     cx={ZONE_X[result.playerDirection]} cy={ZONE_Y + 6}
                     r={12}
                     fill="none" stroke="#00ff88" strokeWidth="2"
                     initial={{ r: 12, opacity: 0.85 }}
-                    animate={{ r: 12 + n * 22, opacity: 0 }}
-                    transition={{ duration: 0.75, delay: n * 0.1, ease: "easeOut" }}
+                    animate={{ r: 12 + n * 30, opacity: 0 }}
+                    transition={{ duration: 0.8, delay: n * 0.08, ease: "easeOut" }}
                     style={{ transformOrigin: `${ZONE_X[result.playerDirection]}px ${ZONE_Y + 6}px` }}
                   />
                 ))}
@@ -309,12 +374,14 @@ export function Penalty() {
               return (
                 <motion.button
                   key={zone}
-                  whileTap={!hasResult ? { scale: 0.88 } : {}}
+                  whileHover={!kicking && !hasResult ? { scale: 1.02 } : {}}
+                  whileTap={!hasResult ? { scale: 0.95 } : {}}
                   onClick={() => !hasResult && handleKick(zone)}
                   disabled={kicking || hasResult}
                   className={`
-                    flex flex-col items-center gap-1.5 py-4 rounded-2xl border-2 font-display
+                    flex flex-col items-center gap-1.5 py-5 rounded-2xl border-2 font-display
                     font-bold text-[11px] uppercase tracking-widest transition-all duration-150
+                    group relative overflow-hidden
                     ${selectedZone === zone && kicking ? "border-[#00ff88] bg-[#00ff88]/18 text-[#00ff88]" : ""}
                     ${isShot && result?.win ? "border-[#00ff88]/55 bg-[#00ff88]/14 text-[#00ff88]" : ""}
                     ${isShot && !result?.win ? "border-red-400/45 bg-red-400/10 text-red-400" : ""}
@@ -323,12 +390,17 @@ export function Penalty() {
                     ${hasResult && !isShot && !isKeeper ? "border-white/5 text-white/18" : ""}
                   `}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 transition-transform duration-200 group-hover:scale-125" />
                   <span>
                     {hasResult
                       ? (isShot ? (result.win ? "goal" : "shot") : isKeeper ? "keeper" : zone)
                       : zone}
                   </span>
+                  {!hasResult && !kicking && (
+                    <div className="absolute bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ChevronUp className="w-3 h-3 text-[#00ff88] animate-bounce" />
+                    </div>
+                  )}
                 </motion.button>
               );
             })}

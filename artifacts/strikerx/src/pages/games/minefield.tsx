@@ -187,6 +187,12 @@ export function Minefield() {
   const color = multColor(mult);
   const tensionAlpha = isActive && mult >= 3 ? Math.min(0.12, (mult - 3) * 0.02) : 0;
 
+  const multGlow = mult >= 5 
+    ? "text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]" 
+    : mult >= 2 
+      ? "text-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.3)]" 
+      : "text-[#00ff88] shadow-[0_0_8px_rgba(0,255,136,0.2)]";
+
   return (
     <Layout>
       {/* Explosion flash */}
@@ -206,8 +212,17 @@ export function Minefield() {
           <span className="font-display font-bold text-xs tracking-[0.2em] text-white">MINEFIELD</span>
           {session && isActive && (
             <div className="ml-auto flex items-center gap-3">
+              {mult > 5 && (
+                <motion.span 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold animate-pulse"
+                >
+                  DANGER
+                </motion.span>
+              )}
               <span className="text-[10px] font-mono text-white/25">{safeProb}% safe next</span>
-              <span className="text-[11px] font-mono font-bold" style={{ color }}>{mult.toFixed(3)}×</span>
+              <span className={`text-[11px] font-mono font-bold transition-all duration-300 ${multGlow}`} style={{ color }}>{mult.toFixed(3)}×</span>
             </div>
           )}
         </div>
@@ -215,55 +230,72 @@ export function Minefield() {
         {!session ? (
           /* ── Setup ── */
           <div className="flex-1 flex flex-col items-center px-4 py-4 gap-4 overflow-y-auto">
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-2xl bg-red-400/10 border border-red-400/20 flex items-center justify-center mx-auto mb-3">
-                <Bomb className="w-7 h-7 text-red-400/65" />
+            <div className="text-center relative">
+              <div className="relative w-20 h-20 mx-auto mb-4">
+                <motion.div
+                  className="absolute inset-0 rounded-full bg-red-500/20"
+                  animate={{ scale: [1, 1.5], opacity: [0.3, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
+                />
+                <div className="absolute inset-0 w-20 h-20 rounded-2xl bg-gradient-to-br from-red-500/20 to-transparent border border-red-500/30 flex items-center justify-center">
+                  <Bomb className="w-10 h-10 text-red-500" />
+                </div>
               </div>
-              <div className="font-display font-bold text-base text-white/65">Click safe squares</div>
-              <div className="text-[11px] font-mono text-white/28 mt-1">Cash out before hitting a mine</div>
+              <div className="font-display font-bold text-lg text-white">Click safe squares</div>
+              <div className="text-[12px] font-mono text-white/40 mt-1">Cash out before hitting a mine</div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 w-full max-w-[288px]">
+            <div className="grid grid-cols-2 gap-2.5 w-full max-w-[320px]">
               {PRESETS.map((p, i) => (
                 <button key={i} onClick={() => setPreset(i)}
-                  className={`py-3 px-3 rounded-xl border font-mono transition-all text-left ${
+                  className={`py-3.5 px-4 rounded-xl border font-mono transition-all text-left relative overflow-hidden ${
                     preset === i
-                      ? "border-red-400/60 bg-red-400/10 text-red-400"
-                      : "border-white/10 text-white/38 hover:border-white/22"
+                      ? "border-red-400/60 bg-red-400/10 text-red-400 shadow-[0_0_15px_rgba(248,113,113,0.1)]"
+                      : "border-white/10 text-white/38 hover:border-white/22 bg-white/5"
                   }`}>
-                  <div className="text-xs font-bold">{p.label}</div>
-                  <div className="text-[9px] opacity-55 mt-0.5">{p.risk} risk · 5×5</div>
+                  <div className="text-sm font-bold">{p.label}</div>
+                  <div className="text-[10px] opacity-55 mt-0.5">{p.risk} risk · 5×5</div>
+                  {preset === i && (
+                    <motion.div 
+                      layoutId="preset-active"
+                      className="absolute inset-0 bg-gradient-to-r from-red-400/5 to-transparent pointer-events-none" 
+                    />
+                  )}
                 </button>
               ))}
             </div>
 
             {/* Mine ratio preview */}
-            <div className="flex gap-1 flex-wrap justify-center max-w-[186px]">
-              {Array.from({ length: 25 }).map((_, i) => {
-                const isMine = i < PRESETS[preset].mineCount;
-                return (
-                  <div key={i} className={`w-6 h-6 rounded flex items-center justify-center ${
-                    isMine ? "bg-red-400/18 border border-red-400/28" : "bg-white/4 border border-white/8"
-                  }`}>
-                    {isMine && <Bomb className="w-3 h-3 text-red-400/55" />}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="text-[10px] font-mono text-white/22">
-              {PRESETS[preset].mineCount} mines · {25 - PRESETS[preset].mineCount} safe squares
+            <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+              <div className="flex gap-1.5 flex-wrap justify-center max-w-[210px]">
+                {Array.from({ length: 25 }).map((_, i) => {
+                  const isMine = i < PRESETS[preset].mineCount;
+                  return (
+                    <div key={i} className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors duration-300 ${
+                      isMine 
+                        ? "bg-red-400/10 border border-red-400/40 shadow-[inset_0_0_8px_rgba(248,113,113,0.2)]" 
+                        : "bg-[#00ff88]/5 border border-[#00ff88]/20"
+                    }`}>
+                      {isMine && <Bomb className="w-3.5 h-3.5 text-red-400/80" />}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] font-mono text-white/40 mt-3 text-center">
+                {PRESETS[preset].mineCount} MINES · {25 - PRESETS[preset].mineCount} SAFE
+              </div>
             </div>
 
             {/* Auto-cashout setting */}
-            <div className="w-full max-w-[288px]">
-              <label className="text-[9px] font-mono uppercase tracking-widest text-white/25 block mb-1.5">
+            <div className="w-full max-w-[320px]">
+              <label className="text-[10px] font-mono uppercase tracking-widest text-white/30 block mb-2 px-1">
                 Auto cash out at × (optional)
               </label>
               <Input
                 type="number" step="0.1" placeholder="e.g. 3.00"
                 value={autoCashoutAt}
                 onChange={e => setAutoCashoutAt(e.target.value)}
-                className="bg-white/5 border-white/10 text-white/80 font-mono h-9 text-sm"
+                className="bg-white/5 border-white/10 text-white/80 font-mono h-11 text-sm rounded-xl focus:border-red-400/50 transition-colors"
               />
             </div>
           </div>
@@ -280,42 +312,51 @@ export function Minefield() {
                   className="flex items-end justify-between px-1"
                 >
                   <div>
-                    <div className="text-[8px] font-mono text-white/22 uppercase tracking-wider">Multiplier</div>
+                    <div className="text-[10px] font-mono text-white/30 uppercase tracking-wider">Current Payout</div>
                     <motion.div
-                      className="font-display font-black leading-none"
-                      style={{ fontSize: "clamp(28px,10vw,40px)", color, textShadow: `0 0 22px ${color}38`, transition: "color 0.3s" }}
-                      animate={safeCount > 0 ? { scale: [1, 1.07, 1] } : {}}
+                      className="font-display font-black leading-none drop-shadow-2xl"
+                      style={{ 
+                        fontSize: "clamp(32px,12vw,48px)", 
+                        color, 
+                        textShadow: `0 0 30px ${color}55`, 
+                        transition: "color 0.3s, text-shadow 0.3s" 
+                      }}
+                      animate={safeCount > 0 ? { scale: [1, 1.1, 1] } : {}}
                       transition={{ duration: 0.3 }}
                     >
                       {mult.toFixed(3)}×
                     </motion.div>
-                    <div className="text-[9px] font-mono text-white/20 mt-0.5">
-                      {session.betStriker.toFixed(0)} × {mult.toFixed(3)} = {potentialWin}
+                    <div className="text-[11px] font-mono text-white/30 mt-1 flex items-center gap-1.5">
+                      <span className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">{session.betStriker.toFixed(0)}</span>
+                      <span className="text-white/20">×</span>
+                      <span className="text-white/50">{mult.toFixed(3)}</span>
+                      <span className="text-white/20">=</span>
+                      <span className="text-[#00ff88] font-bold">{potentialWin}</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[8px] font-mono text-white/22 uppercase">Next pick</div>
-                    <div className="text-sm font-mono font-bold" style={{ color }}>→ {nextMult.toFixed(3)}×</div>
-                    <div className="text-[9px] font-mono text-white/20">{safeProb}% safe</div>
+                    <div className="text-[10px] font-mono text-white/30 uppercase">Next pick</div>
+                    <div className="text-lg font-mono font-black" style={{ color }}>→ {nextMult.toFixed(3)}×</div>
+                    <div className="text-[11px] font-mono text-white/30">{safeProb}% safe</div>
                   </div>
                 </motion.div>
               ) : (
                 <motion.div key="ended"
                   initial={{ opacity: 0, scale: 0.88 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className={`text-center px-4 py-2.5 rounded-xl border ${
+                  className={`text-center px-4 py-3 rounded-2xl border-2 shadow-lg ${
                     session.status === "won"
-                      ? "border-[#00ff88]/35 bg-[#00ff88]/10"
-                      : "border-red-400/35 bg-red-400/10"
+                      ? "border-[#00ff88]/50 bg-[#00ff88]/10 shadow-[#00ff88]/10"
+                      : "border-red-500/50 bg-red-500/10 shadow-red-500/10"
                   }`}
                 >
-                  <div className={`font-display font-black text-2xl ${
-                    session.status === "won" ? "text-[#00ff88]" : "text-red-400"
+                  <div className={`font-display font-black text-3xl tracking-tighter ${
+                    session.status === "won" ? "text-[#00ff88] drop-shadow-[0_0_10px_#00ff8855]" : "text-red-500 drop-shadow-[0_0_10px_#ef444455]"
                   }`}>
                     {session.status === "won" ? "CASHED OUT!" : "BOOM!"}
                   </div>
                   {session.status === "lost" && (
-                    <div className="text-[11px] font-mono text-red-400/55 mt-0.5">
+                    <div className="text-xs font-mono text-red-400/70 mt-1 font-bold">
                       -{session.betStriker.toFixed(0)} STRIKER
                     </div>
                   )}
@@ -325,11 +366,23 @@ export function Minefield() {
 
             {/* Grid */}
             <div className="flex-1 flex items-center justify-center min-h-0 relative">
-              {/* Tension overlay — faint red background at high multipliers */}
-              {tensionAlpha > 0 && (
-                <div className="absolute inset-0 pointer-events-none rounded-xl"
-                  style={{ background: `radial-gradient(ellipse at center, rgba(239,68,68,${tensionAlpha}) 0%, transparent 80%)` }} />
-              )}
+              {/* Tension overlay */}
+              <AnimatePresence>
+                {tensionAlpha > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ 
+                      opacity: [tensionAlpha, tensionAlpha * 1.5, tensionAlpha],
+                    }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 pointer-events-none rounded-2xl"
+                    style={{ 
+                      background: `radial-gradient(ellipse at center, rgba(239,68,68,${tensionAlpha}) 0%, transparent 80%)`,
+                      boxShadow: `inset 0 0 ${mult * 8}px rgba(239,68,68,${Math.min(0.25, tensionAlpha * 3)})`
+                    }} 
+                  />
+                )}
+              </AnimatePresence>
 
               <motion.div
                 key={`grid-${gridShake}`}
@@ -337,12 +390,12 @@ export function Minefield() {
                   ? { x: [-6, 6, -5, 5, -3, 3, -1, 1, 0] }
                   : { x: 0 }}
                 transition={{ duration: 0.48 }}
-                className="w-full"
+                className="w-full p-2"
                 style={{
                   display: "grid",
                   gridTemplateColumns: `repeat(${session.gridSize}, minmax(0,1fr))`,
-                  gap: "6px",
-                  maxWidth: `${session.gridSize * 58}px`,
+                  gap: "8px",
+                  maxWidth: `${session.gridSize * 64}px`,
                   margin: "0 auto",
                 }}
               >
@@ -358,26 +411,39 @@ export function Minefield() {
                       key={i}
                       onClick={() => handlePick(i)}
                       disabled={!isActive || state !== "hidden" || picking}
-                      whileTap={state === "hidden" && isActive ? { scale: 0.82 } : {}}
+                      whileTap={state === "hidden" && isActive ? { scale: 0.85 } : {}}
                       animate={isExploded ? { x: [-4, 4, -3, 3, -1, 1, 0] } : {}}
                       transition={isExploded ? { duration: 0.42, delay: 0.04 } : {}}
                       className={`
-                        aspect-square rounded-xl border flex items-center justify-center
-                        relative overflow-visible transition-colors duration-200
-                        ${state === "hidden" && isActive ? "bg-white/5 border-white/10 hover:bg-[#00ff88]/8 hover:border-[#00ff88]/25 cursor-pointer" : ""}
-                        ${state === "safe"  ? "bg-[#00ff88]/14 border-[#00ff88]/38" : ""}
-                        ${state === "mine"  ? "bg-red-400/14 border-red-400/38" : ""}
-                        ${state === "hidden" && !isActive ? "bg-white/3 border-white/5 opacity-25 cursor-not-allowed" : ""}
+                        aspect-square rounded-2xl border-2 flex items-center justify-center
+                        relative overflow-hidden transition-all duration-300 shadow-sm
+                        ${state === "hidden" && isActive 
+                          ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-[#00ff88]/35 cursor-pointer" 
+                          : ""}
+                        ${state === "safe"  
+                          ? "bg-[#00ff88]/20 border-[#00ff88]/55 shadow-[inset_0_0_12px_rgba(0,255,136,0.2)]" 
+                          : ""}
+                        ${state === "mine"  
+                          ? "bg-red-500/25 border-red-500/65 shadow-[inset_0_0_15px_rgba(239,68,68,0.3)]" 
+                          : ""}
+                        ${state === "hidden" && !isActive 
+                          ? "bg-white/3 border-white/5 opacity-40 cursor-not-allowed" 
+                          : ""}
                       `}
                     >
+                      {/* Hidden cell highlight */}
+                      {state === "hidden" && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-60 pointer-events-none" />
+                      )}
+
                       <AnimatePresence>
                         {state === "safe" && (
                           <motion.div key="safe"
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: [0, 1.5, 1], opacity: 1 }}
                             transition={{ duration: 0.28 }}
-                            className="text-[#00ff88]">
-                            <CheckCircle2 className="w-4 h-4" />
+                            className="text-[#00ff88] drop-shadow-[0_0_5px_rgba(0,255,136,0.5)]">
+                            <CheckCircle2 className="w-6 h-6" />
                           </motion.div>
                         )}
                         {state === "mine" && isExploded && (
@@ -385,8 +451,8 @@ export function Minefield() {
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: [0, 2.4, 1.1, 1], opacity: 1 }}
                             transition={{ duration: 0.42 }}
-                            className="text-red-400">
-                            <Bomb className="w-5 h-5" />
+                            className="text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]">
+                            <Bomb className="w-7 h-7" />
                           </motion.div>
                         )}
                         {state === "mine" && !isExploded && (
@@ -394,8 +460,8 @@ export function Minefield() {
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ duration: 0.22, delay: mineIdx >= 0 ? 0.1 + mineIdx * 0.065 : 0 }}
-                            className="text-red-400/75">
-                            <Bomb className="w-3.5 h-3.5" />
+                            className="text-red-400/80">
+                            <Bomb className="w-5 h-5" />
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -404,15 +470,15 @@ export function Minefield() {
                       {isBurst && BURST_ANGLES.map(angle => (
                         <motion.div
                           key={angle}
-                          className="absolute w-1.5 h-1.5 rounded-full bg-[#00ff88] pointer-events-none"
-                          style={{ top: "calc(50% - 3px)", left: "calc(50% - 3px)", zIndex: 20 }}
+                          className="absolute w-2 h-2 rounded-full bg-[#00ff88] pointer-events-none"
+                          style={{ top: "calc(50% - 4px)", left: "calc(50% - 4px)", zIndex: 20 }}
                           initial={{ x: 0, y: 0, opacity: 1 }}
                           animate={{
-                            x: Math.cos(angle * Math.PI / 180) * 20,
-                            y: Math.sin(angle * Math.PI / 180) * 20,
+                            x: Math.cos(angle * Math.PI / 180) * 25,
+                            y: Math.sin(angle * Math.PI / 180) * 25,
                             opacity: 0,
                           }}
-                          transition={{ duration: 0.38, ease: "easeOut" }}
+                          transition={{ duration: 0.4, ease: "easeOut" }}
                         />
                       ))}
                     </motion.button>
@@ -422,9 +488,16 @@ export function Minefield() {
             </div>
 
             {/* Footer strip */}
-            <div className="flex items-center justify-between text-[9px] font-mono text-white/22 px-1">
-              <span>{session.mineCount} mines · {totalCells - session.mineCount} safe cells</span>
-              <span>{safeCount} revealed</span>
+            <div className="flex items-center justify-between text-[10px] font-mono text-white/30 px-2 py-1 bg-white/5 rounded-lg border border-white/5">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> {session.mineCount} MINES
+              </span>
+              <span className="text-white/10">|</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" /> {totalCells - session.mineCount} SAFE
+              </span>
+              <span className="text-white/10">|</span>
+              <span className="text-white/50">{safeCount} REVEALED</span>
             </div>
           </div>
         )}

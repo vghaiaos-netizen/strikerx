@@ -21,6 +21,7 @@ import { FreeKick } from "./pages/games/freekick";
 
 import { Verify } from "./pages/verify";
 import { Achievements } from "./pages/achievements";
+import HowToPlay from "./pages/how-to-play";
 
 import { AdminLogin } from "./pages/admin/login";
 import { AdminDashboard } from "./pages/admin/dashboard";
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/verify"          component={Verify} />
       <Route path="/achievements"    component={Achievements} />
       <Route path="/loyalty"         component={Loyalty} />
+      <Route path="/guide"           component={HowToPlay} />
 
       {/* Admin Pages */}
       <Route path="/admin"                component={AdminLogin} />

@@ -1,17 +1,29 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Trophy, User, Wallet, Gift, Globe } from "lucide-react";
+import { Home, Trophy, User, Wallet, Gift, Globe, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { soundManager } from "@/lib/sound";
 
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { player } = useAuth();
+  const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+
+  const toggleSound = () => {
+    if (soundManager.isEnabled()) {
+      soundManager.disable();
+      setSoundEnabled(false);
+    } else {
+      soundManager.enable();
+      setSoundEnabled(true);
+    }
+  };
 
   const { data: jackpot } = useGetJackpot({
     query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
@@ -53,6 +65,13 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </Link>
           <div className="flex gap-2 items-center">
+            <button
+              onClick={toggleSound}
+              className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground"
+              title={soundEnabled ? "Mute" : "Unmute"}
+            >
+              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
             <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
               {Math.round(player?.strikerBalance ?? 0).toLocaleString()} STRK
             </div>

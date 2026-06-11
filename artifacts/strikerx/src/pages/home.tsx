@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check, Users } from "lucide-react";
+import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, Copy, Check, Users, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
 import { useGetMyReferral } from "@workspace/api-client-react";
@@ -381,6 +381,27 @@ export function Home() {
             </div>
           </motion.a>
         )}
+
+        {/* ── How to Play ── */}
+        <Link href="/guide">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-xl border border-[#f59e0b]/25 bg-[#f59e0b]/5 p-4 flex items-center gap-3 cursor-pointer hover:border-[#f59e0b]/50 transition-all"
+          >
+            <div className="absolute right-0 top-0 w-20 h-20 bg-[#f59e0b]/8 rounded-full blur-2xl" />
+            <div className="w-10 h-10 rounded-xl bg-[#f59e0b]/15 border border-[#f59e0b]/25 flex items-center justify-center flex-shrink-0">
+              <BookOpen className="w-4 h-4 text-[#f59e0b]" />
+            </div>
+            <div className="flex-1 min-w-0 relative">
+              <div className="font-display font-bold text-sm text-white">How to Play</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">Games guide · deposits · VIP · withdrawals</div>
+            </div>
+            <div className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-[#f59e0b]/70 relative">
+              Read <ChevronRight className="w-3 h-3" />
+            </div>
+          </motion.div>
+        </Link>
 
         {/* ── Recent Winners ── */}
         <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
