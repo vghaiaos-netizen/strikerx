@@ -118,6 +118,41 @@ router.get("/public/recent-wins", async (_req, res): Promise<void> => {
   }
 });
 
+// GET /public/ton-price — TON/USD price, cached 60 seconds (CoinGecko free API)
+router.get("/public/ton-price", async (_req, res): Promise<void> => {
+  try {
+    const { getConfig, setConfig } = await import("../lib/configService");
+    const tsStr = await getConfig("ton_price_cached_at").catch(() => "");
+    const cachedPrice = await getConfig("ton_price_usd").catch(() => "");
+    const isStale = !tsStr || !cachedPrice || Date.now() - Number(tsStr) > 60_000;
+
+    if (!isStale) {
+      res.json({ usd: parseFloat(cachedPrice), cachedAt: Number(tsStr) });
+      return;
+    }
+
+    const r = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd",
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!r.ok) throw new Error(`CoinGecko HTTP ${r.status}`);
+    const d = await r.json() as { "the-open-network"?: { usd?: number } };
+    const usd = d["the-open-network"]?.usd;
+    if (!usd) throw new Error("Missing price data");
+
+    await setConfig("ton_price_usd", String(usd));
+    await setConfig("ton_price_cached_at", String(Date.now()));
+
+    res.json({ usd, cachedAt: Date.now() });
+  } catch (err) {
+    logger.warn({ err }, "TON price fetch failed — returning cached or fallback");
+    const cached = await import("../lib/configService")
+      .then(m => m.getConfig("ton_price_usd"))
+      .catch(() => "0");
+    res.json({ usd: parseFloat(cached) || null, cachedAt: null, stale: true });
+  }
+});
+
 // GET /public/community — group invite link + bot username (no auth required)
 router.get("/public/community", async (_req, res): Promise<void> => {
   try {

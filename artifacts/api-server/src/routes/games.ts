@@ -20,6 +20,7 @@ import { checkAndAward, ACHIEVEMENT_MAP } from "../lib/achievementsService";
 import { sendJackpotWin, sendAchievementUnlocked, sendLowBalanceReminder } from "../services/telegramNotify";
 import { getMatchEventBonus } from "../lib/matchEventBonus";
 import { creditAffiliateCommission } from "../lib/affiliateCommission";
+import { progressMissions } from "../lib/missionService";
 
 const router: IRouter = Router();
 
@@ -158,6 +159,9 @@ router.post("/games/penalty", requireAuth, async (req, res): Promise<void> => {
     resultMultiplier: win ? multiplier : 0, winAmount, outcome,
     gameData: { keeperDirection, direction },
   }).returning();
+
+  // Mission progress (fire-and-forget)
+  progressMissions(playerId, ["play_any_3", ...(win ? ["play_penalty_1"] : [])]).catch(() => {});
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, player.telegramId);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
@@ -307,6 +311,9 @@ router.post("/games/minefield/:id/cashout", requireAuth, async (req, res): Promi
   creditAffiliateCommission(playerId, winAmount).catch(() => {});
   await db.insert(gamesTable).values({ playerId, gameType: "minefield", betStriker: session.betStriker, resultMultiplier: session.currentMultiplier, winAmount, outcome: "cashout", gameData: { gridSize: session.gridSize, mineCount: session.mineCount, safePicks: session.revealedPositions.length } });
 
+  // Mission progress (fire-and-forget)
+  progressMissions(playerId, ["play_any_3", "play_minefield_1"]).catch(() => {});
+
   const jackpotResult = await checkAndTriggerJackpot(playerId, session.betStriker, player?.username ?? "Player", player?.telegramId);
 
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");
@@ -397,6 +404,9 @@ router.post("/games/freekick", requireAuth, async (req, res): Promise<void> => {
   }
 
   const [game] = await db.insert(gamesTable).values({ playerId, gameType: "freekick", betStriker, resultMultiplier: multiplier, winAmount, outcome, gameData: { slot, riskLevel } }).returning();
+
+  // Mission progress (fire-and-forget)
+  progressMissions(playerId, ["play_any_3", ...(outcome === "win" ? ["play_freekick_1"] : [])]).catch(() => {});
 
   const jackpotResult = await checkAndTriggerJackpot(playerId, betStriker, player.username, player.telegramId);
   const bigWinThreshold = parseFloat(process.env.BIG_WIN_ANNOUNCE_THRESHOLD ?? "50");

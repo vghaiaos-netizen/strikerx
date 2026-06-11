@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, transactionsTable, gamesTable, referralsTable } from "@workspace/db";
+import { db, playersTable, transactionsTable, gamesTable, referralsTable, dailyMissionsTable, MISSION_POOL } from "@workspace/db";
+import type { DailyMission } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { getStreakReward, getNextStreakMilestone } from "../lib/gameEngine";
@@ -35,6 +36,7 @@ router.get("/players/me", requireAuth, async (req, res): Promise<void> => {
     isFlagged: player.isFlagged,
     wagerProgress: Math.min(100, (player.strikerWageredSinceBonus / wagerRequirement) * 100),
     languagePreference: player.languagePreference ?? "en",
+    country: player.country ?? null,
     createdAt: player.createdAt.toISOString(),
   });
 });
@@ -360,6 +362,115 @@ router.put("/players/me/language", requireAuth, async (req, res): Promise<void> 
     .where(eq(playersTable.id, playerId));
 
   res.json({ ok: true, language });
+});
+
+// PUT /players/me/country
+router.put("/players/me/country", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { country } = req.body as { country?: string };
+
+  if (!country || typeof country !== "string" || country.length > 2) {
+    res.status(400).json({ error: "country must be a valid 2-letter ISO code" });
+    return;
+  }
+
+  await db.update(playersTable)
+    .set({ country: country.toUpperCase() })
+    .where(eq(playersTable.id, playerId));
+
+  res.json({ ok: true, country: country.toUpperCase() });
+});
+
+// ── Daily Missions ───────────────────────────────────────────────────────────
+
+function getTodayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function pickMissions(seed: number): DailyMission[] {
+  // Deterministic daily pick: shuffle pool with player-id seed, take 3
+  const shuffled = [...MISSION_POOL].sort((a, b) => {
+    const h = (s: number) => ((s * 2654435761) >>> 0);
+    return h(seed + a.key.charCodeAt(0)) - h(seed + b.key.charCodeAt(0));
+  });
+  return shuffled.slice(0, 3).map(m => ({ ...m, progress: 0, completed: false }));
+}
+
+// GET /players/me/missions
+router.get("/players/me/missions", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const today = getTodayUtc();
+
+  const [row] = await db.select()
+    .from(dailyMissionsTable)
+    .where(and(
+      eq(dailyMissionsTable.playerId, playerId),
+      eq(dailyMissionsTable.date, today)
+    ));
+
+  if (row) {
+    res.json(row);
+    return;
+  }
+
+  const { getConfigFloat } = await import("../lib/configService");
+  const bonusStriker = await getConfigFloat("daily_mission_bonus", 200);
+  const missions = pickMissions(playerId + new Date().getDate());
+
+  const [newRow] = await db.insert(dailyMissionsTable)
+    .values({ playerId, date: today, missions, allCompleted: false, bonusClaimed: false, bonusStriker })
+    .returning();
+
+  res.json(newRow);
+});
+
+// POST /players/me/missions/progress — called internally by game handlers on win
+// Also exposed as API so any game can POST { key, amount } to progress a mission
+router.post("/players/me/missions/progress", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { key, amount = 1 } = req.body as { key: string; amount?: number };
+  if (!key) { res.status(400).json({ error: "key required" }); return; }
+
+  const today = getTodayUtc();
+  const [row] = await db.select()
+    .from(dailyMissionsTable)
+    .where(and(
+      eq(dailyMissionsTable.playerId, playerId),
+      eq(dailyMissionsTable.date, today)
+    ));
+
+  if (!row || row.allCompleted) { res.json({ ok: true, changed: false }); return; }
+
+  const updated = (row.missions as DailyMission[]).map(m => {
+    if (m.key !== key || m.completed) return m;
+    const progress = Math.min(m.target, m.progress + amount);
+    return { ...m, progress, completed: progress >= m.target };
+  });
+
+  const allCompleted = updated.every(m => m.completed);
+  await db.update(dailyMissionsTable)
+    .set({ missions: updated, allCompleted })
+    .where(eq(dailyMissionsTable.id, row.id));
+
+  // Award bonus if all 3 just completed and not yet claimed
+  if (allCompleted && !row.bonusClaimed) {
+    await db.update(dailyMissionsTable)
+      .set({ bonusClaimed: true })
+      .where(eq(dailyMissionsTable.id, row.id));
+
+    await db.update(playersTable)
+      .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${row.bonusStriker}` })
+      .where(eq(playersTable.id, playerId));
+
+    await db.insert(transactionsTable).values({
+      playerId,
+      type: "bonus",
+      amountStriker: row.bonusStriker,
+      status: "completed",
+    });
+  }
+
+  res.json({ ok: true, changed: true, allCompleted, bonusAwarded: allCompleted && !row.bonusClaimed });
 });
 
 export default router;
