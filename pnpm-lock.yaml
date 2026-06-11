@@ -450,6 +450,9 @@ importers:
       i18next:
         specifier: ^26.3.1
         version: 26.3.1(typescript@5.9.3)
+      i18next-resources-to-backend:
+        specifier: ^1.2.1
+        version: 1.2.1
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.1.0)
@@ -2446,6 +2449,9 @@ packages:
   human-signals@8.0.1:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
+
+  i18next-resources-to-backend@1.2.1:
+    resolution: {integrity: sha512-okHbVA+HZ7n1/76MsfhPqDou0fptl2dAlhRDu2ideXloRRduzHsqDOznJBef+R3DFZnbvWoBW+KxJ7fnFjd6Yw==}
 
   i18next@26.3.1:
     resolution: {integrity: sha512-txQqd5EULsqEh9OJqRH15aCaOuy/nLJyhw5EHCSKLKJE1aBbb3Zve2+uQIxgWhPm1QqUQoWyQBm2kfmmIrzkcQ==}
@@ -5286,6 +5292,10 @@ snapshots:
       - supports-color
 
   human-signals@8.0.1: {}
+
+  i18next-resources-to-backend@1.2.1:
+    dependencies:
+      '@babel/runtime': 7.29.2
 
   i18next@26.3.1(typescript@5.9.3):
     optionalDependencies:
