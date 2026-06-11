@@ -22,9 +22,19 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     return;
   }
 
-  // Always prefer env var for the bot token — DB value in getConfig can be stale/empty
-  // and would silently override a correctly-set env var via the DB-priority branch.
-  const gamebotToken = process.env.GAMEBOT_TOKEN ?? await getConfig("gamebot_token");
+  // Read bot token — env var takes priority, DB config is fallback
+  const envToken = process.env.GAMEBOT_TOKEN;
+  const dbToken = await getConfig("gamebot_token");
+  const gamebotToken = (envToken && envToken.trim()) ? envToken.trim() : (dbToken && dbToken.trim()) ? dbToken.trim() : "";
+
+  req.log.info({
+    hasEnvToken: !!(envToken && envToken.trim()),
+    hasDbToken: !!(dbToken && dbToken.trim()),
+    tokenLength: gamebotToken.length,
+    isDev: process.env.NODE_ENV === "development",
+    initDataLength: initData.length,
+    initDataPreview: initData.slice(0, 30),
+  }, "Auth attempt");
 
   let userData: Record<string, string> | null = null;
 
@@ -37,6 +47,7 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
   } else if (gamebotToken) {
     // Production path: full HMAC validation
     userData = validateTelegramInitData(initData, gamebotToken);
+    req.log.info({ hmacValid: !!userData }, "HMAC validation result");
     // Dev safety net: if HMAC fails in dev (token mismatch), parse user without HMAC
     if (!userData && process.env.NODE_ENV === "development") {
       try {
@@ -46,7 +57,6 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
     }
   } else if (process.env.NODE_ENV === "development") {
     // Dev mode with no bot token configured: parse user from initData without HMAC
-    // (safe — only active when NODE_ENV=development)
     try {
       const params = new URLSearchParams(initData);
       if (params.get("user")) userData = Object.fromEntries(params.entries());
@@ -54,7 +64,12 @@ router.post("/auth/telegram", async (req, res): Promise<void> => {
   }
 
   if (!userData?.user) {
-    req.log.warn({ hasToken: !!gamebotToken, isDev: process.env.NODE_ENV === "development" }, "Telegram initData validation failed");
+    req.log.warn({
+      hasToken: !!gamebotToken,
+      tokenLength: gamebotToken.length,
+      isDev: process.env.NODE_ENV === "development",
+      initDataLength: initData.length,
+    }, "Telegram initData validation failed");
     res.status(401).json({ error: "Invalid Telegram init data" });
     return;
   }
