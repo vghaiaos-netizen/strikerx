@@ -196,12 +196,53 @@ postgresql://postgres:PASSWORD@HOST:PORT/railway
 
 **Note:** There is NO separate `achievements` definitions table. Achievement definitions live in code at `artifacts/api-server/src/lib/achievementsService.ts`. Only `player_achievements` is in the DB.
 
-### Railway DB — current state (as of 2026-06-09)
-- 1 real player (Dangwhizz, telegram_id 7385327404)
-- 2500+ crash rounds, 36 games, 61 transactions
-- Jackpot at ~10.36 TON, building toward 50 TON threshold
-- All 31 config rows populated including secrets
+### Railway DB — current state (as of 2026-06-11)
+- 3 players: Dangwhizz (championship tier), Musyoks, Masterac_Fx
+- 145 games played, 251 transactions, 2352 kB of crash_rounds data
+- Jackpot exists and building
+- All config rows populated
 - `admin_username` = `"Blize"` (capital B — case-sensitive comparison)
+
+### Schema migration pattern — how to add new columns safely
+
+**Never run `drizzle-kit push` against Railway.** Instead, do TWO things:
+
+1. Add the column to `lib/db/src/schema/*.ts` (for dev)
+2. Add an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` entry to the `migrations` array in `artifacts/api-server/src/index.ts` (for Railway production)
+
+The server runs ALL entries in that array on every startup — they are all `IF NOT EXISTS` so safe to repeat. This is the mechanism that healed Railway production after schema drift caused auth failures in June 2026.
+
+Example entry format:
+```ts
+{
+  name: "players.new_column",
+  sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS new_column TEXT`,
+},
+```
+
+After adding, push via `node scripts/github-push.mjs` and Railway will apply it automatically on next deploy.
+
+### Tables in production (17 total — as of 2026-06-11)
+
+| Table | Notes |
+|---|---|
+| `players` | Main player table |
+| `games` | Game records — has `affiliate_commission_paid` column |
+| `transactions` | Financial movements — has `metadata JSONB` column |
+| `crash_rounds` | Largest table (2352 kB) — many rounds |
+| `minefield_sessions` | Active/completed Minefield sessions |
+| `jackpot` | Single-row — always `SELECT LIMIT 1` |
+| `withdrawals` | withdrawal requests |
+| `tournaments` | Tournament records |
+| `tournament_entries` | Participation records |
+| `kyc_verifications` | KYC submissions (table name is `kyc_verifications` NOT `kyc_submissions`) |
+| `affiliates` | Affiliate codes |
+| `audit_log` | Admin history |
+| `app_config` | DB-backed key/value store |
+| `player_achievements` | Achievement junction table |
+| `referrals` | Referral tracking |
+| `vip_cashback` | VIP cashback records |
+| `daily_missions` | Daily missions (added via inline migration) |
 
 ---
 
@@ -239,6 +280,31 @@ The WS requires a 3-step handshake before the player can bet:
 4. Client can now send `place_bet` and `cashout` messages
 
 If the player tries to `place_bet` before step 3 completes, the server returns `{ "event": "error", "data": { "message": "Not authenticated" } }`.
+
+**WS auth timeout:** Server closes unauthenticated connections after 60 seconds.
+
+### "Invalid token" / WS auth failures — root cause and fix (2026-06-11)
+
+**Symptom:** Players see "Invalid token" or WS keeps disconnecting. Railway logs show "WS client failed to authenticate — closing".
+
+**Root cause:** The original `home.tsx` skipped Telegram re-auth if ANY token existed in localStorage — even a stale one. After a Railway redeploy, the WS would try to auth with the stale token, the server would reject it, and players were stuck until manual page reload.
+
+**Fix applied:**
+- `home.tsx` — always re-authenticates with fresh Telegram `initData` on every app open. The server is idempotent; same player is returned with a fresh JWT.
+- `shot.tsx` + `ws-notifications.tsx` — when server sends `{ event: "error", message: "Invalid token" }`, silently close and reconnect instead of showing an error toast.
+- `wsServer.ts` — WS auth timeout increased from 30s to 60s to accommodate slow mobile connections.
+
+**Rule for future agents:** Never guard Telegram auth with `localStorage.getItem("strikerx_token")`. The correct pattern for Telegram Mini Apps is to always call auth on open — `initData` is always fresh, auth is idempotent.
+
+### Schema drift caused auth failures — root cause (2026-06-11)
+
+**Symptom:** Every auth attempt → "Unhandled error" in Railway logs. HMAC validation succeeded but then crashed.
+
+**Root cause:** Railway's production DB was missing columns added after the initial deploy (`captain_balance`, `device_fingerprint`, `affiliate_code`, `country`, `group_member_status`, `first_withdrawal_reviewed`, `striker_wagered_since_bonus`). Drizzle ORM's `SELECT *` crashed when it tried to read non-existent columns.
+
+**Fix:** Added 12 idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` entries to the `migrations` array in `artifacts/api-server/src/index.ts`. These run on every server startup and are all safe to repeat.
+
+**Rule for future agents:** Any new column added to `lib/db/src/schema/*.ts` MUST also get a corresponding entry in the `migrations` array in `index.ts`. Both steps are required — one for dev DB, one for Railway production.
 
 ### WebSocket events (server → client)
 
