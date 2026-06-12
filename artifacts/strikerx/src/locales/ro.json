@@ -155,7 +155,44 @@
       "yourTier": "Nivelul tău",
       "cashback": "Rambursare",
       "claimStreak": "Revendică bonusul zilnic",
-      "streakDays": "Serie de {{days}} zile"
+      "streakDays": "Serie de {{days}} zile",
+      "hub": "Centrul de fidelizare",
+      "hubDesc": "Recompensele, echipa și rangul tău",
+      "currentRank": "Rangul actual",
+      "tonWagered": "{{amount}} TONĂ PARIATĂ",
+      "nextTier": "{{current}} TON → {{next}}",
+      "dailyStreak": "Dungă zilnică",
+      "days": "zile",
+      "claimStreakBtn": "REVENDICĂ BONUSUL STREAK DE ASTĂZI",
+      "claimedToday": "Revendicat astăzi — reveniți mâine",
+      "referEarn": "Invită și câștigă",
+      "referDesc": "Câștigă 10% din câștigurile prietenilor de nivelul 1 + 5% din câștigurile de nivelul 2 — pentru totdeauna.",
+      "yourCode": "Codul tău",
+      "shareToTelegram": "DISTRIBUIȚI ÎN TELEGRAMĂ",
+      "squad": "echipă",
+      "players": "jucători",
+      "tier1": "Strat 1",
+      "tier2": "Strat 2",
+      "totalEarned": "Total câștigat: {{amount}} ATACANT",
+      "yourSquad": "Echipa ta",
+      "shareCode": "Trimite codul pentru a începe să câștigi",
+      "moreInSquad": "+{{count}} mai multe în echipa ta",
+      "vipCashback": "Cashback VIP",
+      "yourRate": "Punctajul tău",
+      "fromLosses": "Din pierderi",
+      "available": "Disponibil",
+      "claimAmount": "RECLAMAȚIE {{amount}} ATACANT",
+      "claimedWeek": "Revendicat în această săptămână — se resetează luni",
+      "playMore": "Joacă mai mult pentru a câștiga cashback",
+      "unlockCashback": "Deblochează Cashback",
+      "unlockCashbackDesc": "Atingeți nivelul Campionatului (10 TONE pariate) pentru o rambursare săptămânală de 2% a pierderilor.",
+      "badges": "Ecusoane",
+      "viewAllBadges": "Toate insignele",
+      "playForBadge": "Joacă jocuri pentru a debloca prima insignă",
+      "bootShop": "Magazin de cizme",
+      "bootBalance": "Ai __ PH0__ BOOT — convertește la 1:1 în ATACANT",
+      "convertBoot": "Convertește BOOT-UL",
+      "cancelBtn": "Cancel"
     },
     "guide": {
       "title": "CUM SE JOACĂ",
@@ -166,7 +203,53 @@
       "vipTiers": "NIVELURI VIP",
       "withdrawals": "RETRAGERI",
       "referrals": "RECOMANDĂRI",
-      "jackpot": "JACKPOT"
+      "jackpot": "JACKPOT",
+      "taglineDesc": "Stăpânește terenul și înscrie mult cu primul cazinou de fotbal Telegram din lume.",
+      "jackpotTitle": "JACKPOT DE CIZME DE AUR",
+      "striker": {
+        "desc": "STRIKER (strk) este token-ul nostru exclusiv din joc, utilizat pentru toate pariurile și recompensele.",
+        "depositRate": "Rata depozitelor",
+        "withdrawRate": "Rata de retragere",
+        "depositVal": "1 TON = 100 STRK",
+        "withdrawVal": "110 STRK = 1 TON",
+        "note": "STRK are un cuier fix la TONĂ, cu o răspândire mică pentru a sprijini lichiditatea platformei și fondurile de jackpot."
+      },
+      "deposit": {
+        "step1": "Apasă pe pictograma Portofel din bara de navigare de jos;",
+        "step2": "Introduceți cantitatea de TONE pe care doriți să o depuneți.",
+        "step3": "Faceți clic pe „Depunere” pentru a crea o factură prin CryptoBot.",
+        "step4": "Finalizați plata direct în Telegram.",
+        "step5": "Jetoanele STRIKER sunt creditate automat în soldul dvs.!"
+      },
+      "games": {
+        "shot": "Mingea zboară și multiplicatorul crește. Încasează înainte să se prăbușească. Încasările din ultima secundă câștigă mult!",
+        "penalty": "Alege stânga/centru/dreapta. 1,92× încasarea dacă deținătorul se scufundă în direcția greșită.",
+        "freekick": "Mingea cade prin țăruși. Risc scăzut: leagăne mai mici. Risc ridicat: câștiguri mari sau pierderi mari.",
+        "minefield": "Faceți clic pe pătrate sigure pe o grilă de 5×5. Încasează înainte de a lovi o mină. Pătrate mai sigure = multiplicator mai mare."
+      },
+      "vip": {
+        "tier": "Nivel",
+        "cashback": "Rambursare",
+        "minWager": "Pariu minim",
+        "note": "Cashback-ul se calculează pe baza pierderilor nete și se plătește săptămânal. Cerințele minime de pariere se aplică pentru fiecare nivel."
+      },
+      "withdrawal": {
+        "minNote": "Retragerea minimă este de 100 de PERCUTOARE.",
+        "desc": "Retragerile sunt procesate manual de echipa noastră din motive de securitate. Timpul standard de procesare este de ~24 de ore.",
+        "critical": "CRITIC: Trebuie să aveți un @username setat în profilul dvs. Telegram pentru a primi plăți."
+      },
+      "referral": {
+        "earn": "Invită și câștigă 5%",
+        "desc": "Distribuie link-ul tău unic de recomandare găsit pe pagina Profil.",
+        "earnDesc": "Câștigă instantaneu 5% din prima depunere a prietenului tău ca jetoane STRIKER!"
+      },
+      "jackpotDesc": {
+        "intro": "Golden Boot Jackpot este un fond de premii la nivel de comunitate, care crește cu fiecare pariu plasat pe platformă.",
+        "contribution": "Contribuție",
+        "trigger": "Prag de declanșare",
+        "note": "Odată ce piscina ajunge la 50 DE TONE, aceasta este acordată aleatoriu unui jucător eligibil care a fost activ în ultimele 60 de minute. Fiecare pariu este o șansă de a câștiga!"
+      },
+      "goodLuck": "Mult noroc, Striker!"
     },
     "languagePicker": {
       "title": "Alege limba",
@@ -180,6 +263,54 @@
       "betTooLow": "Suma pariului este prea mică",
       "gameNotReady": "Jocul nu este gata. Vă rugăm să așteptați.",
       "unknownError": "Ceva nu a mers bine"
+    },
+    "verify": {
+      "title": "Provably Fair",
+      "subtitle": "Verificați rezultatul rundei de prăbușire",
+      "howItWorks": "Cum funcționează",
+      "howDesc1": "Înainte de fiecare rundă, serverul generează un server Seed aleatoriu.",
+      "howDesc2": "Punctul de avarie este calculat ca HMAC-SHA256(serverSeed, „crash”) și nu poate fi modificat după începerea rundei.",
+      "howDesc3": "Semințele sunt dezvăluite numai după ce runda se blochează, astfel încât să puteți verifica dacă rezultatul a fost predeterminat și corect.",
+      "verifyRound": "Verifică o rundă",
+      "roundId": "ID rotund",
+      "roundIdPlaceholder": "ex. 42",
+      "houseEdge": "Avantajul casei:",
+      "rValue": "VALOAREA R",
+      "serverSeed": "Server Seed",
+      "hash": "HMAC-SHA256 Hash",
+      "verified": "Rundă verificată",
+      "failed": "Verificarea a eșuat",
+      "recordedCrash": "Accident înregistrat:",
+      "computedCrash": "Accident calculat:",
+      "fairMessage": "Rezultatul se potrivește — această rundă a fost corectă.",
+      "manualVerify": "Verificare manuală",
+      "manualDesc": "Introduceți orice sămânță de server pentru a calcula independent punctul de avarie.",
+      "serverSeedHex": "Server Seed (hex)",
+      "seedPlaceholder": "Șir hexagonal cu 64 de carote",
+      "compute": "Calculați punctul de coliziune",
+      "computing": "Computing",
+      "crashPoint": "Punct de coliziune",
+      "openSource": "Formula de avarie este open source și poate fi verificată de oricine",
+      "roundNotCrashed": "Runda nu s-a prăbușit încă — sămânța a fost dezvăluită numai după prăbușire",
+      "networkError": "Eroare de rețea — asigurați-vă că sunteți conectat (ă)",
+      "invalidId": "Introduceți un ID de rundă valid",
+      "roundLabel": "Call",
+      "status": "Statutul"
+    },
+    "notFound": {
+      "title": "404 Pagina nu a fost găsită!",
+      "desc": "Ne pare rău, dar pagina pe care o cauți nu există."
+    },
+    "overlay": {
+      "jackpotLabel": "Golden Boot Jackpot",
+      "wonBy": "Câștigat de",
+      "tapDismiss": "Apasă oriunde pentru a închide",
+      "achievementUnlocked": "Realizare deblocată"
+    },
+    "notifications": {
+      "liveFeed": "Flux live",
+      "clear": "Transparent",
+      "noActivity": "Nicio activitate încă — jucați pentru a vedea acțiunea aici"
     }
   }
 }

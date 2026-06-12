@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { SUPPORTED_LANGUAGES, type LangCode } from "@/i18n";
+import { useTranslation } from "react-i18next";
 
 interface LanguagePickerProps {
   onSelect: (code: LangCode) => void;
 }
 
 export default function LanguagePicker({ onSelect }: LanguagePickerProps) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<LangCode | null>(null);
 
   return (
@@ -30,10 +32,10 @@ export default function LanguagePicker({ onSelect }: LanguagePickerProps) {
 
         {/* Title */}
         <h1 className="text-center text-white font-bold text-xl mb-1.5">
-          Choose Your Language
+          {t("languagePicker.title")}
         </h1>
         <p className="text-center text-white/40 text-[13px] mb-6 leading-relaxed">
-          Select your preferred language.{"\n"}You can change this later in your profile.
+          {t("languagePicker.subtitle")}
         </p>
 
         {/* Language grid */}
@@ -73,7 +75,7 @@ export default function LanguagePicker({ onSelect }: LanguagePickerProps) {
           }`}
           style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.15em" }}
         >
-          CONTINUE
+          {t("languagePicker.continue").toUpperCase()}
         </motion.button>
       </motion.div>
     </div>

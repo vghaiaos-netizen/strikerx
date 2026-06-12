@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import {
   useGetMyStreak,
@@ -31,6 +32,7 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 export function Loyalty() {
+  const { t } = useTranslation();
   const { player, token } = useAuth();
   const { toast } = useToast();
   const [copied, setCopied]     = useState(false);
@@ -124,8 +126,8 @@ export function Loyalty() {
         {/* ── Page Header ── */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display font-black text-xl text-white">Loyalty Hub</h1>
-            <p className="text-[10px] font-mono text-white/40 mt-0.5">Your rewards, squad & rank</p>
+            <h1 className="font-display font-black text-xl text-white">{t("loyalty.hub")}</h1>
+            <p className="text-[10px] font-mono text-white/40 mt-0.5">{t("loyalty.hubDesc")}</p>
           </div>
           <div className="w-10 h-10 rounded-xl flex items-center justify-center border"
             style={{ background: `${vipColor}20`, borderColor: `${vipColor}40` }}>
@@ -143,7 +145,7 @@ export function Loyalty() {
           <div className="relative">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/40">Current Rank</div>
+                <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/40">{t("loyalty.currentRank")}</div>
                 <div className="font-display font-black text-2xl text-white mt-0.5">{vipName}</div>
               </div>
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-display font-black text-base border-2"
@@ -200,9 +202,9 @@ export function Loyalty() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-[#f59e0b]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">Daily Streak</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">{t("loyalty.dailyStreak")}</span>
               </div>
-              <div className="font-display font-bold text-lg text-[#f59e0b]">{streak.streakDays ?? 0} <span className="text-xs text-white/40">days</span></div>
+              <div className="font-display font-bold text-lg text-[#f59e0b]">{streak.streakDays ?? 0} <span className="text-xs text-white/40">{t("loyalty.days")}</span></div>
             </div>
             <div className="flex gap-1.5 mb-3">
               {[1,2,3,4,5,6,7].map(d => {
@@ -220,12 +222,12 @@ export function Loyalty() {
             {streak.canClaim ? (
               <Button onClick={handleClaimStreak} disabled={claimStreak.isPending}
                 className="w-full h-10 font-display font-black text-xs tracking-widest bg-[#f59e0b] hover:bg-[#f59e0b]/90 text-[#0a0e1a]">
-                {claimStreak.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "CLAIM TODAY'S STREAK BONUS"}
+                {claimStreak.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("loyalty.claimStreakBtn").toUpperCase()}
               </Button>
             ) : (
               <div className="flex items-center justify-center gap-2 py-2">
                 <Check className="w-3.5 h-3.5 text-[#00ff88]" />
-                <span className="text-[11px] font-mono text-white/40">Claimed today — come back tomorrow</span>
+                <span className="text-[11px] font-mono text-white/40">{t("loyalty.claimedToday")}</span>
               </div>
             )}
           </div>
@@ -238,17 +240,16 @@ export function Loyalty() {
             <div className="relative">
               <div className="flex items-center gap-2 mb-1">
                 <Gift className="w-3.5 h-3.5 text-[#00ff88]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#00ff88]/70">Refer &amp; Earn</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#00ff88]/70">{t("loyalty.referEarn")}</span>
               </div>
               <p className="text-[11px] font-mono text-white/40 mb-4">
-                Earn <span className="text-[#00ff88] font-bold">10%</span> of Tier 1 friends' wins +{" "}
-                <span className="text-[#00ff88] font-bold">5%</span> of Tier 2 wins — forever.
+                {t("loyalty.referDesc")}
               </p>
 
               {/* Big code block */}
               <div className="flex items-center gap-2 bg-black/40 border border-[#00ff88]/20 rounded-xl px-4 py-3 mb-3">
                 <div className="flex-1">
-                  <div className="text-[9px] font-mono text-white/30 mb-0.5">YOUR CODE</div>
+                  <div className="text-[9px] font-mono text-white/30 mb-0.5">{t("loyalty.yourCode")}</div>
                   <div className="font-mono font-black text-lg text-white tracking-widest">{referral.code}</div>
                 </div>
                 <button onClick={copyCode}
@@ -262,23 +263,23 @@ export function Loyalty() {
               <Button onClick={shareToTelegram}
                 className="w-full h-10 mb-4 font-display font-bold text-xs tracking-widest bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#0a0e1a] flex items-center gap-2">
                 <Share2 className="w-3.5 h-3.5" />
-                SHARE TO TELEGRAM
+                {t("loyalty.shareToTelegram").toUpperCase()}
               </Button>
 
               {/* Earnings summary */}
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <div className="text-[9px] font-mono text-white/30">Squad</div>
+                  <div className="text-[9px] font-mono text-white/30">{t("loyalty.squad")}</div>
                   <div className="font-display font-bold text-base text-white">{refDetail?.totalReferred ?? 0}</div>
-                  <div className="text-[8px] font-mono text-white/20">players</div>
+                  <div className="text-[8px] font-mono text-white/20">{t("loyalty.players")}</div>
                 </div>
                 <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <div className="text-[9px] font-mono text-white/30">Tier 1</div>
+                  <div className="text-[9px] font-mono text-white/30">{t("loyalty.tier1")}</div>
                   <div className="font-display font-bold text-sm text-[#00ff88]">{Number(referral.tier1Earnings ?? 0).toFixed(0)}</div>
                   <div className="text-[8px] font-mono text-white/20">STRIKER</div>
                 </div>
                 <div className="bg-black/20 rounded-xl p-3 text-center">
-                  <div className="text-[9px] font-mono text-white/30">Tier 2</div>
+                  <div className="text-[9px] font-mono text-white/30">{t("loyalty.tier2")}</div>
                   <div className="font-display font-bold text-sm text-[#00ff88]">{Number(referral.tier2Earnings ?? 0).toFixed(0)}</div>
                   <div className="text-[8px] font-mono text-white/20">STRIKER</div>
                 </div>
@@ -288,14 +289,14 @@ export function Loyalty() {
               {totalEarned > 0 && (
                 <div className="flex items-center justify-center gap-2 py-2 mb-3 bg-[#00ff88]/5 rounded-xl border border-[#00ff88]/15">
                   <Trophy className="w-3.5 h-3.5 text-[#f59e0b]" />
-                  <span className="text-[11px] font-mono text-white/60">Total earned: <span className="text-[#00ff88] font-bold">{totalEarned.toFixed(0)} STRIKER</span></span>
+                  <span className="text-[11px] font-mono text-white/60">{t("loyalty.totalEarned")}: <span className="text-[#00ff88] font-bold">{totalEarned.toFixed(0)} STRIKER</span></span>
                 </div>
               )}
 
               {/* Squad list */}
               {refDetail && refDetail.referees.length > 0 && (
                 <div>
-                  <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/25 mb-2">Your Squad</div>
+                  <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/25 mb-2">{t("loyalty.yourSquad")}</div>
                   <div className="flex flex-col gap-1.5">
                     {refDetail.referees.slice(0, 8).map((ref, i) => (
                       <motion.div key={i}
@@ -313,7 +314,7 @@ export function Loyalty() {
                     ))}
                     {refDetail.referees.length > 8 && (
                       <div className="text-[9px] font-mono text-white/25 text-center py-1">
-                        +{refDetail.referees.length - 8} more in your squad
+                        +{refDetail.referees.length - 8} {t("loyalty.moreInSquad")}
                       </div>
                     )}
                   </div>
@@ -324,7 +325,7 @@ export function Loyalty() {
               {(!refDetail || refDetail.referees.length === 0) && (
                 <div className="text-center py-4 border border-dashed border-white/8 rounded-xl">
                   <Users className="w-6 h-6 text-white/20 mx-auto mb-2" />
-                  <div className="text-[11px] font-mono text-white/30">Share your code to start earning</div>
+                  <div className="text-[11px] font-mono text-white/30">{t("loyalty.shareCode")}</div>
                 </div>
               )}
             </div>
@@ -337,15 +338,15 @@ export function Loyalty() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Percent className="w-3.5 h-3.5 text-[#00ff88]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">VIP Cashback</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">{t("loyalty.vipCashback")}</span>
               </div>
               <span className="text-[10px] font-mono text-white/30">{cashback.period}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-3">
               {[
-                { label: "Your Rate",  val: `${((cashback.cashbackRate ?? 0) * 100).toFixed(0)}%`, color: vipColor },
-                { label: "From Losses", val: Number(cashback.estimatedLossesStriker).toFixed(0), color: "white" },
-                { label: "Available",  val: Number(cashback.pendingStriker).toFixed(0), color: "#00ff88" },
+                { label: t("loyalty.yourRate"),   val: `${((cashback.cashbackRate ?? 0) * 100).toFixed(0)}%`, color: vipColor },
+                { label: t("loyalty.fromLosses"), val: Number(cashback.estimatedLossesStriker).toFixed(0), color: "white" },
+                { label: t("loyalty.available"),  val: Number(cashback.pendingStriker).toFixed(0), color: "#00ff88" },
               ].map(({ label, val, color }) => (
                 <div key={label} className="bg-black/20 rounded-xl p-2.5 text-center">
                   <div className="text-[8px] font-mono text-white/30 mb-0.5">{label}</div>
@@ -360,7 +361,7 @@ export function Loyalty() {
               </Button>
             ) : (
               <div className="text-center text-[10px] font-mono text-white/30 py-2">
-                {cashback.claimedThisPeriod ? "Claimed this week — resets Monday" : "Play more to earn cashback"}
+                {cashback.claimedThisPeriod ? t("loyalty.claimedWeek") : t("loyalty.playMore")}
               </div>
             )}
           </div>
@@ -373,10 +374,8 @@ export function Loyalty() {
               <Shield className="w-4 h-4 text-[#3b82f6]" />
             </div>
             <div>
-              <div className="text-[11px] font-mono font-bold text-white/60">Unlock Cashback</div>
-              <div className="text-[10px] font-mono text-white/30 mt-0.5">
-                Reach <span className="text-[#3b82f6]">Championship</span> tier (10 TON wagered) for 2% weekly cashback on losses.
-              </div>
+              <div className="text-[11px] font-mono font-bold text-white/60">{t("loyalty.unlockCashback")}</div>
+              <div className="text-[10px] font-mono text-white/30 mt-0.5">{t("loyalty.unlockCashbackDesc")}</div>
             </div>
           </div>
         )}
@@ -387,7 +386,7 @@ export function Loyalty() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Star className="w-3.5 h-3.5 text-[#f59e0b]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">Badges</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">{t("loyalty.badges")}</span>
               </div>
               <Link href="/achievements">
                 <span className="flex items-center gap-1 text-[10px] font-mono text-white/40 hover:text-white/70 cursor-pointer transition-colors">
@@ -424,13 +423,13 @@ export function Loyalty() {
               </div>
             ) : (
               <div className="text-center py-2 text-[11px] font-mono text-white/30">
-                Play games to unlock your first badge
+                {t("loyalty.playForBadge")}
               </div>
             )}
 
             <Link href="/achievements">
               <div className="mt-3 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-white/6 hover:border-white/15 cursor-pointer transition-all">
-                <span className="text-[10px] font-mono text-white/40">View all badges</span>
+                <span className="text-[10px] font-mono text-white/40">{t("loyalty.viewAllBadges")}</span>
                 <ChevronRight className="w-3 h-3 text-white/30" />
               </div>
             </Link>
@@ -443,15 +442,15 @@ export function Loyalty() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-3.5 h-3.5 text-[#f59e0b]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">Boot Shop</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">{t("loyalty.bootShop")}</span>
               </div>
               <button onClick={() => setShowBootShop(v => !v)}
                 className="text-[10px] font-mono text-[#f59e0b] hover:text-[#f59e0b]/80 transition-colors">
-                {showBootShop ? "Cancel" : "Convert BOOT"}
+                {showBootShop ? t("loyalty.cancelBtn") : t("loyalty.convertBoot")}
               </button>
             </div>
             <p className="text-[11px] font-mono text-white/40 mb-2">
-              You have <span className="text-[#f59e0b] font-bold">{Number(p?.bootBalance ?? 0).toLocaleString()} BOOT</span> — convert at 1:1 to STRIKER
+              {t("loyalty.bootBalance", { amount: Number(p?.bootBalance ?? 0).toLocaleString() })}
             </p>
             <AnimatePresence>
               {showBootShop && (

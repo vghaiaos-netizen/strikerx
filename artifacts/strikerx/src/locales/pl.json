@@ -155,7 +155,44 @@
       "yourTier": "Twój poziom",
       "cashback": "Zwrot gotówki",
       "claimStreak": "Odbierz dzienny bonus",
-      "streakDays": "Seria {{days}} dni"
+      "streakDays": "Seria {{days}} dni",
+      "hub": "Centrum lojalnościowe",
+      "hubDesc": "Twoje nagrody, drużyna i ranga",
+      "currentRank": "Obecna ranga",
+      "tonWagered": "Obstawiono {{amount}} TON",
+      "nextTier": "{{current}} TON → {{next}}",
+      "dailyStreak": "Codzienna seria",
+      "days": "dni",
+      "claimStreakBtn": "ODBIERZ DZISIEJSZY BONUS ZA SERIĘ",
+      "claimedToday": "Zgłoszone dzisiaj — wróć jutro",
+      "referEarn": "Polecaj i zarabiaj",
+      "referDesc": "Zdobądź 10% wygranych znajomych z poziomu 1 + 5% wygranych z poziomu 2 — na zawsze.",
+      "yourCode": "Twój kod",
+      "shareToTelegram": "UDOSTĘPNIJ DO TELEGRAMU",
+      "squad": "Drużyna",
+      "players": "gracze",
+      "tier1": "Szczebel 1",
+      "tier2": "Szczebel 2",
+      "totalEarned": "Łącznie zarobiono: {{amount}} STRIKER",
+      "yourSquad": "Twoja drużyna",
+      "shareCode": "Udostępnij kod, aby zacząć osiągać przychody",
+      "moreInSquad": "+{{count}} więcej w Twojej drużynie",
+      "vipCashback": "Zwrot gotówki VIP",
+      "yourRate": "Twoja ocena",
+      "fromLosses": "Od strat",
+      "available": "Dostępny",
+      "claimAmount": "CLAIM {{amount}} STRIKER",
+      "claimedWeek": "Odebrano w tym tygodniu — resetuje się w poniedziałek",
+      "playMore": "Graj więcej, aby uzyskać zwrot gotówki",
+      "unlockCashback": "Odblokuj cashback",
+      "unlockCashbackDesc": "Osiągnij poziom mistrzostw (10 TON w zakładzie) za 2% tygodniowego zwrotu pieniędzy za straty.",
+      "badges": "Etykiety",
+      "viewAllBadges": "Wszystkie odznaki",
+      "playForBadge": "Graj w gry, aby odblokować swoją pierwszą odznakę",
+      "bootShop": "Sklep z butami",
+      "bootBalance": "Masz BAGAŻNIK {{amount}} — przekonwertuj o 1:1 na STRAJKUJĄCEGO",
+      "convertBoot": "Konwertuj BAGAŻNIK",
+      "cancelBtn": "Anuluj"
     },
     "guide": {
       "title": "JAK GRAĆ",
@@ -166,7 +203,53 @@
       "vipTiers": "POZIOMY VIP",
       "withdrawals": "WYPŁATY",
       "referrals": "POLECENIA",
-      "jackpot": "JACKPOT"
+      "jackpot": "JACKPOT",
+      "taglineDesc": "Opanuj boisko i zdobądź wysokie wyniki w pierwszym na świecie kasynie piłkarskim Telegram.",
+      "jackpotTitle": "ZŁOTY BOOT JACKPOT",
+      "striker": {
+        "desc": "STRIKER (strk) to nasz ekskluzywny token używany we wszystkich zakładach i nagrodach.",
+        "depositRate": "Raty zadatku",
+        "withdrawRate": "Współczynnik wypłat",
+        "depositVal": "1 TON = 100 STRK",
+        "withdrawVal": "110 STRK = 1 TON",
+        "note": "STRK ma stały wskaźnik Peg-to-Ton z małym spreadem, aby wspierać płynność platformy i pule jackpotów."
+      },
+      "deposit": {
+        "step1": "Kliknij ikonę Portfel na dolnym pasku nawigacji.",
+        "step2": "Wprowadź ilość TON, którą chcesz wpłacić.",
+        "step3": "Kliknij „Wpłać”, aby utworzyć fakturę za pośrednictwem CryptoBota.",
+        "step4": "Dokonaj płatności bezpośrednio w Telegramie.",
+        "step5": "Żetony STRIKERA są automatycznie doliczane do Twojego salda!"
+      },
+      "games": {
+        "shot": "Piłka leci i mnożnik rośnie. Wypłać, zanim się zepsuje. Wypłaty w ostatniej sekundzie dają duże wygrane!",
+        "penalty": "Wybierz lewą/środkową/prawą. 1,92× wypłata, jeśli opiekun zanurkuje w złą stronę.",
+        "freekick": "Kula spada przez kołki. Niskie ryzyko: mniejsze huśtawki. Wysokie ryzyko: duże wygrane lub duże straty.",
+        "minefield": "Kliknij bezpieczne kwadraty na siatce 5×5. Wypłata przed uderzeniem w kopalnię. Bardziej bezpieczne kwadraty = wyższy mnożnik."
+      },
+      "vip": {
+        "tier": "Tier",
+        "cashback": "Zwrot gotówki",
+        "minWager": "Minimalny zakład",
+        "note": "Zwrot gotówki jest obliczany na podstawie strat netto i wypłacany co tydzień. Minimalne wymagania dotyczące zakładów mają zastosowanie do każdego poziomu."
+      },
+      "withdrawal": {
+        "minNote": "Minimalna wypłata wynosi 100 uderzeń.",
+        "desc": "Wypłaty są przetwarzane ręcznie przez nasz zespół ze względów bezpieczeństwa. Standardowy czas przetwarzania wynosi ~24 godziny.",
+        "critical": "KRYTYCZNE: Musisz mieć @nazwę użytkownika ustawioną w profilu Telegram, aby otrzymywać płatności."
+      },
+      "referral": {
+        "earn": "Polecaj i zarabiaj 5%",
+        "desc": "Udostępnij swój unikalny link polecający, który znajdziesz na stronie Profilu.",
+        "earnDesc": "Zdobądź natychmiast 5% pierwszego depozytu znajomego jako żetony NAPASTNIKA!"
+      },
+      "jackpotDesc": {
+        "intro": "Jackpot Golden Boot to ogólnospołeczna pula nagród, która rośnie wraz z każdym zakładem postawionym na platformie.",
+        "contribution": "Wkład",
+        "trigger": "Próg wyzwalania",
+        "note": "Gdy pula osiągnie 50 TON, jest losowo przyznawana kwalifikującemu się graczowi, który był aktywny w ciągu ostatnich 60 minut. Każdy zakład to szansa na wygraną!"
+      },
+      "goodLuck": "Powodzenia, Striker!"
     },
     "languagePicker": {
       "title": "Wybierz język",
@@ -180,6 +263,54 @@
       "betTooLow": "Kwota zakładu jest zbyt niska",
       "gameNotReady": "Gra nie jest gotowa. Proszę czekać.",
       "unknownError": "Coś poszło nie tak"
+    },
+    "verify": {
+      "title": "Wystarczająco uczciwy",
+      "subtitle": "Zweryfikuj wynik rundy kolizyjnej",
+      "howItWorks": "Jak to działa?",
+      "howDesc1": "Przed każdą rundą serwer generuje losowy serverSeed.",
+      "howDesc2": "Punkt zderzenia jest obliczany jako HMAC-SHA256(serverSeed, \"crash\") i nie można go zmienić po rozpoczęciu rundy.",
+      "howDesc3": "Nasiona ujawniają się dopiero po rozbiciu się rundy, dzięki czemu można sprawdzić, czy wynik został z góry określony i czy był uczciwy.",
+      "verifyRound": "Zweryfikuj rundę",
+      "roundId": "Identyfikator Rundy",
+      "roundIdPlaceholder": "np. 42",
+      "houseEdge": "Krawędź domu",
+      "rValue": "r value",
+      "serverSeed": "Serwer Seed",
+      "hash": "HMAC-SHA256 Hash",
+      "verified": "Runda zweryfikowana",
+      "failed": "Weryfikacja nie powiodła się",
+      "recordedCrash": "Zarejestrowana awaria:",
+      "computedCrash": "Obliczona awaria:",
+      "fairMessage": "Wynik pasuje — ta runda była uczciwa.",
+      "manualVerify": "Weryfikacja ręczna",
+      "manualDesc": "Wprowadź dowolny seed serwera, aby niezależnie obliczyć jego punkt awarii.",
+      "serverSeedHex": "Serwer Seed (hex)",
+      "seedPlaceholder": "Sześciokątny łańcuch o długości 64 znaków",
+      "compute": "Oblicz punkt awarii",
+      "computing": "Komputeryzacja",
+      "crashPoint": "Punkt zderzenia",
+      "openSource": "Formuła Crash jest open source i może być zweryfikowana przez każdego",
+      "roundNotCrashed": "Runda nie jest jeszcze rozbita — ziarno ujawnione dopiero po rozbiciu",
+      "networkError": "Błąd sieci — upewnij się, że jesteś zalogowany",
+      "invalidId": "Wprowadź prawidłowy identyfikator rundy",
+      "roundLabel": "Okrągły",
+      "status": "Status"
+    },
+    "notFound": {
+      "title": "404 Zagubiony? Strona nie istnieje",
+      "desc": "Strona, której szukasz, nie istnieje"
+    },
+    "overlay": {
+      "jackpotLabel": "Jackpot Złotego Buta",
+      "wonBy": "Zwycięski projekt:",
+      "tapDismiss": "Dotknij w dowolnym miejscu, aby odrzucić",
+      "achievementUnlocked": "Osiągnięcie odblokowane:"
+    },
+    "notifications": {
+      "liveFeed": "Kanał na żywo",
+      "clear": "Clear",
+      "noActivity": "Brak aktywności — zagraj, aby zobaczyć akcję tutaj"
     }
   }
 }

@@ -155,7 +155,44 @@
       "yourTier": "Tvoj nivo",
       "cashback": "Povraćaj novca",
       "claimStreak": "Preuzmi dnevni bonus",
-      "streakDays": "Niz od {{days}} dana"
+      "streakDays": "Niz od {{days}} dana",
+      "hub": "Centar za lojalnost",
+      "hubDesc": "Vaše nagrade, tim i rang",
+      "currentRank": "Trenutni rang",
+      "tonWagered": "{{amount}} TONA ULOŽENO",
+      "nextTier": "{{current}} TON → {{next}}",
+      "dailyStreak": "Dnevni period",
+      "days": "dana",
+      "claimStreakBtn": "ISKORISTITE DANAŠNJI BONUS ZA NIZ",
+      "claimedToday": "Preuzeto danas — vratite se sutra",
+      "referEarn": "Preporučite i zaradite",
+      "referDesc": "Zaradite 10% od pobeda prijatelja prvog reda + 5% od pobeda drugog nivoa — zauvek.",
+      "yourCode": "Ваш код",
+      "shareToTelegram": "PODELITE NA TELEGRAM",
+      "squad": "Jedinica",
+      "players": "Igrači",
+      "tier1": "Nivo 1",
+      "tier2": "Nivo 2",
+      "totalEarned": "Ukupna zarada: {{amount}} STRIKER",
+      "yourSquad": "Tvoja jedinica?",
+      "shareCode": "Podelite šifru da biste počeli da zarađujete",
+      "moreInSquad": "+{{count}} više u vašem timu",
+      "vipCashback": "VIP povraćaj novca",
+      "yourRate": "Ocena",
+      "fromLosses": "Od gubitaka",
+      "available": "Dostupno",
+      "claimAmount": "POTRAŽIVANJE {{amount}} STRIKER",
+      "claimedWeek": "Preuzeto ove nedelje — resetovanje ponedeljka",
+      "playMore": "Igrajte više da biste zaradili povraćaj novca",
+      "unlockCashback": "Otključajte povraćaj novca",
+      "unlockCashbackDesc": "Dostignite nivo šampionata (sa zaradom od 10 TONA) za 2% nedeljnog povraćaja novca na gubitke.",
+      "badges": "Značke",
+      "viewAllBadges": "Pogledajte sve značke",
+      "playForBadge": "Igrajte igre da biste otključali svoju prvu značku",
+      "bootShop": "Prodavnica obuće",
+      "bootBalance": "Imate __ PH0__ ČIZMU — konvertujte u 1:1 u NAPADAČA",
+      "convertBoot": "Konvertuj POKRETANJE",
+      "cancelBtn": "Otkaži"
     },
     "guide": {
       "title": "KAKO SE IGRA",
@@ -166,7 +203,53 @@
       "vipTiers": "VIP NIVOI",
       "withdrawals": "PODIZANJA",
       "referrals": "PREPORUKE",
-      "jackpot": "DŽEKPOT"
+      "jackpot": "DŽEKPOT",
+      "taglineDesc": "Ovladajte terenom i ostvarite veliki rezultat uz prvi Telegram fudbalski kazino na svetu.",
+      "jackpotTitle": "ZLATNI DŽEKPOT ČIZME",
+      "striker": {
+        "desc": "STRIKER (STRK) je naš ekskluzivni token u igri koji se koristi za sve opklade i nagrade.",
+        "depositRate": "Stopa depozita",
+        "withdrawRate": "Stopa povlačenja",
+        "depositVal": "1 TON = 100 STRK",
+        "withdrawVal": "110 STRK = 1 TON",
+        "note": "STRK ima fiksni klin na TONU sa malim rasponom za podršku likvidnosti platforme i bazena džekpota."
+      },
+      "deposit": {
+        "step1": "Dodirnite ikonu Novčanik u donjoj traci za navigaciju.",
+        "step2": "Unesite količinu TONA koju želite da uplatite.",
+        "step3": "Kliknite na „Uplata“ da biste kreirali fakturu putem CryptoBot-a.",
+        "step4": "Dovršite plaćanje direktno u Telegramu.",
+        "step5": "STRIKER tokeni se automatski pripisuju vašem stanju!"
+      },
+      "games": {
+        "shot": "Lopta leti i množilac raste. Unovčite pre nego što se pokvari. Veliki dobitak u poslednjoj sekundi za isplatu!",
+        "penalty": "Izaberite levo/sredina/desno. 1,92× isplata ako vlasnik zaroni na pogrešan način.",
+        "freekick": "Lopta pada kroz klinove. Nizak rizik: manje ljuljaške. Visok rizik: velike pobede ili veliki gubici.",
+        "minefield": "Kliknite na sigurne kvadrate na mreži 5×5. Unovčite pre nego što udarite u rudnik. Više sigurnih kvadrata = veći množilac."
+      },
+      "vip": {
+        "tier": "Nivo",
+        "cashback": "Povraćaj novca",
+        "minWager": "Min. opklada",
+        "note": "Cashback se obračunava na neto gubitke i isplaćuje nedeljno. Minimalni zahtevi za klađenje važe za svaki nivo."
+      },
+      "withdrawal": {
+        "minNote": "Minimalno povlačenje je 100 ŠTRAJKAČA.",
+        "desc": "Naš tim ručno obrađuje isplate iz bezbednosnih razloga. Standardno vreme obrade je ~24 sata.",
+        "critical": "KRITIČNO: Morate imati podešeno @korisničko ime na svom Telegram profilu da biste primali uplate."
+      },
+      "referral": {
+        "earn": "Preporučite i zaradite 5%",
+        "desc": "Podijelite svoj jedinstveni link za preporuku koji se nalazi na stranici profila.",
+        "earnDesc": "Odmah zaradite 5% prvog depozita vašeg prijatelja kao žetone za napadače!"
+      },
+      "jackpotDesc": {
+        "intro": "Golden Boot Jackpot je nagradni fond na nivou zajednice koji raste sa svakom ulogom na platformi.",
+        "contribution": "dopnnos",
+        "trigger": "Prag okidača",
+        "note": "Kada bazen dostigne 50 TONA, nasumično se dodeljuje igraču koji ispunjava uslove i koji je bio aktivan u poslednjih 60 minuta. Svaka opklada je šansa za pobedu!"
+      },
+      "goodLuck": "Srećno, Strajkeru!"
     },
     "languagePicker": {
       "title": "Izaberi jezik",
@@ -180,6 +263,54 @@
       "betTooLow": "Iznos opklade je prenizak",
       "gameNotReady": "Igra nije spremna. Sačekaj.",
       "unknownError": "Nešto je pošlo naopako"
+    },
+    "verify": {
+      "title": "Provably Fair",
+      "subtitle": "Verifikujte bilo koji ishod runde sudara",
+      "howItWorks": "Kako radi",
+      "howDesc1": "Pre svakog kruga, server generiše nasumično serverSeed.",
+      "howDesc2": "Tačka pada se izračunava kao HMAC-SHA256 (serverSeed, \"crash\") i ne može se menjati nakon početka runde.",
+      "howDesc3": "Seme se otkriva tek nakon što se krug sruši, tako da možete proveriti da li je rezultat bio unapred određen i pošten.",
+      "verifyRound": "Verifikujte krug",
+      "roundId": "ID kruga",
+      "roundIdPlaceholder": "npr. 42",
+      "houseEdge": "Ivica kuće",
+      "rValue": "VREDNOST PO \"R\" osi:",
+      "serverSeed": "Serverski Seed",
+      "hash": "HMAC-SHA256 Hash",
+      "verified": "Krug je verifikovan",
+      "failed": "Потврда није успела",
+      "recordedCrash": "Snimljeni sudar:",
+      "computedCrash": "Izračunati sudar:",
+      "fairMessage": "Ishod se poklapa — ova runda je bila fer.",
+      "manualVerify": "=ručna provjera",
+      "manualDesc": "Unesite bilo koje seme servera da biste nezavisno izračunali njegovu tačku pada.",
+      "serverSeedHex": "Seme servera (heksadecimalno)",
+      "seedPlaceholder": "Šestougaona žica sa 64 čare",
+      "compute": "Izračunajte tačku sudara",
+      "computing": "Рачунарство",
+      "crashPoint": "Tačka sudara",
+      "openSource": "Formula za pad je otvorenog koda i svako može da je proveri",
+      "roundNotCrashed": "Runda se još nije srušila — seme je otkriveno tek nakon sudara",
+      "networkError": "Greška na mreži — proverite da li ste prijavljeni",
+      "invalidId": "Unesite važeći ID kruga",
+      "roundLabel": "Round",
+      "status": "Status"
+    },
+    "notFound": {
+      "title": "Greška 404: stranica nije pronađena",
+      "desc": "Stranica koju tražite ne postoji."
+    },
+    "overlay": {
+      "jackpotLabel": "Zlatna kopačka džekpot",
+      "wonBy": "Osvojio/la",
+      "tapDismiss": "Dodirnite bilo gde da biste odbacili",
+      "achievementUnlocked": "Postignuće je otključano"
+    },
+    "notifications": {
+      "liveFeed": "Direktan prenos.",
+      "clear": "Obriši",
+      "noActivity": "Još nema aktivnosti — reprodukujte da biste videli akciju ovde"
     }
   }
 }

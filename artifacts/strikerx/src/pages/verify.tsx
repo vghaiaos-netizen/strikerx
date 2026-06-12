@@ -5,6 +5,7 @@ import { ShieldCheck, Search, ArrowLeft, CheckCircle, XCircle, ExternalLink } fr
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTranslation } from "react-i18next";
 
 const HOUSE_EDGE = 0.03;
 
@@ -38,6 +39,7 @@ interface RoundData {
 }
 
 export function Verify() {
+  const { t } = useTranslation();
   const [roundId, setRoundId] = useState("");
   const [manualSeed, setManualSeed] = useState("");
   const [roundData, setRoundData] = useState<RoundData | null>(null);
@@ -120,19 +122,19 @@ export function Verify() {
           <div>
             <h1 className="font-bold text-lg text-foreground flex items-center gap-2">
               <ShieldCheck size={20} className="text-[#00c853]" />
-              Provably Fair
+              {t("verify.title")}
             </h1>
-            <p className="text-xs text-muted-foreground">Verify any crash round outcome</p>
+            <p className="text-xs text-muted-foreground">{t("verify.subtitle")}</p>
           </div>
         </div>
 
         {/* How it works */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-2">
-          <h2 className="text-sm font-bold text-foreground">How it works</h2>
+          <h2 className="text-sm font-bold text-foreground">{t("verify.howItWorks")}</h2>
           <div className="space-y-1.5 text-xs text-muted-foreground">
-            <p>Before each round, the server generates a random <span className="font-mono text-foreground">serverSeed</span>.</p>
-            <p>The crash point is computed as <span className="font-mono text-foreground">HMAC-SHA256(serverSeed, "crash")</span> and cannot be changed after the round begins.</p>
-            <p>The seed is revealed only after the round crashes, so you can verify the result was predetermined and fair.</p>
+            <p>{t("verify.howDesc1")}</p>
+            <p>{t("verify.howDesc2")}</p>
+            <p>{t("verify.howDesc3")}</p>
           </div>
           <div className="mt-3 bg-muted rounded-lg p-3 font-mono text-[11px] text-muted-foreground space-y-1">
             <p>hash = HMAC-SHA256(serverSeed, "crash")</p>
@@ -144,9 +146,9 @@ export function Verify() {
 
         {/* Lookup by Round ID */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-bold text-foreground">Verify a Round</h2>
+          <h2 className="text-sm font-bold text-foreground">{t("verify.verifyRound")}</h2>
           <div className="space-y-1.5">
-            <Label htmlFor="roundId" className="text-xs text-muted-foreground">Round ID</Label>
+            <Label htmlFor="roundId" className="text-xs text-muted-foreground">{t("verify.roundId")}</Label>
             <div className="flex gap-2">
               <Input
                 id="roundId"
@@ -227,13 +229,13 @@ export function Verify() {
                         }
                         <div className="space-y-1">
                           <p className="text-sm font-bold text-foreground">
-                            {verified ? "Round Verified" : "Verification Failed"}
+                            {verified ? t("verify.verified") : t("verify.failed")}
                           </p>
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <p>Recorded crash: <span className="font-mono font-bold text-foreground">{roundData.crashPoint?.toFixed(2)}x</span></p>
-                            <p>Computed crash: <span className={`font-mono font-bold ${verified ? "text-[#00c853]" : "text-red-400"}`}>{computedCrash.toFixed(2)}x</span></p>
+                            <p>{t("verify.recordedCrash")}: <span className="font-mono font-bold text-foreground">{roundData.crashPoint?.toFixed(2)}x</span></p>
+                            <p>{t("verify.computedCrash")}: <span className={`font-mono font-bold ${verified ? "text-[#00c853]" : "text-red-400"}`}>{computedCrash.toFixed(2)}x</span></p>
                           </div>
-                          {verified && <p className="text-[11px] text-[#00c853] font-medium mt-1">The outcome matches — this round was fair.</p>}
+                          {verified && <p className="text-[11px] text-[#00c853] font-medium mt-1">{t("verify.fairMessage")}</p>}
                         </div>
                       </div>
                     </div>
@@ -246,10 +248,10 @@ export function Verify() {
 
         {/* Manual verification */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-bold text-foreground">Manual Verification</h2>
-          <p className="text-xs text-muted-foreground">Enter any server seed to compute its crash point independently.</p>
+          <h2 className="text-sm font-bold text-foreground">{t("verify.manualVerify")}</h2>
+          <p className="text-xs text-muted-foreground">{t("verify.manualDesc")}</p>
           <div className="space-y-1.5">
-            <Label htmlFor="manualSeed" className="text-xs text-muted-foreground">Server Seed (hex)</Label>
+            <Label htmlFor="manualSeed" className="text-xs text-muted-foreground">{t("verify.serverSeed")}</Label>
             <Input
               id="manualSeed"
               value={manualSeed}
@@ -266,11 +268,11 @@ export function Verify() {
             variant="outline"
             className="w-full"
           >
-            {manualLoading ? "Computing..." : "Compute Crash Point"}
+            {manualLoading ? t("verify.computing") : t("verify.compute")}
           </Button>
           {manualResult !== null && (
             <div className="bg-muted rounded-lg p-3 text-center">
-              <p className="text-xs text-muted-foreground">Crash point</p>
+              <p className="text-xs text-muted-foreground">{t("verify.crashPoint")}</p>
               <p className="text-2xl font-mono font-bold text-[#00c853]">{manualResult.toFixed(2)}x</p>
             </div>
           )}
@@ -279,7 +281,7 @@ export function Verify() {
         {/* Footer */}
         <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground pb-2">
           <ExternalLink size={12} />
-          <span>Crash formula is open source and verifiable by anyone</span>
+          <span>{t("verify.openSource")}</span>
         </div>
       </div>
     </Layout>

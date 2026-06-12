@@ -155,7 +155,44 @@
       "yourTier": "Seu Nível",
       "cashback": "Cashback",
       "claimStreak": "Reclamar Bônus Diário",
-      "streakDays": "Sequência de {{days}} dias"
+      "streakDays": "Sequência de {{days}} dias",
+      "hub": "Loyalty Hub",
+      "hubDesc": "Suas recompensas, pelotão E classificação",
+      "currentRank": "Classificação atual",
+      "tonWagered": "{{amount}} TONELADA APOSTADA",
+      "nextTier": "{{current}} TON → {{next}}",
+      "dailyStreak": "Sequência diária",
+      "days": "dias",
+      "claimStreakBtn": "REIVINDICAR O BÓNUS DA SÉRIE DE HOJE",
+      "claimedToday": "Reclamado hoje — volte amanhã",
+      "referEarn": "Recomende e ganhe",
+      "referDesc": "Ganhe 10% das vitórias dos amigos do Nível 1 + 5% das vitórias do Nível 2 — para sempre.",
+      "yourCode": "O SEU CÓDIGO",
+      "shareToTelegram": "COMPARTILHAR NO TELEGRAM",
+      "squad": "Plantel",
+      "players": "jogadores",
+      "tier1": "Escalão 1",
+      "tier2": "Escalão 2",
+      "totalEarned": "Total ganho: {{amount}} ATACANTE",
+      "yourSquad": "O seu pelotão",
+      "shareCode": "Partilhe o seu código para começar a ganhar",
+      "moreInSquad": "+{{count}} mais no seu pelotão",
+      "vipCashback": "<x id=\"1\"/>- CASHBACK VIP",
+      "yourRate": "Sua Avaliação",
+      "fromLosses": "De Perdas",
+      "available": "Disponível",
+      "claimAmount": "REIVINDICAR {{amount}} STRIKER",
+      "claimedWeek": "Resgatado esta semana — redefine segunda-feira",
+      "playMore": "Jogue mais para ganhar cashback",
+      "unlockCashback": "Desbloquear Cashback",
+      "unlockCashbackDesc": "Alcance o nível do Campeonato (10 TONELADAS apostadas) para 2% de reembolso semanal em perdas.",
+      "badges": "Distintivos",
+      "viewAllBadges": "Todos os emblemas",
+      "playForBadge": "Jogue para desbloquear o seu primeiro emblema",
+      "bootShop": "Loja de botas",
+      "bootBalance": "Você tem {{amount}} INICIALIZAÇÃO — converter em 1:1 para ATACANTE",
+      "convertBoot": "Converter INICIALIZAÇÃO",
+      "cancelBtn": "Cancelar"
     },
     "guide": {
       "title": "COMO JOGAR",
@@ -166,7 +203,53 @@
       "vipTiers": "NÍVEIS VIP",
       "withdrawals": "SAQUES",
       "referrals": "INDICAÇÕES",
-      "jackpot": "JACKPOT"
+      "jackpot": "JACKPOT",
+      "taglineDesc": "Domine o campo e marque pontos com o primeiro casino de futebol Telegram do mundo.",
+      "jackpotTitle": "JACKPOT BOTA DOURADA",
+      "striker": {
+        "desc": "STRIKER (STRK) é o nosso token exclusivo no jogo usado para todas as apostas e recompensas.",
+        "depositRate": "Taxa de Depósito",
+        "withdrawRate": "Taxa de saque",
+        "depositVal": "1 TON = 100 STRK",
+        "withdrawVal": "110 STRK = 1 TON",
+        "note": "O STRK tem um peg to TON fixo com um pequeno spread para suportar liquidez da plataforma e pools de jackpot."
+      },
+      "deposit": {
+        "step1": "Toque no ícone da Carteira na barra de navegação inferior.",
+        "step2": "Insira a quantidade de TONELADAS que deseja depositar.",
+        "step3": "Clique em 'Depositar' para criar uma fatura via CryptoBot.",
+        "step4": "Conclua o pagamento diretamente no Telegram.",
+        "step5": "As fichas de ATACANTE são creditadas no seu saldo automaticamente!"
+      },
+      "games": {
+        "shot": "A bola voa e o multiplicador cresce. Saque antes que falhe. Os saques de último segundo ganham muito!",
+        "penalty": "Escolha esquerda/centro/direita. 1,92× pagamento se o goleiro mergulhar na direção errada.",
+        "freekick": "A bola cai através dos pinos. Baixo risco: oscilações menores. Alto risco: grandes vitórias ou grandes perdas.",
+        "minefield": "Clique em quadrados seguros numa grelha 5×5. Saque antes de atingir uma mina. Quadrados mais seguros = multiplicador mais alto."
+      },
+      "vip": {
+        "tier": "Categoria",
+        "cashback": "Cashback",
+        "minWager": "Aposta mínima",
+        "note": "O reembolso é calculado sobre as perdas líquidas e pago semanalmente. Os requisitos mínimos de aposta aplicam-se a cada nível."
+      },
+      "withdrawal": {
+        "minNote": "A retirada mínima é de 100 ATACANTES.",
+        "desc": "Os levantamentos são processados manualmente pela nossa equipa por motivos de segurança. O tempo de processamento padrão é de ~24 horas.",
+        "critical": "CRÍTICO: tem de ter um @username definido no seu perfil do Telegram para receber pagamentos."
+      },
+      "referral": {
+        "earn": "Recomende e ganhe 5%",
+        "desc": "Partilhe a sua ligação de recomendação única encontrada na página Perfil.",
+        "earnDesc": "Ganhe 5% do primeiro depósito do seu amigo como tokens de ATACANTE instantaneamente!"
+      },
+      "jackpotDesc": {
+        "intro": "O Jackpot da Bota de Ouro é uma premiação em toda a comunidade que cresce com cada aposta feita na plataforma.",
+        "contribution": "Contribuição",
+        "trigger": "limiar de desencadeamento",
+        "note": "Quando o pool atinge 50 TONELADAS, ele é concedido aleatoriamente a um jogador elegível que esteve ativo nos últimos 60 minutos. Cada aposta é uma oportunidade de ganhar!"
+      },
+      "goodLuck": "Boa sorte, Striker!"
     },
     "languagePicker": {
       "title": "Escolha seu Idioma",
@@ -180,6 +263,54 @@
       "betTooLow": "Valor da aposta muito baixo",
       "gameNotReady": "Jogo não pronto. Por favor, aguarde.",
       "unknownError": "Algo deu errado"
+    },
+    "verify": {
+      "title": "Provavelmente justo ",
+      "subtitle": "Verifique qualquer resultado da rodada de colisão",
+      "howItWorks": "Como funciona",
+      "howDesc1": "Antes de cada rodada, o servidor gera um serverSeed aleatório.",
+      "howDesc2": "O ponto de falha é calculado como HMAC-SHA256(serverSeed, \"falha\") e não pode ser alterado após o início da rodada.",
+      "howDesc3": "A semente é revelada somente após a falha da rodada, para que você possa verificar se o resultado foi predeterminado e justo.",
+      "verifyRound": "Verificar uma rodada",
+      "roundId": "ID de ronda:",
+      "roundIdPlaceholder": "por exemplo, 42",
+      "houseEdge": "Vantagem da casa",
+      "rValue": "r VALOR",
+      "serverSeed": "Server Seed",
+      "hash": "HMAC-SHA256 Hash",
+      "verified": "Rodada Verificada",
+      "failed": "A verificação falhou",
+      "recordedCrash": "Acidente gravado:",
+      "computedCrash": "Falha computada:",
+      "fairMessage": "O resultado corresponde — esta ronda foi justa.",
+      "manualVerify": "Verificação manual",
+      "manualDesc": "Insira qualquer seed do servidor para calcular seu ponto de falha de forma independente.",
+      "serverSeedHex": "Server Seed (Hex)",
+      "seedPlaceholder": "Cadeia hexagonal de 64 caracteres",
+      "compute": "Calcular Ponto de Colisão",
+      "computing": "Informática",
+      "crashPoint": "Ponto de colisão",
+      "openSource": "A fórmula de falha é de código aberto e verificável por qualquer pessoa",
+      "roundNotCrashed": "A rodada ainda não travou — semente revelada somente após o travamento",
+      "networkError": "Erro de rede — certifique-se de que tem sessão iniciada",
+      "invalidId": "Introduza um ID de ronda válido",
+      "roundLabel": "Fase",
+      "status": "Status"
+    },
+    "notFound": {
+      "title": " 404 Página não encontrada",
+      "desc": "A página que procura não existe. "
+    },
+    "overlay": {
+      "jackpotLabel": "Jackpot da Bota de Ouro",
+      "wonBy": "Ganho por",
+      "tapDismiss": "Toque em qualquer lugar para dispensar",
+      "achievementUnlocked": "Conquista desbloqueada!"
+    },
+    "notifications": {
+      "liveFeed": "Transmissão ao vivo",
+      "clear": "Limpar",
+      "noActivity": "Ainda não há atividade — jogue para ver a ação aqui"
     }
   }
 }
