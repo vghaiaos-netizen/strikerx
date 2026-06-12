@@ -7,12 +7,14 @@ import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-reac
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { soundManager } from "@/lib/sound";
+import { useTranslation } from "react-i18next";
 
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { player } = useAuth();
+  const { t } = useTranslation();
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
 
   const toggleSound = () => {
@@ -105,11 +107,11 @@ export function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-card border-t border-border grid grid-cols-5 px-2 py-2 z-50">
-        <NavLink href="/"           icon={<Home    size={20} />} label="Home"    active={location === "/"} />
-        <NavLink href="/leaderboard" icon={<Trophy  size={20} />} label="Rank"    active={location === "/leaderboard"} />
-        <NavLink href="/deposit"     icon={<Wallet  size={20} />} label="Wallet"  active={location === "/deposit" || location === "/withdraw"} />
-        <NavLink href="/loyalty"     icon={<Gift    size={20} />} label="Loyalty" active={location === "/loyalty"} />
-        <NavLink href="/profile"     icon={<User    size={20} />} label="Profile" active={location === "/profile"} />
+        <NavLink href="/"           icon={<Home    size={20} />} label={t('nav.home')}    active={location === "/"} />
+        <NavLink href="/leaderboard" icon={<Trophy  size={20} />} label={t('nav.rank')}    active={location === "/leaderboard"} />
+        <NavLink href="/deposit"     icon={<Wallet  size={20} />} label={t('nav.wallet')}  active={location === "/deposit" || location === "/withdraw"} />
+        <NavLink href="/loyalty"     icon={<Gift    size={20} />} label={t('nav.loyalty')} active={location === "/loyalty"} />
+        <NavLink href="/profile"     icon={<User    size={20} />} label={t('nav.profile')} active={location === "/profile"} />
       </nav>
     </div>
   );
