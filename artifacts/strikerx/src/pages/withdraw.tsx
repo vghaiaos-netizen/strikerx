@@ -6,8 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUpRight, Clock, AlertTriangle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function Withdraw() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const requestWithdrawal = useRequestWithdrawal();
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
@@ -46,7 +48,7 @@ export function Withdraw() {
       <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
         <div className="flex items-center gap-2">
           <ArrowUpRight className="w-4 h-4 text-white/60" />
-          <span className="font-display font-bold text-sm tracking-widest text-white">WITHDRAW</span>
+          <span className="font-display font-bold text-sm tracking-widest text-white">{t('withdraw.title')}</span>
           <span className="ml-auto text-xs font-mono text-white/30">{balance.toLocaleString()} STRIKER</span>
         </div>
 
@@ -105,7 +107,7 @@ export function Withdraw() {
 
               {/* Amount */}
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">Amount (STRIKER)</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">{t('withdraw.amount')}</label>
                 <div className="relative">
                   <Input type="number" value={strikerAmount} onChange={e => setStrikerAmount(e.target.value)}
                     className="bg-white/5 border-white/10 text-white font-mono font-bold h-11 text-base pr-16"
@@ -128,7 +130,7 @@ export function Withdraw() {
 
               {/* Address */}
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">TON Wallet Address</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">{t('withdraw.addressLabel')}</label>
                 <Input value={address} onChange={e => setAddress(e.target.value)}
                   className="bg-white/5 border-white/10 text-white font-mono text-sm h-11"
                   placeholder="UQA..." />
@@ -136,7 +138,7 @@ export function Withdraw() {
 
               <Button onClick={handleSubmit} disabled={!canWithdraw || requestWithdrawal.isPending}
                 className="h-12 font-display font-bold tracking-widest bg-white/10 hover:bg-white/15 text-white disabled:opacity-30 border border-white/10">
-                {requestWithdrawal.isPending ? "SUBMITTING..." : "REQUEST WITHDRAWAL"}
+                {requestWithdrawal.isPending ? t('withdraw.processing') : "REQUEST WITHDRAWAL"}
               </Button>
 
               <div className="text-center text-[10px] font-mono text-white/20">
