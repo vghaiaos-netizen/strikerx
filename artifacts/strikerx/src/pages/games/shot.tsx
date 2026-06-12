@@ -9,6 +9,7 @@ import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, Users, Zap, Clock, Target } from "lucide-react";
 import { soundManager } from "@/lib/sound";
+import { useTranslation } from "react-i18next";
 
 type RoundStatus = "waiting" | "running" | "crashed";
 
@@ -66,6 +67,7 @@ function HistoryPill({ value }: { value: number }) {
 }
 
 export function TheShot() {
+  const { t } = useTranslation();
   const { token, player } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -481,7 +483,7 @@ export function TheShot() {
         <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#00ff88]" />
-            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">THE SHOT</span>
+            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">{t('games.shot.title')}</span>
           </div>
           <div className="flex items-center gap-3">
             {round?.activePlayers ? (
@@ -492,7 +494,7 @@ export function TheShot() {
             ) : null}
             <div className={`flex items-center gap-1.5 text-[10px] ${wsReady ? "text-[#00ff88]" : wsReconnecting ? "text-[#f59e0b]" : "text-white/20"}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${wsReady ? "bg-[#00ff88] animate-pulse" : wsReconnecting ? "bg-[#f59e0b] animate-pulse" : "bg-white/15"}`} />
-              {wsReady ? "live" : wsReconnecting ? "reconnecting" : "offline"}
+              {wsReady ? t('games.shot.live') : wsReconnecting ? "reconnecting" : "offline"}
             </div>
           </div>
         </div>
@@ -695,7 +697,7 @@ export function TheShot() {
                   </div>
                   <motion.div animate={{ opacity: [0.25, 0.65, 0.25] }} transition={{ repeat: Infinity, duration: 1.5 }}
                     className="text-[9px] font-mono tracking-[0.3em] text-[#00ff88]/40 uppercase">
-                    Place your bet
+                    {t('games.shot.placeYourBet')}
                   </motion.div>
                 </motion.div>
               )}
@@ -835,7 +837,7 @@ export function TheShot() {
               disabled={!isWaiting || !!myBet?.placed || !wsAuthed}
               className="h-11 font-display font-bold tracking-widest text-sm bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#060a14] disabled:opacity-20 disabled:bg-white/5 disabled:text-white/20">
               <Zap className="w-4 h-4 mr-1" />
-              {myBet?.placed ? "BET PLACED" : "PLACE BET"}
+              {myBet?.placed ? "BET PLACED" : t('games.common.placeBet')}
             </Button>
 
             <motion.div
@@ -849,7 +851,7 @@ export function TheShot() {
                   ? { background: color, color: "#060a14", boxShadow: `0 0 28px ${color}55` }
                   : { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.2)" }
                 }>
-                {hasBet && isRunning ? `CASHOUT ${mult.toFixed(2)}x` : "CASHOUT"}
+                {hasBet && isRunning ? t('games.shot.cashOutAt', { mult: mult.toFixed(2) }) : t('games.common.cashOut')}
               </Button>
             </motion.div>
           </div>

@@ -3,6 +3,7 @@ import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Trophy, Medal, Star, Crown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const VIP_ICONS: Record<string, React.ReactNode> = {
   sunday_league: null,
@@ -44,6 +45,7 @@ interface Tournament {
 }
 
 export function Leaderboard() {
+  const { t } = useTranslation();
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("wagered");
 
@@ -86,7 +88,7 @@ export function Leaderboard() {
               <Trophy size={20} className="text-yellow-400" />
             </div>
             <div>
-              <h1 className="text-xl font-mono font-bold text-foreground">LEADERBOARD</h1>
+              <h1 className="text-xl font-mono font-bold text-foreground">{t('leaderboard.title').toUpperCase()}</h1>
               <p className="text-xs text-muted-foreground">Top players on StrikerX</p>
             </div>
           </div>

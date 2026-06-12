@@ -8,6 +8,7 @@ import { usePlayFreekick, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 import { soundManager } from "@/lib/sound";
+import { useTranslation } from "react-i18next";
 
 type Risk = "low" | "medium" | "high";
 
@@ -85,6 +86,7 @@ function generatePath(targetSlot: number): number[] {
 interface FKResult { slot: number; multiplier: number; winAmount: number; }
 
 export function FreeKick() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const playFk = usePlayFreekick();
@@ -173,7 +175,7 @@ export function FreeKick() {
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-2.5 pb-2 border-b border-white/5">
           <Zap className="w-4 h-4 text-[#f59e0b]" />
-          <span className="font-display font-bold text-xs tracking-[0.2em] text-white">FREE KICK</span>
+          <span className="font-display font-bold text-xs tracking-[0.2em] text-white">{t('games.freekick.title')}</span>
           <span className="ml-auto text-[10px] font-mono text-white/22">Plinko · 9 slots</span>
         </div>
 
@@ -394,7 +396,7 @@ export function FreeKick() {
           <Button onClick={handleKick} disabled={animating}
             className="h-11 font-display font-bold tracking-widest bg-[#f59e0b] hover:bg-[#f59e0b]/90 text-[#060a14] disabled:opacity-30 disabled:bg-white/8 disabled:text-white/25">
             <Zap className="w-4 h-4 mr-1.5" />
-            {animating ? "FLYING…" : "KICK!"}
+            {animating ? t('games.freekick.flying') : t('games.freekick.kick')}
           </Button>
         </div>
       </div>

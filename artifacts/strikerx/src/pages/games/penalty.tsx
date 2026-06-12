@@ -8,6 +8,7 @@ import { usePlayPenalty, getGetMeQueryKey } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, ChevronUp, RotateCcw, Trophy } from "lucide-react";
 import { soundManager } from "@/lib/sound";
+import { useTranslation } from "react-i18next";
 
 type Zone = "left" | "center" | "right";
 
@@ -93,6 +94,7 @@ function Keeper({ cx, diveDir }: { cx: number; diveDir: Zone | null }) {
 }
 
 export function Penalty() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const playPenalty = usePlayPenalty();
@@ -176,7 +178,7 @@ export function Penalty() {
         <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-[#00ff88]" />
-            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">PENALTY</span>
+            <span className="font-display font-bold text-xs tracking-[0.2em] text-white">{t('games.penalty.title')}</span>
             <span className="text-[9px] font-mono text-white/20 ml-1">1.92× payout</span>
           </div>
           {history.length > 0 && (
@@ -355,7 +357,7 @@ export function Penalty() {
                   <div className={`font-display font-black text-3xl leading-none tracking-wide ${
                     result.win ? "text-[#00ff88]" : "text-red-400"
                   }`}>
-                    {result.win ? "GOAL!" : "SAVED!"}
+                    {result.win ? t('games.penalty.goal') : t('games.penalty.saved')}
                   </div>
                   <div className={`text-sm font-mono mt-1.5 ${result.win ? "text-[#00ff88]/65" : "text-red-400/50"}`}>
                     {result.win
@@ -397,8 +399,8 @@ export function Penalty() {
                   <Icon className="w-5 h-5 transition-transform duration-200 group-hover:scale-125" />
                   <span>
                     {hasResult
-                      ? (isShot ? (result.win ? "goal" : "shot") : isKeeper ? "keeper" : zone)
-                      : zone}
+                      ? (isShot ? (result.win ? t('games.penalty.goal') : t('games.penalty.saved')) : isKeeper ? "keeper" : t(`games.penalty.${zone}`))
+                      : t(`games.penalty.${zone}`)}
                   </span>
                   {!hasResult && !kicking && (
                     <div className="absolute bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -8,6 +8,7 @@ import { TrendingUp, Target, Bomb, Zap, Trophy, ChevronRight, Tv2, Globe, Gift, 
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications } from "@/lib/ws-notifications";
 import { useGetMyReferral } from "@workspace/api-client-react";
+import { useTranslation } from "react-i18next";
 
 interface MatchEvent { active: boolean; teamA: string; teamB: string; bonusMultiplier: number; endsAt: string | null; label: string; }
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
@@ -76,6 +77,7 @@ function timeAgo(iso: string | null): string {
 
 export function Home() {
   useDevAuth();
+  const { t } = useTranslation();
   const { player, token } = useAuth();
   const { notifications } = useNotifications();
   const [wcCountdownSecs, setWcCountdownSecs] = useState(0);
@@ -268,7 +270,7 @@ export function Home() {
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <Trophy className="w-3.5 h-3.5 text-[#f59e0b]" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]">Golden Boot</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]">{t('home.goldenBoot')}</span>
               </div>
               <motion.div className="font-display font-black text-3xl text-white"
                 animate={{ opacity: [1, 0.7, 1] }} transition={{ duration: 2, repeat: Infinity }}>
@@ -276,7 +278,7 @@ export function Home() {
                 <span className="text-[#f59e0b] ml-1 text-2xl">TON</span>
               </motion.div>
               <div className="text-[10px] font-mono text-white/30 mt-0.5">
-                {jackpot?.status === "ready" ? "READY TO TRIGGER" : `Building to ${jackpot?.minimumTrigger ?? 50} TON`}
+                {jackpot?.status === "ready" ? "READY TO TRIGGER" : t('home.buildingTo', { target: jackpot?.minimumTrigger ?? 50 })}
               </div>
             </div>
             <div className={`px-2 py-1 rounded-md text-[9px] font-mono font-bold uppercase ${jackpot?.status === "ready" ? "bg-[#f59e0b]/20 text-[#f59e0b]" : "bg-white/5 text-white/30"}`}>
@@ -374,7 +376,7 @@ export function Home() {
         <div>
           <div className="flex items-center gap-2 mb-2.5">
             <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">
-              {wcTheme?.active ? "WC ORIGINALS" : "ORIGINALS"}
+              {wcTheme?.active ? t('home.wcOriginals') : "ORIGINALS"}
             </div>
             {wcTheme?.active && (
               <span className="text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">2026</span>
@@ -434,8 +436,8 @@ export function Home() {
               <Gift className="w-4 h-4 text-[#00ff88]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-display font-bold text-sm text-white">Earn with your Squad</div>
-              <div className="text-[10px] font-mono text-white/40 mt-0.5">Get 10% of friends' wins forever</div>
+              <div className="font-display font-bold text-sm text-white">{t('home.earnSquad')}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">{t('home.referralDesc')}</div>
               {referral?.code && (
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <span className="font-mono text-[11px] text-[#00ff88] font-bold tracking-widest">{referral.code}</span>
@@ -468,8 +470,8 @@ export function Home() {
               <Users className="w-4 h-4 text-[#3b82f6]" />
             </div>
             <div className="flex-1 min-w-0 relative">
-              <div className="font-display font-bold text-sm text-white">Join the Community</div>
-              <div className="text-[10px] font-mono text-white/40 mt-0.5">Big-win alerts · jackpot updates · live chat</div>
+              <div className="font-display font-bold text-sm text-white">{t('home.communityTitle')}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">{t('home.communityDesc')}</div>
             </div>
             <div className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-[#3b82f6]/70 relative">
               Join <ChevronRight className="w-3 h-3" />
@@ -489,8 +491,8 @@ export function Home() {
               <BookOpen className="w-4 h-4 text-[#f59e0b]" />
             </div>
             <div className="flex-1 min-w-0 relative">
-              <div className="font-display font-bold text-sm text-white">How to Play</div>
-              <div className="text-[10px] font-mono text-white/40 mt-0.5">Games guide · deposits · VIP · withdrawals</div>
+              <div className="font-display font-bold text-sm text-white">{t('home.howToPlay')}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">{t('home.howToPlayDesc')}</div>
             </div>
             <div className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-[#f59e0b]/70 relative">
               Read <ChevronRight className="w-3 h-3" />
@@ -501,7 +503,7 @@ export function Home() {
         {/* ── Recent Winners ── */}
         <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
           <div className="px-4 pt-3 pb-2 flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">Recent Winners</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">{t('home.recentWinners')}</span>
             {wsWins.length > 0 && (
               <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse ml-auto" />
             )}

@@ -8,6 +8,7 @@ import { useStartMinefield, usePickMinefield, useCashoutMinefield, getGetMeQuery
 import { motion, AnimatePresence } from "framer-motion";
 import { Bomb, CheckCircle2, Zap } from "lucide-react";
 import { soundManager } from "@/lib/sound";
+import { useTranslation } from "react-i18next";
 
 type CellState = "hidden" | "safe" | "mine";
 
@@ -53,6 +54,7 @@ function multColor(m: number) {
 }
 
 export function Minefield() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const startMine = useStartMinefield();
@@ -213,7 +215,7 @@ export function Minefield() {
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-2.5 pb-2 border-b border-white/5">
           <Bomb className="w-4 h-4 text-red-400" />
-          <span className="font-display font-bold text-xs tracking-[0.2em] text-white">MINEFIELD</span>
+          <span className="font-display font-bold text-xs tracking-[0.2em] text-white">{t('games.minefield.title')}</span>
           {session && isActive && (
             <div className="ml-auto flex items-center gap-3">
               {mult > 5 && (
@@ -245,8 +247,8 @@ export function Minefield() {
                   <Bomb className="w-10 h-10 text-red-500" />
                 </div>
               </div>
-              <div className="font-display font-bold text-lg text-white">Click safe squares</div>
-              <div className="text-[12px] font-mono text-white/40 mt-1">Cash out before hitting a mine</div>
+              <div className="font-display font-bold text-lg text-white">{t('games.minefield.setupTitle')}</div>
+              <div className="text-[12px] font-mono text-white/40 mt-1">{t('games.minefield.setupSub')}</div>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 w-full max-w-[320px]">
@@ -526,7 +528,7 @@ export function Minefield() {
                 className="bg-white/5 border-white/10 text-white font-mono font-bold h-9 text-sm" />
               <Button onClick={handleStart} disabled={startMine.isPending}
                 className="h-11 font-display font-bold tracking-widest bg-red-500 hover:bg-red-400 text-white disabled:opacity-30">
-                {startMine.isPending ? "PLACING BET…" : "START GAME"}
+                {startMine.isPending ? "PLACING BET…" : t('games.minefield.startGame')}
               </Button>
             </>
           ) : isActive ? (

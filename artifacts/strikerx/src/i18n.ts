@@ -33,8 +33,8 @@ export function saveLangLocally(code: string) {
 
 i18n
   .use(initReactI18next)
-  .use(resourcesToBackend((language: string) =>
-    import(`./locales/${language}.json`)
+  .use(resourcesToBackend((language: string, namespace: string) =>
+    import(`./locales/${language}.json`).then(m => (m.default ?? m)[namespace])
   ))
   .init({
     lng: getSavedLang() ?? "en",

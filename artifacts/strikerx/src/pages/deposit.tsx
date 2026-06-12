@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, ExternalLink, Copy, Check, Clock, Zap } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { useTranslation } from "react-i18next";
 
 type Currency = "TON" | "USDT" | "BNB" | "SOL";
 const CURRENCIES: { id: Currency; label: string; color: string; rate: string }[] = [
@@ -21,6 +22,7 @@ interface Invoice { payUrl: string; amount: string; currency: string; expiresAt?
 interface RateEvent { active: boolean; depositRate: number; endsAt: string | null; }
 
 export function Deposit() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const createDeposit = useCreateDeposit();
   const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
@@ -183,7 +185,7 @@ export function Deposit() {
 
             <Button onClick={handleGenerate} disabled={createDeposit.isPending}
               className="h-12 font-display font-bold tracking-widest bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#0a0e1a] disabled:opacity-30">
-              {createDeposit.isPending ? "GENERATING..." : "GENERATE INVOICE"}
+              {createDeposit.isPending ? t('deposit.processing') : "GENERATE INVOICE"}
             </Button>
           </>
         ) : (
