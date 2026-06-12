@@ -73,13 +73,13 @@ export function Deposit() {
 
   const handleGenerate = async () => {
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    if (!amt || amt <= 0) { toast({ title: t('errors.unknownError'), variant: "destructive" }); return; }
     try {
       const res = await createDeposit.mutateAsync({ data: { currency: currency as "TON" | "USDT_TON" | "USDT_TRC20" | "BNB" | "SOL" } });
       setInvoice({ payUrl: res.payLink ?? "#", amount: amount, currency, expiresAt: res.expiresAt });
       setCountdown(res.expiresAt ? Math.floor((new Date(res.expiresAt).getTime() - Date.now()) / 1000) : 0);
     } catch (e: unknown) {
-      toast({ title: "Failed to generate invoice", description: (e as { message?: string })?.message, variant: "destructive" });
+      toast({ title: t('deposit.invoiceCreated'), description: (e as { message?: string })?.message, variant: "destructive" });
     }
   };
 
@@ -108,7 +108,7 @@ export function Deposit() {
       <div className="flex flex-col gap-4 px-4 pt-3 pb-6">
         <div className="flex items-center gap-2">
           <Wallet className="w-4 h-4 text-[#00ff88]" />
-          <span className="font-display font-bold text-sm tracking-widest text-white">ADD FUNDS</span>
+          <span className="font-display font-bold text-sm tracking-widest text-white">{t('deposit.addFunds')}</span>
           {me && (
             <span className="ml-auto text-xs font-mono text-white/30">
               {Number(me?.strikerBalance ?? 0).toLocaleString()} STRIKER
@@ -132,14 +132,14 @@ export function Deposit() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-display font-bold text-sm text-[#fbbf24] tracking-wider">BONUS RATE ACTIVE</span>
+                    <span className="font-display font-bold text-sm text-[#fbbf24] tracking-wider">{t('deposit.bonusRateActive')}</span>
                     <span className="text-[10px] font-mono font-bold bg-[#fbbf24] text-black rounded-full px-2 py-0.5">
                       {effectiveRate} STRIKER / TON
                     </span>
                   </div>
                   {rateEventCountdown > 0 && (
                     <div className="text-[10px] font-mono text-[#fbbf24]/70 mt-0.5">
-                      Ends in {formatRateCountdown(rateEventCountdown)}
+                      {t('deposit.endsIn', { time: formatRateCountdown(rateEventCountdown) })}
                     </div>
                   )}
                 </div>
@@ -162,7 +162,7 @@ export function Deposit() {
             </div>
 
             <div className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
-              <div className="text-[10px] font-mono text-white/30 mb-0.5">Exchange Rate</div>
+              <div className="text-[10px] font-mono text-white/30 mb-0.5">{t('deposit.exchangeRate')}</div>
               <div className="font-mono text-sm font-bold text-white">
                 {rateEvent?.active && currency === "TON"
                   ? <span className="text-[#fbbf24]">{effectiveRate} STRIKER / TON</span>
@@ -172,20 +172,22 @@ export function Deposit() {
 
             {/* Amount */}
             <div>
-              <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">Amount ({currency})</label>
+              <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">
+                {t('deposit.amountLabel', { currency })}
+              </label>
               <Input type="number" step="0.1" min="0.1" value={amount} onChange={e => setAmount(e.target.value)}
                 className="bg-white/5 border-white/10 text-white font-mono font-bold h-11 text-base" />
             </div>
 
             {/* Preview */}
             <div className={`flex items-center justify-between border rounded-xl px-4 py-3 transition-colors ${rateEvent?.active ? "bg-[#fbbf24]/5 border-[#fbbf24]/20" : "bg-[#00ff88]/5 border-[#00ff88]/15"}`}>
-              <span className="text-xs font-mono text-white/40">You receive</span>
+              <span className="text-xs font-mono text-white/40">{t('deposit.youReceive')}</span>
               <span className={`font-display font-bold text-lg ${rateEvent?.active ? "text-[#fbbf24]" : "text-[#00ff88]"}`}>{strikerPreview} STRIKER</span>
             </div>
 
             <Button onClick={handleGenerate} disabled={createDeposit.isPending}
               className="h-12 font-display font-bold tracking-widest bg-[#00ff88] hover:bg-[#00ff88]/90 text-[#0a0e1a] disabled:opacity-30">
-              {createDeposit.isPending ? t('deposit.processing') : "GENERATE INVOICE"}
+              {createDeposit.isPending ? t('deposit.processing') : t('deposit.generateInvoice')}
             </Button>
           </>
         ) : (
@@ -206,7 +208,7 @@ export function Deposit() {
               {countdown > 0 && (
                 <div className="flex items-center gap-1.5 text-xs font-mono text-[#f59e0b]">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>Expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</span>
+                  <span>{t('deposit.expiresIn')} {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</span>
                 </div>
               )}
 
@@ -215,7 +217,7 @@ export function Deposit() {
                 <a href={invoice.payUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
                   <Button className="w-full h-11 font-display font-bold tracking-widest bg-[#0098ea] hover:bg-[#0098ea]/90 text-white">
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    PAY IN TELEGRAM
+                    {t('deposit.payInTelegram')}
                   </Button>
                 </a>
                 <Button variant="outline" onClick={copyUrl} className="h-11 w-11 p-0 border-white/10 bg-white/5 hover:bg-white/10 text-white">
@@ -225,7 +227,7 @@ export function Deposit() {
 
               <button onClick={() => setInvoice(null)}
                 className="text-xs font-mono text-white/30 hover:text-white/60 underline">
-                Generate new invoice
+                {t('deposit.generateNew')}
               </button>
             </motion.div>
           </AnimatePresence>

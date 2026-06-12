@@ -23,6 +23,7 @@ const VIP_THRESHOLDS = [0, 10, 50, 200, 1000];
 export function Profile() {
   const { player, token, setToken } = useAuth();
   const { toast }  = useToast();
+  const { t } = useTranslation();
   const [bootAmount, setBootAmount] = useState("");
   const [showBootShop, setShowBootShop] = useState(false);
   const [kycFullName, setKycFullName]   = useState("");
@@ -47,7 +48,6 @@ export function Profile() {
     document.documentElement.dir = getLangDir(code);
     document.documentElement.lang = code;
     setShowLangPicker(false);
-    // Persist to server (best-effort)
     if (token) {
       fetch("/api/players/me/language", {
         method: "PUT",
@@ -70,20 +70,20 @@ export function Profile() {
   const initials = (p?.username as string ?? "?").slice(0, 2).toUpperCase();
 
   const statCards = [
-    { label: "Total Games", value: stats?.totalGames ?? 0,                                  icon: TrendingUp },
-    { label: "Win Rate",    value: `${((stats?.winRate ?? 0) * 100).toFixed(0)}%`,         icon: Target     },
-    { label: "Best Multi",  value: `${stats?.biggestMultiplier ?? 0}x`,                     icon: Zap        },
+    { labelKey: "profile.totalGames", value: stats?.totalGames ?? 0,                                  icon: TrendingUp },
+    { labelKey: "profile.winRate",    value: `${((stats?.winRate ?? 0) * 100).toFixed(0)}%`,         icon: Target     },
+    { labelKey: "profile.bestMulti",  value: `${stats?.biggestMultiplier ?? 0}x`,                     icon: Zap        },
   ];
 
   const handleBootRedeem = async () => {
     const amount = Number(bootAmount);
-    if (!amount || amount <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    if (!amount || amount <= 0) { toast({ title: t('profile.enterValid'), variant: "destructive" }); return; }
     try {
       const result = await redeemBootMut.mutateAsync({ data: { amount } });
-      toast({ title: "BOOT redeemed!", description: `+${result.redeemedBoot} STRIKER added` });
+      toast({ title: t('profile.redeemSuccess'), description: t('profile.redeemSuccessDesc', { amount: result.redeemedBoot }) });
       setBootAmount(""); setShowBootShop(false);
     } catch (e: unknown) {
-      toast({ title: "Redeem failed", description: (e as { message?: string })?.message, variant: "destructive" });
+      toast({ title: t('profile.redeemFailed'), description: (e as { message?: string })?.message, variant: "destructive" });
     }
   };
 
@@ -121,7 +121,9 @@ export function Profile() {
         <div className="bg-white/3 border border-white/6 rounded-xl p-3">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-mono text-white/40">
-              {isMaxTier ? "Max tier reached" : `${tonWagered.toFixed(1)} / ${nextThreshold} TON to ${VIP_TIERS[vipIdx + 1] ?? ""}`}
+              {isMaxTier
+                ? t('profile.maxTier')
+                : t('profile.vipProgress', { wagered: tonWagered.toFixed(1), threshold: nextThreshold, tier: VIP_TIERS[vipIdx + 1] ?? "" })}
             </span>
             <span className="text-[10px] font-mono font-bold" style={{ color: vipColor }}>{Math.round(vipProgress)}%</span>
           </div>
@@ -142,8 +144,8 @@ export function Profile() {
               <Gift className="w-4 h-4 text-[#00ff88]" />
             </div>
             <div className="flex-1">
-              <div className="font-display font-bold text-sm text-white">Loyalty Hub</div>
-              <div className="text-[10px] font-mono text-white/40 mt-0.5">Streak, cashback, referral squad &amp; badges</div>
+              <div className="font-display font-bold text-sm text-white">{t('profile.loyaltyHub')}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">{t('profile.loyaltyHubDesc')}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30" />
           </motion.div>
@@ -162,8 +164,8 @@ export function Profile() {
               <Users className="w-4 h-4 text-[#3b82f6]" />
             </div>
             <div className="flex-1">
-              <div className="font-display font-bold text-sm text-white">Community Channel</div>
-              <div className="text-[10px] font-mono text-white/40 mt-0.5">Big-win alerts · jackpot updates · live chat</div>
+              <div className="font-display font-bold text-sm text-white">{t('profile.communityChannel')}</div>
+              <div className="text-[10px] font-mono text-white/40 mt-0.5">{t('profile.communityDesc')}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30" />
           </motion.a>
@@ -179,7 +181,7 @@ export function Profile() {
             <Globe className="w-4 h-4 text-white/50" />
           </div>
           <div className="flex-1">
-            <div className="font-display font-bold text-sm text-white">Language</div>
+            <div className="font-display font-bold text-sm text-white">{t('profile.language')}</div>
             <div className="text-[10px] font-mono text-white/40 mt-0.5">
               {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.label ?? "English"}
             </div>
@@ -243,15 +245,15 @@ export function Profile() {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <ShoppingBag size={14} className="text-amber-400" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/50">Boot Shop</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/50">{t('profile.bootShop')}</span>
               </div>
               <button onClick={() => setShowBootShop(v => !v)}
                 className="text-[10px] font-mono text-amber-400 hover:text-amber-300 transition-colors">
-                {showBootShop ? "Cancel" : "Convert BOOT"}
+                {showBootShop ? t('profile.cancel') : t('profile.convertBoot')}
               </button>
             </div>
             <p className="text-[11px] font-mono text-white/40">
-              Convert <span className="text-amber-400 font-bold">{Number(p?.bootBalance ?? 0).toLocaleString()} BOOT</span> to STRIKER at 1:1
+              {t('profile.convertBootDesc', { amount: Number(p?.bootBalance ?? 0).toLocaleString() })}
             </p>
             <AnimatePresence>
               {showBootShop && (
@@ -273,11 +275,11 @@ export function Profile() {
 
         {/* ── Game Stats ── */}
         <div className="grid grid-cols-3 gap-2">
-          {statCards.map(({ label, value, icon: Icon }) => (
-            <div key={label} className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
+          {statCards.map(({ labelKey, value, icon: Icon }) => (
+            <div key={labelKey} className="bg-white/3 border border-white/6 rounded-xl p-3 text-center">
               <Icon className="w-4 h-4 text-white/30 mx-auto mb-1.5" />
               <div className="font-display font-bold text-sm text-white">{value}</div>
-              <div className="text-[9px] font-mono text-white/30 mt-0.5">{label}</div>
+              <div className="text-[9px] font-mono text-white/30 mt-0.5">{t(labelKey)}</div>
             </div>
           ))}
         </div>
@@ -289,15 +291,15 @@ export function Profile() {
             <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
               <div className="flex items-center gap-2 mb-4">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-mono font-semibold">Identity Verification (KYC)</span>
+                <span className="text-sm font-mono font-semibold">{t('profile.kycTitle')}</span>
               </div>
 
               {kycStatus === "verified" && (
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
                   <ShieldCheck className="w-6 h-6 text-emerald-400 flex-shrink-0" />
                   <div>
-                    <div className="text-sm font-mono font-bold text-emerald-400">Verified</div>
-                    <div className="text-xs text-white/50 mt-0.5">Your identity is verified. Withdrawal limits fully unlocked.</div>
+                    <div className="text-sm font-mono font-bold text-emerald-400">{t('profile.kycVerified')}</div>
+                    <div className="text-xs text-white/50 mt-0.5">{t('profile.kycVerifiedDesc')}</div>
                   </div>
                 </div>
               )}
@@ -306,8 +308,8 @@ export function Profile() {
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
                   <Loader2 className="w-5 h-5 text-yellow-400 animate-spin flex-shrink-0" />
                   <div>
-                    <div className="text-sm font-mono font-bold text-yellow-400">Under Review</div>
-                    <div className="text-xs text-white/50 mt-0.5">Our team is reviewing your submission. Usually 24–48 hours.</div>
+                    <div className="text-sm font-mono font-bold text-yellow-400">{t('profile.kycPending')}</div>
+                    <div className="text-xs text-white/50 mt-0.5">{t('profile.kycPendingDesc')}</div>
                   </div>
                 </div>
               )}
@@ -316,31 +318,31 @@ export function Profile() {
                 <div className="space-y-3">
                   {kycStatus === "rejected" && (
                     <div className="text-xs font-mono text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                      Your previous submission was rejected. Please re-submit with valid details.
+                      {t('profile.kycRejected')}
                     </div>
                   )}
                   {kycStatus === "none" && (
-                    <p className="text-xs text-white/50">Verify your identity to unlock full withdrawal limits.</p>
+                    <p className="text-xs text-white/50">{t('profile.kycNoneDesc')}</p>
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] font-mono text-white/40 block mb-1">Full Name</label>
+                      <label className="text-[10px] font-mono text-white/40 block mb-1">{t('profile.kycFullName')}</label>
                       <input className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
-                        placeholder="As on your ID" value={kycFullName} onChange={e => setKycFullName(e.target.value)} />
+                        placeholder={t('profile.kycFullNamePlaceholder')} value={kycFullName} onChange={e => setKycFullName(e.target.value)} />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono text-white/40 block mb-1">Country</label>
+                      <label className="text-[10px] font-mono text-white/40 block mb-1">{t('profile.kycCountry')}</label>
                       <input className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
-                        placeholder="e.g. Nigeria" value={kycCountry} onChange={e => setKycCountry(e.target.value)} />
+                        placeholder={t('profile.kycCountryPlaceholder')} value={kycCountry} onChange={e => setKycCountry(e.target.value)} />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">Document Type</label>
+                    <label className="text-[10px] font-mono text-white/40 block mb-1">{t('profile.kycDocType')}</label>
                     <select className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-white"
                       value={kycDocType} onChange={e => setKycDocType(e.target.value)}>
-                      <option value="passport">Passport</option>
-                      <option value="national_id">National ID</option>
-                      <option value="drivers_license">Driver's License</option>
+                      <option value="passport">{t('profile.kycPassport')}</option>
+                      <option value="national_id">{t('profile.kycNationalId')}</option>
+                      <option value="drivers_license">{t('profile.kycDriversLicense')}</option>
                     </select>
                   </div>
                   <Button className="w-full font-mono text-xs h-9 gap-2"
@@ -354,20 +356,20 @@ export function Profile() {
                           body: JSON.stringify({ fullName: kycFullName.trim(), country: kycCountry.trim(), docType: kycDocType }),
                         });
                         if (r.ok) {
-                          toast({ title: "KYC submitted!", description: "We'll review within 24–48 hours." });
+                          toast({ title: t('profile.kycSubmitted'), description: t('profile.kycSubmittedDesc') });
                           setKycFullName(""); setKycCountry("");
                         } else {
                           const d = await r.json() as { error?: string };
-                          toast({ title: "Submission failed", description: d.error ?? "Please try again.", variant: "destructive" });
+                          toast({ title: t('profile.kycFailed'), description: d.error ?? t('errors.unknownError'), variant: "destructive" });
                         }
                       } catch {
-                        toast({ title: "Network error", variant: "destructive" });
+                        toast({ title: t('profile.networkError'), variant: "destructive" });
                       } finally {
                         setKycSubmitting(false);
                       }
                     }}>
                     {kycSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                    Submit for Verification
+                    {t('profile.kycSubmit')}
                   </Button>
                 </div>
               )}

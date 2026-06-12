@@ -26,13 +26,6 @@ const RANK_STYLES = [
 
 type Tab = "wagered" | "wins" | "streak" | "referrals";
 
-const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "wagered", label: "Top Wagerers" },
-  { key: "wins", label: "Top Winners" },
-  { key: "streak", label: "Streak Kings" },
-  { key: "referrals", label: "Referrals" },
-];
-
 interface LeaderboardEntry {
   rank: number; playerId: number; username: string; vipTier: string;
   score: number; gamesPlayed?: number;
@@ -48,6 +41,13 @@ export function Leaderboard() {
   const { t } = useTranslation();
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("wagered");
+
+  const TABS: Array<{ key: Tab; label: string }> = [
+    { key: "wagered",   label: t('leaderboard.topWagerers') },
+    { key: "wins",      label: t('leaderboard.topWinners') },
+    { key: "streak",    label: t('leaderboard.streakKings') },
+    { key: "referrals", label: t('leaderboard.referrals') },
+  ];
 
   const { data, isLoading } = useQuery<LeaderboardResponse>({
     queryKey: ["/leaderboard", activeTab],
@@ -71,10 +71,10 @@ export function Leaderboard() {
 
   const formatScore = (tab: Tab, score: number) => {
     switch (tab) {
-      case "wagered": return `${Number(score).toFixed(2)} TON`;
-      case "wins": return `${Math.round(score).toLocaleString()} STRIKER`;
-      case "streak": return `${score} days`;
-      case "referrals": return `${score} refs`;
+      case "wagered":   return `${Number(score).toFixed(2)} TON`;
+      case "wins":      return `${Math.round(score).toLocaleString()} STRIKER`;
+      case "streak":    return t('leaderboard.scoreDays', { count: score });
+      case "referrals": return t('leaderboard.scoreRefs', { count: score });
     }
   };
 
@@ -89,7 +89,7 @@ export function Leaderboard() {
             </div>
             <div>
               <h1 className="text-xl font-mono font-bold text-foreground">{t('leaderboard.title').toUpperCase()}</h1>
-              <p className="text-xs text-muted-foreground">Top players on StrikerX</p>
+              <p className="text-xs text-muted-foreground">{t('leaderboard.subtitle')}</p>
             </div>
           </div>
 
@@ -99,9 +99,9 @@ export function Leaderboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-sm font-mono font-bold text-green-400">TOURNAMENT LIVE</span>
+                  <span className="text-sm font-mono font-bold text-green-400">{t('leaderboard.tournamentLive')}</span>
                 </div>
-                <span className="text-xs text-green-300 font-mono">{tournament.prizePoolTon} TON prize</span>
+                <span className="text-xs text-green-300 font-mono">{t('leaderboard.tonPrize', { amount: tournament.prizePoolTon })}</span>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 {tournament.type} · Ends {new Date(tournament.endTime).toLocaleDateString()}
@@ -134,8 +134,8 @@ export function Leaderboard() {
           ) : !data?.entries?.length ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Trophy size={48} className="text-muted-foreground/20 mb-4" />
-              <p className="text-muted-foreground font-mono">No data yet</p>
-              <p className="text-xs text-muted-foreground mt-1">Be the first to make it on the board!</p>
+              <p className="text-muted-foreground font-mono">{t('leaderboard.noData')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('leaderboard.beFirst')}</p>
             </div>
           ) : (
             data.entries.map((entry) => {
@@ -165,7 +165,7 @@ export function Leaderboard() {
                       {formatScore(activeTab, entry.score)}
                     </div>
                     {entry.gamesPlayed !== undefined && (
-                      <div className="text-xs text-muted-foreground">{entry.gamesPlayed} games</div>
+                      <div className="text-xs text-muted-foreground">{t('leaderboard.scoreGames', { count: entry.gamesPlayed })}</div>
                     )}
                   </div>
                 </div>

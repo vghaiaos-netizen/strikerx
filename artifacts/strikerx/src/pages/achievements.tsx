@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useGetMyAchievements } from "@workspace/api-client-react";
 import { Lock, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 
 const RARITY_COLORS: Record<string, string> = {
   common:    "#6b7280",
@@ -20,6 +21,7 @@ const RARITY_BG: Record<string, string> = {
 const RARITY_ORDER = ["legendary", "epic", "rare", "common"];
 
 export function Achievements() {
+  const { t } = useTranslation();
   const { data: achievements, isLoading } = useGetMyAchievements();
 
   const unlocked = achievements?.filter(a => a.unlockedAt) ?? [];
@@ -37,9 +39,9 @@ export function Achievements() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display font-black text-lg text-white">Achievements</h1>
+            <h1 className="font-display font-black text-lg text-white">{t('achievements.title')}</h1>
             <p className="text-[10px] font-mono text-white/40 mt-0.5">
-              {unlocked.length} / {achievements?.length ?? 0} unlocked
+              {t('achievements.unlocked', { count: unlocked.length, total: achievements?.length ?? 0 })}
             </p>
           </div>
           <div className="flex items-center gap-1.5 bg-[#f59e0b]/10 border border-[#f59e0b]/30 rounded-lg px-3 py-1.5">
@@ -51,7 +53,7 @@ export function Achievements() {
         {/* Progress bar */}
         <div className="bg-white/3 border border-white/6 rounded-xl p-3">
           <div className="flex justify-between text-[10px] font-mono text-white/40 mb-2">
-            <span>Progress</span>
+            <span>{t('achievements.progress')}</span>
             <span>{Math.round((unlocked.length / Math.max(1, achievements?.length ?? 1)) * 100)}%</span>
           </div>
           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -68,7 +70,7 @@ export function Achievements() {
         {unlocked.length > 0 && (
           <section>
             <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40 mb-2">
-              Unlocked ({unlocked.length})
+              {t('achievements.unlockedSection', { count: unlocked.length })}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {sortByRarity(unlocked).map((a, i) => (
@@ -82,7 +84,7 @@ export function Achievements() {
         {locked.length > 0 && (
           <section>
             <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/40 mb-2">
-              Locked ({locked.length})
+              {t('achievements.lockedSection', { count: locked.length })}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {sortByRarity(locked).map((a, i) => (
