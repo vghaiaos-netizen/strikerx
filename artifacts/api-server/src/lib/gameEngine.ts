@@ -102,13 +102,17 @@ export function minefieldMultiplier(
 
 // ─── FREE KICK (PLINKO) ───────────────────────────────────────────────────────
 
-// Slot values are pre-calibrated so that E[slot] = 1.0 given the actual
-// Plinko ball distribution (8 rows, start center, clamped to [0,8]).
-// RTP = E[slot] * (1 - houseEdge) ≈ 96% at 4% house edge.
+// Slot values calibrated to E[slot] ≈ 1.0 given the ACTUAL clamped random-walk
+// distribution for 8 rows starting at center (slot 4 of 9).
+// Boundary clamping produces: p(0)=p(8)≈10.9%, p(1)=p(7)≈3.1%, p(2)=p(6)≈21.9%,
+// p(3)=p(5)≈0.4%, p(4)≈27.3%. RTP = E[slot] × (1 - houseEdge) ≈ 96% at 4% edge.
+//
+// Outer slots (0, 8) are intentional 0× busts so players can lose their full bet.
+// Low:  ~22% bust; Med: ~44% bust; High: ~73% bust.
 const FREEKICK_SLOTS = {
-  low:    [0.49, 0.79, 0.98, 1.18, 1.47, 1.18, 0.98, 0.79, 0.49],
-  medium: [0.11, 0.26, 0.53, 1.05, 2.64, 1.05, 0.53, 0.26, 0.11],
-  high:   [0.03, 0.10, 0.17, 0.66, 3.32, 0.66, 0.17, 0.10, 0.03],
+  low:    [0, 0.50, 0.90, 1.10, 2.10, 1.10, 0.90, 0.50, 0],
+  medium: [0, 0,    0.30, 0.50, 3.20, 0.50, 0.30, 0,    0],
+  high:   [0, 0,    0,    0.10, 3.65, 0.10, 0,    0,    0],
 };
 
 export function playFreekick(riskLevel: "low" | "medium" | "high"): {
