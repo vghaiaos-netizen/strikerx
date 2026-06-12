@@ -191,31 +191,58 @@ export function TheShot() {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     }
 
-    if (event === "auth_ok") { setWsAuthed(true); return; }
+    if (event === "auth_ok") {
+      authRetriesRef.current = 0;
+      if (authRetryTimerRef.current) { clearTimeout(authRetryTimerRef.current); authRetryTimerRef.current = null; }
+      setWsAuthed(true);
+      return;
+    }
 
     if (event === "error") {
       const msg = String(d.message ?? "");
-      // Token errors: close silently — the WS will reconnect and home.tsx will
-      // have refreshed the token via Telegram initData by then.
       if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
-        wsRef.current?.close();
+        // Stay connected — retry auth with the latest token after a short delay.
+        // home.tsx fires Telegram re-auth on mount (~200-500ms round trip), so
+        // by the time we retry the fresh token will be in tokenRef.current.
+        setWsAuthed(false);
+        const MAX_AUTH_RETRIES = 4;
+        if (authRetriesRef.current < MAX_AUTH_RETRIES) {
+          authRetriesRef.current += 1;
+          const delay = Math.min(3000, 600 * authRetriesRef.current);
+          if (authRetryTimerRef.current) clearTimeout(authRetryTimerRef.current);
+          authRetryTimerRef.current = setTimeout(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN && tokenRef.current) {
+              wsRef.current.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
+            }
+          }, delay);
+        } else {
+          // Exhausted retries — close and let the reconnect loop handle it
+          wsRef.current?.close();
+        }
         return;
       }
       toast({ title: "Error", description: msg, variant: "destructive" });
     }
   }, [toast]);
 
-  // Keep a ref to the latest token so the WS reconnect can always send current auth
-  // without the effect needing to re-run (which would create a new connection).
+  // Keep a ref to the latest token so auth retries always use the freshest value
+  // without needing to tear down the WS connection.
   const tokenRef = useRef(token);
   useEffect(() => { tokenRef.current = token; }, [token]);
 
+  // Track inline auth retries — on "Invalid token" we retry a few times with
+  // an increasing delay (waiting for home.tsx's Telegram re-auth to complete)
+  // before giving up and closing the connection.
+  const authRetriesRef = useRef(0);
+  const authRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Send auth immediately if the WS is already open when the token arrives
   useEffect(() => {
-    if (token && wsRef.current?.readyState === WebSocket.OPEN) {
+    if (token && wsRef.current?.readyState === WebSocket.OPEN && !wsAuthed) {
+      authRetriesRef.current = 0;
       wsRef.current.send(JSON.stringify({ type: "auth", token }));
     }
-  }, [token]);
+  }, [token, wsAuthed]);
 
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -230,6 +257,8 @@ export function TheShot() {
       wsRef.current = ws;
       ws.onopen = () => {
         reconnectAttempts.current = 0;
+        authRetriesRef.current = 0;
+        if (authRetryTimerRef.current) { clearTimeout(authRetryTimerRef.current); authRetryTimerRef.current = null; }
         setWsReady(true);
         setWsReconnecting(false);
         setWsFailedPermanently(false);
@@ -263,6 +292,7 @@ export function TheShot() {
     return () => {
       destroyed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (authRetryTimerRef.current) { clearTimeout(authRetryTimerRef.current); authRetryTimerRef.current = null; }
       if (countdownRef.current) clearInterval(countdownRef.current);
       wsRef.current?.close();
     };
@@ -423,9 +453,18 @@ export function TheShot() {
             <motion.div key="ws-failed"
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="bg-[#ef4444]/15 border-b border-[#ef4444]/30 px-4 py-2 flex items-center justify-between flex-shrink-0">
-              <span className="text-[11px] font-mono text-[#ef4444]">Connection lost — refresh to reconnect</span>
-              <button onClick={() => { reconnectAttempts.current = 0; setWsFailedPermanently(false); setWsReconnecting(true); wsRef.current?.close(); }}
-                className="text-[10px] font-mono text-[#ef4444]/70 underline hover:text-[#ef4444]">Retry</button>
+              <span className="text-[11px] font-mono text-[#ef4444]">
+                Connection lost — close and reopen the app to reconnect
+              </span>
+              <button onClick={() => { reconnectAttempts.current = 0; authRetriesRef.current = 0; setWsFailedPermanently(false); setWsReconnecting(true); wsRef.current?.close(); }}
+                className="text-[10px] font-mono text-[#ef4444]/70 underline hover:text-[#ef4444] ml-3 flex-shrink-0">Retry</button>
+            </motion.div>
+          )}
+          {!wsFailedPermanently && !wsReady && !wsReconnecting && (
+            <motion.div key="ws-auth-hint"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="bg-white/3 border-b border-white/5 px-4 py-1 flex-shrink-0">
+              <span className="text-[10px] font-mono text-white/25">Connecting… if this takes a moment, close and reopen the app</span>
             </motion.div>
           )}
           {wsReconnecting && !wsFailedPermanently && (
@@ -433,7 +472,7 @@ export function TheShot() {
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="bg-[#f59e0b]/10 border-b border-[#f59e0b]/20 px-4 py-1.5 flex items-center gap-2 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
-              <span className="text-[10px] font-mono text-[#f59e0b]">Reconnecting… attempt {reconnectAttempts.current}</span>
+              <span className="text-[10px] font-mono text-[#f59e0b]">Reconnecting… if this persists, close and reopen the app</span>
             </motion.div>
           )}
         </AnimatePresence>

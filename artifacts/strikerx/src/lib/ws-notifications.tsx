@@ -29,6 +29,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<WsNotification[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authRetries = useRef(0);
   const mounted = useRef(true);
   const myPlayerIdRef = useRef<number | null>(null);
 
@@ -39,7 +41,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Authenticate so server knows our playerId for targeted events
+      authRetries.current = 0;
+      if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
       const token = localStorage.getItem("strikerx_token");
       if (token) {
         ws.send(JSON.stringify({ type: "auth", token }));
@@ -51,17 +54,32 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         const { event, data } = JSON.parse(e.data) as { event: string; data: Record<string, unknown> };
 
         if (event === "auth_ok") {
+          authRetries.current = 0;
+          if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
           myPlayerIdRef.current = Number(data.playerId ?? 0);
           return;
         }
 
-        // If server rejects our token, close and reconnect — home.tsx will have
-        // re-authed with fresh Telegram initData by then and localStorage will
-        // have a valid token on the next connect attempt.
+        // If server rejects our token, retry auth inline with the latest token
+        // (home.tsx re-auths with fresh Telegram initData on every open — we just
+        // need to wait a short time for that to land in localStorage).
         if (event === "error") {
           const msg = String(data.message ?? "");
           if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
-            ws.close();
+            const MAX_AUTH_RETRIES = 4;
+            if (authRetries.current < MAX_AUTH_RETRIES) {
+              authRetries.current += 1;
+              const delay = Math.min(3000, 600 * authRetries.current);
+              if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
+              authRetryTimer.current = setTimeout(() => {
+                const t = localStorage.getItem("strikerx_token");
+                if (ws.readyState === WebSocket.OPEN && t) {
+                  ws.send(JSON.stringify({ type: "auth", token: t }));
+                }
+              }, delay);
+            } else {
+              ws.close();
+            }
             return;
           }
         }
@@ -147,6 +165,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
       wsRef.current?.close();
     };
   }, [connect]);
