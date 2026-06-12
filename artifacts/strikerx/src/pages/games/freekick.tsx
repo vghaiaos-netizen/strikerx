@@ -11,16 +11,13 @@ import { soundManager } from "@/lib/sound";
 
 type Risk = "low" | "medium" | "high";
 
-// ── Corrected multipliers — match actual server payouts (FREEKICK_SLOTS × 0.96)
-// Server values from gameEngine.ts:
-//   low:    [0.49, 0.79, 0.98, 1.18, 1.47, 1.18, 0.98, 0.79, 0.49]
-//   medium: [0.11, 0.26, 0.53, 1.05, 2.64, 1.05, 0.53, 0.26, 0.11]
-//   high:   [0.03, 0.10, 0.17, 0.66, 3.32, 0.66, 0.17, 0.10, 0.03]
-// Payout = value × (1 - 0.04):
+// Display multipliers = server FREEKICK_SLOTS × (1 - 0.04 house edge).
+// Outer slots are 0× busts — players can lose their full bet.
+// Low:  ~22% bust | Med: ~44% bust | High: ~73% bust
 const SLOT_MULTS: Record<Risk, number[]> = {
-  low:    [0.47, 0.76, 0.94, 1.13, 1.41, 1.13, 0.94, 0.76, 0.47],
-  medium: [0.11, 0.25, 0.51, 1.01, 2.53, 1.01, 0.51, 0.25, 0.11],
-  high:   [0.03, 0.10, 0.16, 0.63, 3.19, 0.63, 0.16, 0.10, 0.03],
+  low:    [0,    0.48, 0.86, 1.06, 2.02, 1.06, 0.86, 0.48, 0],
+  medium: [0,    0,    0.29, 0.46, 3.07, 0.46, 0.29, 0,    0],
+  high:   [0,    0,    0,    0.10, 3.50, 0.10, 0,    0,    0],
 };
 
 function slotColor(m: number): string {
@@ -148,7 +145,8 @@ export function FreeKick() {
         toast({ title: `+${res.winAmount.toFixed(0)} STRIKER`, description: `${res.multiplier}× · slot ${slot + 1}` });
         soundManager.play("win");
       } else {
-        toast({ title: `${res.multiplier}×`, description: "Better luck next kick", variant: "destructive" });
+        const title = res.multiplier === 0 ? "MISSED!" : `${res.multiplier}×`;
+        toast({ title, description: "Better luck next kick", variant: "destructive" });
         soundManager.play("crash");
       }
     } catch (e: unknown) {
