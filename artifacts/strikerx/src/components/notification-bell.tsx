@@ -1,6 +1,7 @@
 import { Bell, Trophy, Zap, Star, X, Medal } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNotifications, type WsNotification } from "@/lib/ws-notifications";
+import { useTranslation } from "react-i18next";
 
 function timeAgo(ts: number): string {
   const diff = Math.floor((Date.now() - ts) / 1000);
@@ -38,6 +39,7 @@ function NotifRow({ n }: { n: WsNotification }) {
 }
 
 export function NotificationBell() {
+  const { t } = useTranslation();
   const { notifications, unreadCount, markAllRead, clearAll } = useNotifications();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -74,14 +76,14 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-9 w-72 bg-card border border-border rounded-lg shadow-2xl z-[200] overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Live Feed</span>
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">{t("notifications.liveFeed")}</span>
             <div className="flex gap-1">
               {notifications.length > 0 && (
                 <button
                   onClick={clearAll}
                   className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded transition-colors"
                 >
-                  Clear
+                  {t("notifications.clear")}
                 </button>
               )}
               <button
@@ -97,7 +99,7 @@ export function NotificationBell() {
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
                 <Bell size={24} className="opacity-30" />
-                <p className="text-xs">No activity yet — play to see action here</p>
+                <p className="text-xs">{t("notifications.noActivity")}</p>
               </div>
             ) : (
               notifications.map((n) => <NotifRow key={n.id} n={n} />)

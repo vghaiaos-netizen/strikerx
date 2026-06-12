@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotifications, WsNotification } from "@/lib/ws-notifications";
 import { Trophy, Star, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 /**
  * GlobalWinOverlay — renders a full-screen hype overlay for:
@@ -11,6 +12,7 @@ import { Trophy, Star, X } from "lucide-react";
  * Mount once in App.tsx (outside the Router but inside NotificationsProvider).
  */
 export function GlobalWinOverlay() {
+  const { t } = useTranslation();
   const { notifications } = useNotifications();
   const [jackpot, setJackpot]     = useState<WsNotification | null>(null);
   const [achievement, setAchievement] = useState<WsNotification | null>(null);
@@ -86,7 +88,7 @@ export function GlobalWinOverlay() {
                 </motion.div>
 
                 <div className="text-[10px] font-mono font-bold uppercase tracking-[0.3em] text-[#f59e0b]/70 mb-2">
-                  Golden Boot Jackpot
+                  {t("overlay.jackpotLabel")}
                 </div>
 
                 <motion.div
@@ -98,7 +100,7 @@ export function GlobalWinOverlay() {
                 </motion.div>
 
                 <div className="text-sm font-mono text-white/60 mb-6">
-                  Won by <span className="text-[#f59e0b] font-bold">{jackpot.username}</span>
+                  {t("overlay.wonBy")} <span className="text-[#f59e0b] font-bold">{jackpot.username}</span>
                 </div>
 
                 {/* Floating stars */}
@@ -113,7 +115,7 @@ export function GlobalWinOverlay() {
                   </motion.div>
                 ))}
 
-                <div className="text-[10px] font-mono text-white/25">Tap anywhere to dismiss</div>
+                <div className="text-[10px] font-mono text-white/25">{t("overlay.tapDismiss")}</div>
               </div>
 
               {/* Close button */}
@@ -145,7 +147,7 @@ export function GlobalWinOverlay() {
                 <Star className="w-5 h-5 text-[#f59e0b]" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]/70">Achievement Unlocked</div>
+                <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-[#f59e0b]/70">{t("overlay.achievementUnlocked")}</div>
                 <div className="font-display font-bold text-sm text-white truncate">{achievement.message.replace("Achievement unlocked: ", "")}</div>
                 <div className="text-[10px] font-mono text-white/40 truncate">{achievement.detail}</div>
               </div>
