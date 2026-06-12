@@ -70,8 +70,9 @@ export function Loyalty() {
 
   const shareToTelegram = () => {
     const code = referral?.code ?? "";
-    const text = encodeURIComponent(`Join me on StrikerX — the football casino inside Telegram! Use my code ${code} for a 500 STRIKER welcome bonus.`);
-    const url  = encodeURIComponent("https://t.me/StrykkerXBot/StrikerX");
+    const text = encodeURIComponent(`Join me on StrikerX — the football casino inside Telegram! Use my link for a 500 STRIKER welcome bonus.`);
+    // Include startapp so Telegram passes the referral code to the mini app automatically
+    const url  = encodeURIComponent(`https://t.me/StrykkerXBot/StrikerX?startapp=${code}`);
     const tg   = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { openTelegramLink?: (u: string) => void } } | undefined;
     const link = `https://t.me/share/url?url=${url}&text=${text}`;
     if (tg?.WebApp?.openTelegramLink) {

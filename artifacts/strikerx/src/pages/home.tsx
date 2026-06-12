@@ -27,10 +27,16 @@ function useDevAuth() {
     // This guarantees the stored token is valid after Railway restarts, JWT rotations, etc.
     if (tried.current) return;
     tried.current = true;
-    const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
+    const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string } } } | undefined;
     const initData = tg?.WebApp?.initData;
+    // start_param is set by Telegram when the app is opened via a deep link
+    // e.g. t.me/StrykkerXBot/StrikerX?startapp=REFCODE → start_param = "REFCODE"
+    const startParam = tg?.WebApp?.initDataUnsafe?.start_param;
     if (initData) {
-      telegramAuth.mutate({ data: { initData } }, { onSuccess: d => setToken(d.token) });
+      telegramAuth.mutate(
+        { data: { initData, referralCode: startParam || undefined } },
+        { onSuccess: d => setToken(d.token) },
+      );
     } else if (import.meta.env.DEV) {
       telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
     }
