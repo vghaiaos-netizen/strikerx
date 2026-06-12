@@ -17,13 +17,11 @@ async function getGroupChatId(): Promise<string | null> {
 }
 
 function getAppUrl(): string {
-  const domain =
-    process.env.WEBHOOK_DOMAIN ??
-    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ??
-    process.env.RAILWAY_PUBLIC_DOMAIN ??
-    process.env.REPLIT_DEV_DOMAIN;
-  if (domain) return `https://${domain}`;
-  return `https://t.me/StrykkerXBot/StrikerX`;
+  // Always link to the Telegram Mini App, never to a raw web/Railway URL.
+  // Railway/Replit URLs are not the product — the mini app is.
+  const link = process.env.MINI_APP_LINK;
+  if (link) return link.startsWith("http") ? link : `https://${link}`;
+  return "https://t.me/StrykkerXBot/StrikerX";
 }
 
 /** Escape special HTML chars so Telegraf parse_mode:"HTML" never throws a Bad Request error. */
