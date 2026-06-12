@@ -31,15 +31,15 @@ export function Withdraw() {
 
   const handleSubmit = async () => {
     const amount = parseFloat(strikerAmount);
-    if (!amount || amount <= 0) { toast({ title: "Enter an amount", variant: "destructive" }); return; }
-    if (amount > balance) { toast({ title: "Insufficient balance", variant: "destructive" }); return; }
-    if (!address.trim()) { toast({ title: "Enter a TON wallet address", variant: "destructive" }); return; }
-    if (!canWithdraw) { toast({ title: "Wager requirement not met", variant: "destructive" }); return; }
+    if (!amount || amount <= 0) { toast({ title: t('withdraw.enterAmount'), variant: "destructive" }); return; }
+    if (amount > balance) { toast({ title: t('withdraw.insufficientBalance'), variant: "destructive" }); return; }
+    if (!address.trim()) { toast({ title: t('withdraw.enterAddress'), variant: "destructive" }); return; }
+    if (!canWithdraw) { toast({ title: t('withdraw.wagerNotMet'), variant: "destructive" }); return; }
     try {
       await requestWithdrawal.mutateAsync({ data: { amountStriker: amount, destinationAddress: address.trim(), currency: "TON" } });
       setSubmitted(true);
     } catch (e: unknown) {
-      toast({ title: "Withdrawal failed", description: (e as { message?: string })?.message, variant: "destructive" });
+      toast({ title: t('withdraw.withdrawalFailed'), description: (e as { message?: string })?.message, variant: "destructive" });
     }
   };
 
@@ -60,28 +60,37 @@ export function Withdraw() {
                 <Clock className="w-8 h-8 text-[#00ff88]" />
               </div>
               <div>
-                <div className="font-display font-black text-xl text-white">Withdrawal Queued</div>
+                <div className="font-display font-black text-xl text-white">{t('withdraw.queued')}</div>
                 <div className="text-xs font-mono text-white/40 mt-2 leading-relaxed">
-                  Pending review. First withdrawal goes through manual verification.
+                  {t('withdraw.queuedDesc')}
                 </div>
               </div>
               <div className="bg-white/3 border border-white/6 rounded-xl p-4 w-full text-left">
                 <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  <div><div className="text-white/30 mb-0.5">Amount</div><div className="text-white font-bold">{strikerAmount} STRIKER</div></div>
-                  <div><div className="text-white/30 mb-0.5">TON</div><div className="text-[#00ff88] font-bold">≈ {tonPreview} TON</div></div>
-                  <div className="col-span-2"><div className="text-white/30 mb-0.5">Address</div><div className="text-white break-all">{address}</div></div>
+                  <div>
+                    <div className="text-white/30 mb-0.5">{t('withdraw.amountSummaryLabel')}</div>
+                    <div className="text-white font-bold">{strikerAmount} STRIKER</div>
+                  </div>
+                  <div>
+                    <div className="text-white/30 mb-0.5">{t('withdraw.tonSummaryLabel')}</div>
+                    <div className="text-[#00ff88] font-bold">≈ {tonPreview} TON</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-white/30 mb-0.5">{t('withdraw.addressSummaryLabel')}</div>
+                    <div className="text-white break-all">{address}</div>
+                  </div>
                 </div>
               </div>
               <Button onClick={() => { setSubmitted(false); setStrikerAmount(""); setAddress(""); }}
                 variant="outline" className="border-white/10 text-white/60 hover:text-white hover:border-white/25">
-                New Withdrawal
+                {t('withdraw.newWithdrawal')}
               </Button>
             </motion.div>
           ) : (
             <motion.div key="form" className="flex flex-col gap-4">
               {/* Rate */}
               <div className="bg-white/3 border border-white/6 rounded-xl p-3 flex items-center justify-between">
-                <div className="text-[10px] font-mono text-white/30">Withdraw Rate</div>
+                <div className="text-[10px] font-mono text-white/30">{t('withdraw.withdrawRate')}</div>
                 <div className="text-xs font-mono font-bold text-white">{WITHDRAW_RATE} STRIKER = 1 TON</div>
               </div>
 
@@ -91,16 +100,16 @@ export function Withdraw() {
                   <div className="flex items-start gap-2 mb-2">
                     <AlertTriangle className="w-4 h-4 text-[#f59e0b] shrink-0 mt-0.5" />
                     <div>
-                      <div className="text-xs font-mono font-bold text-[#f59e0b]">Wager requirement</div>
-                      <div className="text-[10px] font-mono text-white/30 mt-0.5">Play through your deposit first</div>
+                      <div className="text-xs font-mono font-bold text-[#f59e0b]">{t('withdraw.wagerRequirement')}</div>
+                      <div className="text-[10px] font-mono text-white/30 mt-0.5">{t('withdraw.playThrough')}</div>
                     </div>
                   </div>
                   <div className="bg-black/30 rounded-full h-1.5 overflow-hidden">
                     <div className="h-full bg-[#f59e0b] rounded-full" style={{ width: `${wagerPct}%` }} />
                   </div>
                   <div className="flex justify-between mt-1 text-[9px] font-mono text-white/25">
-                    <span>{wageredSince.toFixed(0)} wagered</span>
-                    <span>{wagerRequired.toFixed(0)} required</span>
+                    <span>{t('withdraw.wagered', { amount: wageredSince.toFixed(0) })}</span>
+                    <span>{t('withdraw.required', { amount: wagerRequired.toFixed(0) })}</span>
                   </div>
                 </div>
               )}
@@ -123,7 +132,7 @@ export function Withdraw() {
               {strikerAmount && (
                 <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
                   className="flex items-center justify-between bg-white/3 border border-white/6 rounded-xl px-4 py-3">
-                  <span className="text-xs font-mono text-white/40">You receive</span>
+                  <span className="text-xs font-mono text-white/40">{t('withdraw.youReceive')}</span>
                   <span className="font-display font-bold text-lg text-white">{tonPreview} <span className="text-[#0098ea]">TON</span></span>
                 </motion.div>
               )}
@@ -138,11 +147,11 @@ export function Withdraw() {
 
               <Button onClick={handleSubmit} disabled={!canWithdraw || requestWithdrawal.isPending}
                 className="h-12 font-display font-bold tracking-widest bg-white/10 hover:bg-white/15 text-white disabled:opacity-30 border border-white/10">
-                {requestWithdrawal.isPending ? t('withdraw.processing') : "REQUEST WITHDRAWAL"}
+                {requestWithdrawal.isPending ? t('withdraw.processing') : t('withdraw.requestWithdrawal')}
               </Button>
 
               <div className="text-center text-[10px] font-mono text-white/20">
-                10 STRIKER spread from deposit rate. Processed within 24h.
+                {t('withdraw.spreadNote')}
               </div>
             </motion.div>
           )}
