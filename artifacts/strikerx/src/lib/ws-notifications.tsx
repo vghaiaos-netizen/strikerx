@@ -46,17 +46,29 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       authRetries.current = 0;
       reconnectAttempts.current = 0;
       if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
-      const token = localStorage.getItem("strikerx_token");
-      if (token) {
-        ws.send(JSON.stringify({ type: "auth", token }));
-      }
-      // Keepalive: send an application-level ping every 20 s so mobile proxies
-      // and Telegram's WebView don't kill the idle connection when the app is
-      // backgrounded. The server responds with a "pong" event (ignored here).
+
+      // Keepalive ping every 20 s (keeps mobile proxies from killing idle sockets).
       if (pingInterval.current) clearInterval(pingInterval.current);
       pingInterval.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
       }, 20_000);
+
+      // Auth with polling: home.tsx fires Telegram re-auth on every open, which
+      // writes a fresh JWT to localStorage ~200-500 ms after this WS connects.
+      // Poll every 500 ms for up to 30 s so we catch the token even if it isn't
+      // in localStorage at the instant onopen fires.
+      let pollCount = 0;
+      const tryAuth = () => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const token = localStorage.getItem("strikerx_token");
+        if (token) {
+          ws.send(JSON.stringify({ type: "auth", token }));
+        } else if (pollCount < 60) {
+          pollCount++;
+          setTimeout(tryAuth, 500);
+        }
+      };
+      tryAuth();
     };
 
     ws.onmessage = (e) => {
@@ -70,26 +82,31 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // If server rejects our token, retry auth inline with the latest token
-        // (home.tsx re-auths with fresh Telegram initData on every open — we just
-        // need to wait a short time for that to land in localStorage).
+        // If server rejects our token, wait for a FRESH token to land in
+        // localStorage (home.tsx re-auths with Telegram on every open, writing a
+        // new JWT within ~200-500 ms). Poll until the value changes, then retry.
         if (event === "error") {
           const msg = String(data.message ?? "");
           if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
-            const MAX_AUTH_RETRIES = 4;
-            if (authRetries.current < MAX_AUTH_RETRIES) {
-              authRetries.current += 1;
-              const delay = Math.min(3000, 600 * authRetries.current);
-              if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
-              authRetryTimer.current = setTimeout(() => {
-                const t = localStorage.getItem("strikerx_token");
-                if (ws.readyState === WebSocket.OPEN && t) {
-                  ws.send(JSON.stringify({ type: "auth", token: t }));
-                }
-              }, delay);
-            } else {
-              ws.close();
-            }
+            if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
+            const failedToken = localStorage.getItem("strikerx_token");
+            let pollCount = 0;
+            const waitForFreshToken = () => {
+              if (ws.readyState !== WebSocket.OPEN) return; // onclose will reconnect
+              const current = localStorage.getItem("strikerx_token");
+              if (current && current !== failedToken) {
+                // A new token arrived — retry auth
+                ws.send(JSON.stringify({ type: "auth", token: current }));
+              } else if (pollCount < 60) {
+                // Keep polling every 500 ms for up to 30 s
+                pollCount++;
+                authRetryTimer.current = setTimeout(waitForFreshToken, 500);
+              } else {
+                // Gave up — close so onclose reconnects cleanly
+                ws.close();
+              }
+            };
+            authRetryTimer.current = setTimeout(waitForFreshToken, 300);
             return;
           }
         }

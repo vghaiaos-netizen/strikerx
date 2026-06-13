@@ -203,24 +203,26 @@ export function TheShot() {
     if (event === "error") {
       const msg = String(d.message ?? "");
       if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
-        // Stay connected — retry auth with the latest token after a short delay.
-        // home.tsx fires Telegram re-auth on mount (~200-500ms round trip), so
-        // by the time we retry the fresh token will be in tokenRef.current.
+        // Token was rejected — wait for a FRESH token to appear (home.tsx writes
+        // a new JWT to localStorage within ~200-500 ms of every Telegram open).
+        // Poll until tokenRef changes from the value that just failed, then retry.
         setWsAuthed(false);
-        const MAX_AUTH_RETRIES = 4;
-        if (authRetriesRef.current < MAX_AUTH_RETRIES) {
-          authRetriesRef.current += 1;
-          const delay = Math.min(3000, 600 * authRetriesRef.current);
-          if (authRetryTimerRef.current) clearTimeout(authRetryTimerRef.current);
-          authRetryTimerRef.current = setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN && tokenRef.current) {
-              wsRef.current.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
-            }
-          }, delay);
-        } else {
-          // Exhausted retries — close and let the reconnect loop handle it
-          wsRef.current?.close();
-        }
+        if (authRetryTimerRef.current) clearTimeout(authRetryTimerRef.current);
+        const failedToken = tokenRef.current;
+        let pollCount = 0;
+        const waitForFreshToken = () => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+          if (tokenRef.current && tokenRef.current !== failedToken) {
+            authRetriesRef.current = 0;
+            wsRef.current.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
+          } else if (pollCount < 60) {
+            pollCount++;
+            authRetryTimerRef.current = setTimeout(waitForFreshToken, 500);
+          } else {
+            wsRef.current?.close();
+          }
+        };
+        authRetryTimerRef.current = setTimeout(waitForFreshToken, 300);
         return;
       }
       toast({ title: "Error", description: msg, variant: "destructive" });
