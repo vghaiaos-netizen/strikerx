@@ -253,6 +253,8 @@ export function TheShot() {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     const MAX_RECONNECT = 8;
 
+    let pingIntervalId: ReturnType<typeof setInterval> | null = null;
+
     const connect = () => {
       if (destroyed) return;
       const ws = new WebSocket(wsUrl);
@@ -265,6 +267,12 @@ export function TheShot() {
         setWsReconnecting(false);
         setWsFailedPermanently(false);
         if (tokenRef.current) ws.send(JSON.stringify({ type: "auth", token: tokenRef.current }));
+        // Keepalive: mobile Telegram WebView and upstream proxies kill idle WS
+        // after ~60 s of silence. Ping every 20 s to keep the pipe open.
+        if (pingIntervalId) clearInterval(pingIntervalId);
+        pingIntervalId = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
+        }, 20_000);
       };
       ws.onmessage = (e) => {
         try {
@@ -294,6 +302,7 @@ export function TheShot() {
     return () => {
       destroyed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (pingIntervalId) clearInterval(pingIntervalId);
       if (authRetryTimerRef.current) { clearTimeout(authRetryTimerRef.current); authRetryTimerRef.current = null; }
       if (countdownRef.current) clearInterval(countdownRef.current);
       wsRef.current?.close();

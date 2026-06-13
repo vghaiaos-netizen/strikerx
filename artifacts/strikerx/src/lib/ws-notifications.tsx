@@ -30,7 +30,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const authRetries = useRef(0);
+  const reconnectAttempts = useRef(0);
   const mounted = useRef(true);
   const myPlayerIdRef = useRef<number | null>(null);
 
@@ -42,11 +44,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
     ws.onopen = () => {
       authRetries.current = 0;
+      reconnectAttempts.current = 0;
       if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
       const token = localStorage.getItem("strikerx_token");
       if (token) {
         ws.send(JSON.stringify({ type: "auth", token }));
       }
+      // Keepalive: send an application-level ping every 20 s so mobile proxies
+      // and Telegram's WebView don't kill the idle connection when the app is
+      // backgrounded. The server responds with a "pong" event (ignored here).
+      if (pingInterval.current) clearInterval(pingInterval.current);
+      pingInterval.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
+      }, 20_000);
     };
 
     ws.onmessage = (e) => {
@@ -150,8 +160,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     };
 
     ws.onclose = () => {
+      if (pingInterval.current) { clearInterval(pingInterval.current); pingInterval.current = null; }
       if (!mounted.current) return;
-      reconnectTimer.current = setTimeout(connect, 5000);
+      reconnectAttempts.current += 1;
+      const delay = Math.min(16000, 1000 * 2 ** (reconnectAttempts.current - 1));
+      reconnectTimer.current = setTimeout(connect, delay);
     };
 
     ws.onerror = () => {
@@ -166,6 +179,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       mounted.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
+      if (pingInterval.current) clearInterval(pingInterval.current);
       wsRef.current?.close();
     };
   }, [connect]);
