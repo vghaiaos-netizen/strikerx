@@ -12,6 +12,8 @@ interface WsClient {
   username?: string;
   // Rate limiting: sliding window of message timestamps
   msgTimestamps: number[];
+  // Heartbeat: set to false on ping, true on pong; terminate if still false
+  isAlive: boolean;
 }
 
 // Per-connection message rate limit: max 30 messages per 10 seconds
@@ -32,6 +34,12 @@ function isRateLimited(client: WsClient): boolean {
 }
 
 const clients = new Map<WebSocket, WsClient>();
+
+// Server-initiated heartbeat: ping every 25 s, terminate clients that miss a pong.
+// This detects dead mobile connections (backgrounded Telegram, NAT timeout, etc.)
+// within one heartbeat cycle instead of waiting for the OS TCP timeout.
+const HEARTBEAT_INTERVAL_MS = 25_000;
+const HEARTBEAT_LATENCY_MS  = 10_000; // extra window for slow mobile links
 
 /** Returns the number of currently connected WebSocket clients */
 export function getConnectedClients(): number {
@@ -74,8 +82,26 @@ export function initWebSocketServer(server: HttpServer) {
   // Register broadcast with crash engine
   crashEngine.setBroadcast(broadcast);
 
+  // Server-side heartbeat loop — runs every HEARTBEAT_INTERVAL_MS.
+  // Clients that don't respond to a WS-level ping within HEARTBEAT_LATENCY_MS
+  // are terminated so dead mobile connections don't accumulate.
+  const heartbeatInterval = setInterval(() => {
+    for (const [ws, client] of clients) {
+      if (!client.isAlive) {
+        logger.warn({ playerId: client.playerId }, "WS client missed heartbeat — terminating");
+        clients.delete(ws);
+        ws.terminate();
+        return;
+      }
+      client.isAlive = false;
+      ws.ping();
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+
+  wss.on("close", () => clearInterval(heartbeatInterval));
+
   wss.on("connection", (ws, req) => {
-    const client: WsClient = { ws, msgTimestamps: [] };
+    const client: WsClient = { ws, msgTimestamps: [], isAlive: true };
     clients.set(ws, client);
     logger.info({ clients: clients.size }, "WebSocket client connected");
 
@@ -153,6 +179,11 @@ export function initWebSocketServer(server: HttpServer) {
       if (msg.type === "ping") {
         sendToClient(ws, "pong", { t: Date.now() });
       }
+    });
+
+    // Mark client alive whenever it responds to a server ping
+    ws.on("pong", () => {
+      client.isAlive = true;
     });
 
     ws.on("close", () => {
