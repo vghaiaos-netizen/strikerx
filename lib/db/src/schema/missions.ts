@@ -32,13 +32,16 @@ export interface DailyMission {
 }
 
 export const MISSION_POOL: Omit<DailyMission, "progress" | "completed">[] = [
-  { key: "play_any_3",       title: "Hat-Trick",         description: "Play 3 games",                target: 3  },
-  { key: "play_penalty_1",   title: "Penalty King",       description: "Win a penalty",               target: 1,  gameType: "penalty"   },
-  { key: "play_minefield_1", title: "Mine Sweeper",       description: "Cash out a Minefield game",   target: 1,  gameType: "minefield" },
-  { key: "play_freekick_1",  title: "Set Piece",          description: "Win a Free Kick",             target: 1,  gameType: "freekick"  },
-  { key: "shot_2x",          title: "The Wall",           description: "Reach 2x in The Shot",        target: 1,  gameType: "shot"      },
-  { key: "win_streak_2",     title: "Back-to-Back",       description: "Win 2 games in a row",        target: 2  },
-  { key: "bet_500",          title: "High Roller",        description: "Place a 500+ STRIKER bet",    target: 1  },
+  { key: "trade_3_times",   title: "Active Trader",   description: "Place 3 trades",                    target: 3, gameType: "trading" },
+  { key: "win_trade",       title: "In the Money",    description: "Win a trade",                       target: 1, gameType: "trading" },
+  { key: "trade_btc",       title: "Bitcoin Signal",  description: "Place a BTC trade",                 target: 1, gameType: "trading" },
+  { key: "trade_forex",     title: "FX Trader",       description: "Place a forex pair trade",          target: 1, gameType: "trading" },
+  { key: "trade_commodity", title: "Commodities Desk",description: "Place a Gold or Oil trade",         target: 1, gameType: "trading" },
+  { key: "win_streak_2",    title: "Back-to-Back",    description: "Win 2 trades in a row",             target: 2, gameType: "trading" },
+  { key: "trade_60s",       title: "Quick Fire",      description: "Place a 60-second trade",           target: 1, gameType: "trading" },
+  { key: "trade_5_times",   title: "High Volume",     description: "Place 5 trades in one day",         target: 5, gameType: "trading" },
+  { key: "bet_500",         title: "High Roller",     description: "Place a 500+ STRIKER trade",        target: 1, gameType: "trading" },
+  { key: "trade_eth",       title: "Ethereum Play",   description: "Place an ETH trade",                target: 1, gameType: "trading" },
 ];
 
 export type DailyMissionsRow = typeof dailyMissionsTable.$inferSelect;
