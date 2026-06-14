@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Trophy, User, Wallet, TrendingUp, Globe, Volume2, VolumeX } from "lucide-react";
+import { Home, Star, User, Wallet, TrendingUp, Globe, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
@@ -110,7 +110,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <NavLink href="/"              icon={<Home       size={18} />} label={t('nav.home')}    active={location === "/"} />
         <NavLink href="/games/trading" icon={<TrendingUp size={18} />} label="Trade"             active={location.startsWith("/games/trading")} />
         <NavLink href="/deposit"       icon={<Wallet     size={18} />} label={t('nav.wallet')}  active={location === "/deposit" || location === "/withdraw"} />
-        <NavLink href="/leaderboard"   icon={<Trophy     size={18} />} label={t('nav.rank')}    active={location === "/leaderboard"} />
+        <NavLink href="/loyalty"       icon={<Star       size={18} />} label="Loyalty"           active={location === "/loyalty"} />
         <NavLink href="/profile"       icon={<User       size={18} />} label={t('nav.profile')} active={location === "/profile"} />
       </nav>
     </div>
