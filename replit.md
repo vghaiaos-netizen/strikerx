@@ -1,6 +1,9 @@
 # StrikerX
 
-A football-themed Telegram Mini App casino platform with four original games, three-tier virtual token economy (STRIKER / BOOT / CAPTAIN), multi-currency crypto payments via CryptoBot, dual Telegram bot architecture, and a private admin dashboard. Stake.com meets Hamster Kombat — living entirely inside Telegram.
+A Telegram Mini App combining **binary crypto prediction trading** (BTC/ETH/SOL/BNB/TON vs Binance live prices) with **The Shot** crash game. Players trade with STRIKER tokens using fixed odds (1.82×), deposit/withdraw via CryptoBot, and refer friends for lifetime commission. Dual Telegram bot architecture, private admin dashboard, real-time WebSocket price feed.
+
+> **Active refactor in progress — see `docs/refactor-plan.md` for Phase 2 agent tasks.**
+> **Railway DB connection string: `docs/railway-db.md`**
 
 ## User preferences
 

@@ -9,3 +9,4 @@ export * from "./achievements";
 export * from "./affiliates";
 export * from "./outreach";
 export * from "./missions";
+export * from "./trading";
