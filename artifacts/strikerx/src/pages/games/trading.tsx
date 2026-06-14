@@ -148,7 +148,7 @@ export function Trading() {
   // Price flash animation
   const selectedPrice = currentPrices[selectedAsset];
   useEffect(() => {
-    if (selectedPrice === undefined) return;
+    if (selectedPrice === undefined) return undefined;
     const prev = prevPriceRef.current[selectedAsset];
     if (prev !== undefined && selectedPrice !== prev) {
       setPriceFlash(selectedPrice > prev ? "up" : "down");
@@ -156,6 +156,7 @@ export function Trading() {
       return () => clearTimeout(t);
     }
     prevPriceRef.current[selectedAsset] = selectedPrice;
+    return undefined;
   }, [selectedPrice, selectedAsset]);
 
   // WS trade_settled → toast + refresh + streak update
