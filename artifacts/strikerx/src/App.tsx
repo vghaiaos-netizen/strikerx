@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { NotificationsProvider } from "@/lib/ws-notifications";
 import { GlobalWinOverlay } from "@/components/big-win-overlay";
+import { useDevAuth } from "@/lib/use-telegram-auth";
 import NotFound from "@/pages/not-found";
 import LanguagePicker from "@/pages/language-picker";
 import { getSavedLang, saveLangLocally, getLangDir, type LangCode } from "@/i18n";
@@ -51,6 +52,10 @@ import { AdminTradingAssets } from "./pages/admin/trading-assets";
 const queryClient = new QueryClient();
 
 function Router() {
+  // Handles initial Telegram auth AND the strikerx:reauth listener.
+  // Must live here (always mounted) — not in any page component that may not be active.
+  useDevAuth();
+
   return (
     <Switch>
       <Route path="/" component={Trading} />
