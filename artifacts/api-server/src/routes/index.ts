@@ -14,6 +14,7 @@ import publicRouter from "./public";
 import rateEventsRouter from "./rateEvents";
 import outreachRouter from "./outreach";
 import tradingRouter from "./trading";
+import demoRouter from "./demo";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(publicRouter);
 router.use(rateEventsRouter);
 router.use(outreachRouter);
 router.use(tradingRouter);
+router.use(demoRouter);
 
 export default router;

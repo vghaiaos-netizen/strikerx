@@ -1,4 +1,4 @@
-import { db, tradingPositionsTable, tradingAssetsTable, playersTable, transactionsTable, gamesTable, pool } from "@workspace/db";
+import { db, tradingPositionsTable, tradingAssetsTable, demoPositionsTable, playersTable, transactionsTable, gamesTable, pool } from "@workspace/db";
 import { eq, and, lte } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getPrice } from "./binanceFeed";
@@ -71,12 +71,54 @@ let settlementInterval: NodeJS.Timeout | null = null;
 
 export function startTradingSettlementScheduler() {
   if (settlementInterval) return;
-  settlementInterval = setInterval(settleExpiredPositions, 1_000);
-  logger.info("Trading settlement scheduler started");
+  settlementInterval = setInterval(async () => {
+    await settleExpiredPositions();
+    await settleDemoExpiredPositions();
+  }, 1_000);
+  logger.info("Trading settlement scheduler started (real + demo)");
 }
 
 export function stopTradingSettlementScheduler() {
   if (settlementInterval) { clearInterval(settlementInterval); settlementInterval = null; }
+}
+
+async function settleDemoExpiredPositions(): Promise<void> {
+  let expired: (typeof demoPositionsTable.$inferSelect)[];
+  try {
+    expired = await db.select().from(demoPositionsTable).where(
+      and(eq(demoPositionsTable.outcome, "pending"), lte(demoPositionsTable.expiresAt, new Date())),
+    );
+  } catch (err) {
+    logger.error({ err }, "Failed to query expired demo positions");
+    return;
+  }
+  for (const pos of expired) {
+    try {
+      const exitPrice = getPrice(pos.assetSymbol);
+      if (exitPrice === null) continue;
+      const ct = (pos.contractType ?? "UP_DOWN") as ContractType;
+      const dir = pos.direction as Direction;
+      const lb = pos.lowerBarrier != null ? parseFloat(String(pos.lowerBarrier)) : null;
+      const ub = pos.upperBarrier != null ? parseFloat(String(pos.upperBarrier)) : null;
+      const outcome = determineOutcome(ct, dir, parseFloat(String(pos.entryPrice)), exitPrice, lb, ub);
+      const stake = parseFloat(String(pos.stake));
+      const ratio = parseFloat(String(pos.payoutRatio));
+      const winAmount = outcome === "win" ? parseFloat((stake * ratio).toFixed(4)) : 0;
+      const creditAmt = outcome === "win" ? winAmount : outcome === "cancelled" ? stake : 0;
+      await db.update(demoPositionsTable).set({ outcome, exitPrice, winAmount, settledAt: new Date() }).where(eq(demoPositionsTable.id, pos.id));
+      if (creditAmt > 0) {
+        await db.update(playersTable).set({ demoUsdtBalance: sql`${playersTable.demoUsdtBalance} + ${creditAmt}` }).where(eq(playersTable.id, pos.playerId));
+      }
+      broadcastToPlayer(pos.playerId, "trade_settled", {
+        positionId: pos.id, assetSymbol: pos.assetSymbol, contractType: ct, direction: dir,
+        currency: "DEMO_USDT", outcome, entryPrice: parseFloat(String(pos.entryPrice)), exitPrice,
+        lowerBarrier: lb, upperBarrier: ub, winAmount, stake, creditAmount: creditAmt, isDemo: true,
+      });
+      logger.info({ positionId: pos.id, outcome, winAmount, asset: pos.assetSymbol }, "Demo position settled");
+    } catch (err) {
+      logger.error({ err, positionId: pos.id }, "Failed to settle demo position");
+    }
+  }
 }
 
 async function settleExpiredPositions() {

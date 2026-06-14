@@ -29,6 +29,7 @@ router.get("/players/me", requireAuth, async (req, res): Promise<void> => {
     captainBalance: player.captainBalance,
     tonBalance: parseFloat(String(player.tonBalance ?? 0)),
     usdtBalance: parseFloat(String(player.usdtBalance ?? 0)),
+    demoUsdtBalance: parseFloat(String(player.demoUsdtBalance ?? 10000)),
     vipTier: player.vipTier,
     streakDays: player.streakDays,
     tonWageredLifetime: player.tonWageredLifetime,
@@ -483,6 +484,114 @@ router.post("/players/me/missions/progress", requireAuth, async (req, res): Prom
     req.log.error({ err }, "Failed to progress daily missions");
     res.status(500).json({ error: "Could not update missions" });
   }
+});
+
+// GET /players/me/portfolio — aggregate trading P&L stats
+router.get("/players/me/portfolio", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+
+  const now = new Date();
+  const startOfDay  = new Date(now); startOfDay.setUTCHours(0, 0, 0, 0);
+  const startOfWeek = new Date(now); startOfWeek.setUTCDate(now.getUTCDate() - 7);
+  const startOfMonth = new Date(now); startOfMonth.setUTCDate(now.getUTCDate() - 30);
+
+  const { pool: pgPool } = await import("@workspace/db");
+
+  const [allTime, today, thisWeek] = await Promise.all([
+    pgPool.query(`
+      SELECT
+        COUNT(*)                                                            AS total_trades,
+        SUM(CASE WHEN outcome='win'  THEN 1 ELSE 0 END)                    AS wins,
+        SUM(CASE WHEN outcome='loss' THEN 1 ELSE 0 END)                    AS losses,
+        SUM(CASE WHEN outcome='win'  THEN (win_amount - stake_striker)
+                 WHEN outcome='loss' THEN -stake_striker ELSE 0 END)       AS net_pnl,
+        SUM(stake_striker)                                                  AS volume,
+        MAX(win_amount)                                                     AS biggest_win,
+        (SELECT COALESCE(trading_win_streak, 0) FROM players WHERE id = $1) AS current_streak
+      FROM trading_positions
+      WHERE player_id = $1 AND outcome != 'pending'
+    `, [playerId]),
+    pgPool.query(`
+      SELECT
+        COUNT(*) AS total_trades,
+        SUM(CASE WHEN outcome='win' THEN (win_amount - stake_striker)
+                 WHEN outcome='loss' THEN -stake_striker ELSE 0 END) AS net_pnl,
+        SUM(CASE WHEN outcome='win' THEN 1 ELSE 0 END) AS wins
+      FROM trading_positions
+      WHERE player_id = $1 AND outcome != 'pending' AND created_at >= $2
+    `, [playerId, startOfDay]),
+    pgPool.query(`
+      SELECT
+        COUNT(*) AS total_trades,
+        SUM(CASE WHEN outcome='win' THEN (win_amount - stake_striker)
+                 WHEN outcome='loss' THEN -stake_striker ELSE 0 END) AS net_pnl,
+        SUM(CASE WHEN outcome='win' THEN 1 ELSE 0 END) AS wins
+      FROM trading_positions
+      WHERE player_id = $1 AND outcome != 'pending' AND created_at >= $2
+    `, [playerId, startOfWeek]),
+  ]);
+
+  const at = allTime.rows[0] ?? {};
+  const td = today.rows[0] ?? {};
+  const tw = thisWeek.rows[0] ?? {};
+
+  const totalTrades = parseInt(at.total_trades ?? 0);
+  const wins        = parseInt(at.wins ?? 0);
+  const winRate     = totalTrades > 0 ? Math.round((wins / totalTrades) * 100) : 0;
+
+  res.json({
+    allTime: {
+      totalTrades,
+      wins,
+      losses:      parseInt(at.losses ?? 0),
+      winRate,
+      netPnl:      parseFloat(at.net_pnl ?? 0),
+      volume:      parseFloat(at.volume ?? 0),
+      biggestWin:  parseFloat(at.biggest_win ?? 0),
+      currentStreak: parseInt(at.current_streak ?? 0),
+    },
+    today: {
+      totalTrades: parseInt(td.total_trades ?? 0),
+      netPnl:      parseFloat(td.net_pnl ?? 0),
+      wins:        parseInt(td.wins ?? 0),
+    },
+    thisWeek: {
+      totalTrades: parseInt(tw.total_trades ?? 0),
+      netPnl:      parseFloat(tw.net_pnl ?? 0),
+      wins:        parseInt(tw.wins ?? 0),
+    },
+  });
+});
+
+// GET /players/me/portfolio/chart — daily P&L for last 30 days
+router.get("/players/me/portfolio/chart", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const days = Math.min(parseInt(String(req.query.days ?? 30)), 90);
+  const { pool: pgPool } = await import("@workspace/db");
+
+  const result = await pgPool.query(`
+    SELECT
+      DATE(created_at AT TIME ZONE 'UTC') AS date,
+      COUNT(*)                             AS trades,
+      SUM(CASE WHEN outcome='win' THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN outcome='win'  THEN (win_amount - stake_striker)
+               WHEN outcome='loss' THEN -stake_striker ELSE 0 END) AS pnl
+    FROM trading_positions
+    WHERE player_id = $1
+      AND outcome != 'pending'
+      AND created_at >= NOW() - ($2 || ' days')::INTERVAL
+    GROUP BY DATE(created_at AT TIME ZONE 'UTC')
+    ORDER BY date ASC
+  `, [playerId, days]);
+
+  res.json({
+    points: result.rows.map((r: Record<string, unknown>) => ({
+      date:   String(r.date).split("T")[0],
+      trades: parseInt(String(r.trades ?? 0)),
+      wins:   parseInt(String(r.wins ?? 0)),
+      pnl:    parseFloat(String(r.pnl ?? 0)),
+    })),
+  });
 });
 
 export default router;

@@ -268,4 +268,48 @@ router.get("/tournaments/:id/leaderboard", async (req, res): Promise<void> => {
   res.json(leaderboard);
 });
 
+// GET /leaderboard/trading — top traders by P&L
+router.get("/leaderboard/trading", async (req, res): Promise<void> => {
+  const { pool: pgPool } = await import("@workspace/db");
+  const period = String(req.query.period ?? "week"); // week | month | alltime
+  const limit  = Math.min(parseInt(String(req.query.limit ?? 50)), 100);
+
+  const interval = period === "week" ? "7 days" : period === "month" ? "30 days" : null;
+  const whereClause = interval ? `AND tp.created_at >= NOW() - '${interval}'::INTERVAL` : "";
+
+  const result = await pgPool.query(`
+    SELECT
+      p.id                                  AS player_id,
+      p.username,
+      p.vip_tier,
+      COUNT(tp.id)::int                     AS total_trades,
+      SUM(CASE WHEN tp.outcome='win' THEN 1 ELSE 0 END)::int AS wins,
+      SUM(CASE WHEN tp.outcome='win'  THEN (tp.win_amount - tp.stake_striker)
+               WHEN tp.outcome='loss' THEN -tp.stake_striker
+               ELSE 0 END)                 AS net_pnl,
+      SUM(tp.stake_striker)                 AS volume
+    FROM trading_positions tp
+    JOIN players p ON p.id = tp.player_id
+    WHERE tp.outcome != 'pending' ${whereClause}
+    GROUP BY p.id, p.username, p.vip_tier
+    HAVING COUNT(tp.id) >= 3
+    ORDER BY net_pnl DESC
+    LIMIT $1
+  `, [limit]);
+
+  const entries = result.rows.map((r: Record<string, unknown>, i: number) => ({
+    rank:        i + 1,
+    playerId:    r.player_id,
+    username:    r.username,
+    vipTier:     r.vip_tier,
+    totalTrades: r.total_trades,
+    wins:        r.wins,
+    winRate:     r.total_trades ? Math.round((Number(r.wins) / Number(r.total_trades)) * 100) : 0,
+    netPnl:      parseFloat(String(r.net_pnl ?? 0)),
+    volume:      parseFloat(String(r.volume ?? 0)),
+  }));
+
+  res.json({ entries, period });
+});
+
 export default router;

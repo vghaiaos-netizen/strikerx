@@ -268,6 +268,43 @@ server.listen(port, async () => {
         ('trading_inout_spread',   '0.5',  'trading', 'IN/OUT Spread %', 'Band width each side of entry price for IN/OUT contracts')
         ON CONFLICT (key) DO NOTHING`,
     },
+    // ── Demo trading ─────────────────────────────────────────────────────────
+    {
+      name: "players.demo_usdt_balance",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS demo_usdt_balance REAL NOT NULL DEFAULT 10000`,
+    },
+    {
+      name: "players.demo_last_reset",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS demo_last_reset TIMESTAMPTZ`,
+    },
+    {
+      name: "demo_positions.create",
+      sql: `CREATE TABLE IF NOT EXISTS demo_positions (
+        id                     SERIAL PRIMARY KEY,
+        player_id              INTEGER NOT NULL REFERENCES players(id),
+        asset_symbol           TEXT NOT NULL,
+        direction              TEXT NOT NULL,
+        contract_type          TEXT NOT NULL DEFAULT 'UP_DOWN',
+        stake                  REAL NOT NULL,
+        entry_price            REAL NOT NULL,
+        exit_price             REAL,
+        payout_ratio           REAL NOT NULL DEFAULT 1.82,
+        outcome                TEXT NOT NULL DEFAULT 'pending',
+        win_amount             REAL NOT NULL DEFAULT 0,
+        contract_duration_secs INTEGER NOT NULL DEFAULT 60,
+        expires_at             TIMESTAMPTZ NOT NULL,
+        settled_at             TIMESTAMPTZ,
+        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "demo_positions.player_idx",
+      sql: `CREATE INDEX IF NOT EXISTS demo_positions_player_id_idx ON demo_positions (player_id)`,
+    },
+    {
+      name: "demo_positions.expires_at_idx",
+      sql: `CREATE INDEX IF NOT EXISTS demo_positions_expires_at_idx ON demo_positions (expires_at)`,
+    },
   ];
 
   for (const { name, sql } of migrations) {
