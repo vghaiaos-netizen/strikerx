@@ -158,17 +158,15 @@ function AppShell() {
 
 function App() {
   const { i18n } = useTranslation();
-  const [langReady, setLangReady] = useState<boolean>(() => !!getSavedLang());
 
-  function handleLanguageSelect(code: LangCode) {
-    saveLangLocally(code);
-    i18n.changeLanguage(code);
-    setLangReady(true);
-  }
-
-  if (!langReady) {
-    return <LanguagePicker onSelect={handleLanguageSelect} />;
-  }
+  // Ensure a language is always set — default to English on first visit
+  useEffect(() => {
+    if (!getSavedLang()) {
+      saveLangLocally("en");
+      i18n.changeLanguage("en");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return <AppShell />;
 }
