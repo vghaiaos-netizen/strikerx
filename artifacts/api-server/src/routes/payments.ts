@@ -6,6 +6,8 @@ import { requireAuth } from "../lib/auth";
 import { strikerToTon, tonToStriker } from "../lib/gameEngine";
 import { logger } from "../lib/logger";
 import { processCryptoBotTransfer } from "../lib/cryptobotService";
+import { getPrice } from "../lib/binanceFeed";
+import { broadcastToPlayer } from "../lib/wsServer";
 
 const router: IRouter = Router();
 
@@ -237,11 +239,16 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
     const amount = parseFloat(payload.payload?.amount ?? "0");
     const asset = payload.payload?.asset ?? "TON";
 
+    // Use live prices for accurate TON equivalence.
+    // Fallback constants are conservative minimums in case feed isn't ready yet.
+    const liveTon = getPrice("TON") ?? 1.72;
+    const liveBnb = getPrice("BNB") ?? 600;
+    const liveSol = getPrice("SOL") ?? 67;
     const tonRates: Record<string, number> = {
-      TON: 1,
-      USDT: 0.2,
-      BNB: 20,
-      SOL: 5,
+      TON:  1,
+      USDT: 1 / liveTon,            // 1 USDT ≈ 1/tonUsdPrice TON
+      BNB:  liveBnb / liveTon,      // 1 BNB  ≈ bnbUsdPrice/tonUsdPrice TON
+      SOL:  liveSol / liveTon,      // 1 SOL  ≈ solUsdPrice/tonUsdPrice TON
     };
     const tonEquivalent = amount * (tonRates[asset] ?? 1);
 
@@ -290,6 +297,16 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
         .where(eq(transactionsTable.externalId, payload.payload?.invoice_id ?? ""));
 
       logger.info({ playerId, strikerAmount, realAmount, asset, currency, depositRate }, "Deposit credited");
+
+      // Push real-time confirmation to the player's WebSocket connection
+      broadcastToPlayer(playerId, "deposit_confirmed", {
+        amount:         realAmount,
+        amountStriker:  strikerAmount,
+        asset,
+        isUsdt,
+        tonEquivalent,
+        at: Date.now(),
+      });
     }
   } catch (err) {
     logger.error({ err }, "Failed to process CryptoBot webhook");

@@ -18,6 +18,22 @@ const CONTRACT_DIRECTIONS: Record<ContractType, Direction[]> = {
   IN_OUT:     ["IN", "OUT"],
 };
 
+// ─── Asset decimal precision for last-digit contracts ─────────────────────────
+// EVEN_ODD and OVER_UNDER use the last significant digit at the asset's natural
+// display precision, not the integer part (which barely changes for e.g. BTC).
+const ASSET_DECIMAL_PLACES: Record<string, number> = {
+  BTC: 2, ETH: 2, SOL: 3, BNB: 2, TON: 4,
+  EURUSD: 5, GBPUSD: 5, USDJPY: 3, AUDUSD: 5, USDCHF: 5,
+  XAUUSD: 2, XAGUSD: 3, USOIL: 2, NATGAS: 3, COPPER: 4,
+};
+
+function lastDigitAt(price: number, decimals: number): number {
+  // Round to the asset's natural precision and take the last digit.
+  // e.g. BTC $63780.12 at 2dp → round(63780.12 * 100) % 10 = 2
+  // e.g. EURUSD 1.15673 at 5dp → round(1.15673 * 100000) % 10 = 3
+  return Math.round(Math.abs(price) * Math.pow(10, decimals)) % 10;
+}
+
 // ─── Settlement outcome logic ──────────────────────────────────────────────────
 function determineOutcome(
   contractType: ContractType,
@@ -26,6 +42,7 @@ function determineOutcome(
   exitPrice: number,
   lowerBarrier: number | null,
   upperBarrier: number | null,
+  assetSymbol: string,
 ): "win" | "loss" | "cancelled" {
   switch (contractType) {
     case "UP_DOWN":
@@ -34,13 +51,15 @@ function determineOutcome(
       return exitPrice < entryPrice ? "win" : "loss";
 
     case "EVEN_ODD": {
-      const lastDigit = Math.floor(Math.abs(exitPrice)) % 10;
+      const decimals  = ASSET_DECIMAL_PLACES[assetSymbol.toUpperCase()] ?? 2;
+      const lastDigit = lastDigitAt(exitPrice, decimals);
       const isEven    = lastDigit % 2 === 0;
       return direction === "EVEN" ? (isEven ? "win" : "loss") : (!isEven ? "win" : "loss");
     }
 
     case "OVER_UNDER": {
-      const lastDigit = Math.floor(Math.abs(exitPrice)) % 10;
+      const decimals  = ASSET_DECIMAL_PLACES[assetSymbol.toUpperCase()] ?? 2;
+      const lastDigit = lastDigitAt(exitPrice, decimals);
       const isOver    = lastDigit >= 5;
       return direction === "OVER" ? (isOver ? "win" : "loss") : (!isOver ? "win" : "loss");
     }
@@ -54,6 +73,33 @@ function determineOutcome(
     default:
       return "cancelled";
   }
+}
+
+// ─── Trade direction sentiment (rolling 5-min window per asset) ───────────────
+interface SentimentBucket { upCount: number; downCount: number; windowStart: number }
+const sentimentMap = new Map<string, SentimentBucket>();
+const SENTIMENT_WINDOW_MS = 5 * 60_000;
+
+export function recordTradeSentiment(symbol: string, direction: Direction) {
+  const now    = Date.now();
+  const cur    = sentimentMap.get(symbol) ?? { upCount: 0, downCount: 0, windowStart: now };
+  const bucket = now - cur.windowStart > SENTIMENT_WINDOW_MS
+    ? { upCount: 0, downCount: 0, windowStart: now }   // new window
+    : { ...cur };
+
+  if (direction === "UP")       bucket.upCount++;
+  else if (direction === "DOWN") bucket.downCount++;
+  sentimentMap.set(symbol, bucket);
+
+  const total   = bucket.upCount + bucket.downCount;
+  if (total < 2) return; // don't broadcast on first trade — no useful signal
+
+  broadcastToAll("trade_sentiment", {
+    symbol,
+    upPct:   total > 0 ? Math.round((bucket.upCount   / total) * 100) : 50,
+    downPct: total > 0 ? Math.round((bucket.downCount / total) * 100) : 50,
+    total,
+  });
 }
 
 // ─── Win-streak payout boost ───────────────────────────────────────────────────
@@ -100,7 +146,7 @@ async function settleDemoExpiredPositions(): Promise<void> {
       const dir = pos.direction as Direction;
       const lb = pos.lowerBarrier != null ? parseFloat(String(pos.lowerBarrier)) : null;
       const ub = pos.upperBarrier != null ? parseFloat(String(pos.upperBarrier)) : null;
-      const outcome = determineOutcome(ct, dir, parseFloat(String(pos.entryPrice)), exitPrice, lb, ub);
+      const outcome = determineOutcome(ct, dir, parseFloat(String(pos.entryPrice)), exitPrice, lb, ub, pos.assetSymbol);
       const stake = parseFloat(String(pos.stake));
       const ratio = parseFloat(String(pos.payoutRatio));
       const winAmount = outcome === "win" ? parseFloat((stake * ratio).toFixed(4)) : 0;
@@ -157,7 +203,7 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
   const lowerBarrier = position.lowerBarrier != null ? parseFloat(String(position.lowerBarrier)) : null;
   const upperBarrier = position.upperBarrier != null ? parseFloat(String(position.upperBarrier)) : null;
 
-  const outcome      = determineOutcome(contractType, direction, entryPrice, exitPrice, lowerBarrier, upperBarrier);
+  const outcome      = determineOutcome(contractType, direction, entryPrice, exitPrice, lowerBarrier, upperBarrier, position.assetSymbol);
   const winAmount    = outcome === "win" ? parseFloat((stake * payoutRatio).toFixed(8)) : 0;
   const creditAmount = outcome === "cancelled" ? stake : winAmount;
 
@@ -202,6 +248,7 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
   });
 
   let newStreak = 0;
+  let prevStreak = 0;
   try {
     if (outcome === "win") {
       const r = await pool.query<{ trading_win_streak: number }>(
@@ -210,7 +257,26 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
       );
       newStreak = Number(r.rows[0]?.trading_win_streak ?? 1);
     } else {
+      // Capture streak before reset so we can give consolation BOOT
+      const prev = await pool.query<{ trading_win_streak: number }>(
+        `SELECT COALESCE(trading_win_streak,0) AS trading_win_streak FROM players WHERE id=$1`,
+        [position.playerId],
+      );
+      prevStreak = Number(prev.rows[0]?.trading_win_streak ?? 0);
       await pool.query(`UPDATE players SET trading_win_streak=0 WHERE id=$1`, [position.playerId]);
+
+      // Consolation BOOT reward for losing after a meaningful streak
+      if (prevStreak >= 3) {
+        const bootReward = prevStreak * 15; // 15 BOOT per trade in the streak
+        await pool.query(
+          `UPDATE players SET boot_balance = COALESCE(boot_balance,0) + $1 WHERE id=$2`,
+          [bootReward, position.playerId],
+        );
+        broadcastToPlayer(position.playerId, "consolation_boot", {
+          boot:   bootReward,
+          streak: prevStreak,
+        });
+      }
     }
   } catch { /* non-fatal */ }
 
@@ -371,6 +437,11 @@ export async function openPosition(params: {
       upperBarrier,
     }).returning();
   });
+
+  // Record direction sentiment for UP_DOWN trades so the UI can show market bias
+  if (contractType === "UP_DOWN") {
+    recordTradeSentiment(assetSymbol.toUpperCase(), direction);
+  }
 
   return { success: true, positionId: position.id, entryPrice, expiresAt, lowerBarrier, upperBarrier };
 }
