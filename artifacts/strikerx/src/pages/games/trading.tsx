@@ -19,11 +19,16 @@ import {
   getGetTradingPricesQueryKey,
   getGetTradingPositionsActiveQueryKey,
   getGetTradingPositionsQueryKey,
+  useGetDemoPositionsActive,
+  useGetDemoPositions,
+  usePostDemoPositions,
+  getGetDemoPositionsActiveQueryKey,
+  getGetDemoPositionsQueryKey,
 } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, Clock, CheckCircle, XCircle,
-  MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins,
+  MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins, FlaskConical,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
 
@@ -179,6 +184,15 @@ export function Trading() {
 
   const isAuthed = !!player;
 
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() =>
+    typeof localStorage !== "undefined" && localStorage.getItem("strikerx_demo_mode") === "true",
+  );
+  const demoUsdtBalance = parseFloat(String((player as Record<string, unknown>)?.demoUsdtBalance ?? 10000));
+  const toggleDemo = (v: boolean) => {
+    localStorage.setItem("strikerx_demo_mode", String(v));
+    setIsDemoMode(v);
+  };
+
   const { data: configData } = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
   const { data: pricesData } = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
   const { data: assetsData } = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
@@ -186,8 +200,8 @@ export function Trading() {
   const availableDurations = configData?.availableDurations ?? DEFAULT_DURATIONS;
 
   // Stake limits per currency
-  const minStake = currency === "STRIKER" ? (configData?.minStake ?? 10) : (configData?.minStakeTon ?? 0.1);
-  const maxStake = currency === "STRIKER" ? (configData?.maxStake ?? 10000) : (configData?.maxStakeTon ?? 500);
+  const minStake = isDemoMode ? 1 : currency === "STRIKER" ? (configData?.minStake ?? 10) : (configData?.minStakeTon ?? 0.1);
+  const maxStake = isDemoMode ? Math.min(1000, demoUsdtBalance > 0 ? demoUsdtBalance : 1000) : currency === "STRIKER" ? (configData?.maxStake ?? 10000) : (configData?.maxStakeTon ?? 500);
 
   // 24h changes — now properly typed after codegen
   const changes24h = pricesData?.changes24h ?? {};
@@ -202,13 +216,16 @@ export function Trading() {
     : [0.5, 1, 5, 10].filter((v) => v <= maxStake);
 
   // Balance for the active currency
-  const balance = currency === "TON"
+  const balance = isDemoMode
+    ? demoUsdtBalance
+    : currency === "TON"
     ? parseFloat(String(player?.tonBalance ?? 0))
     : currency === "USDT"
     ? parseFloat(String(player?.usdtBalance ?? 0))
     : Math.floor(parseFloat(String(player?.strikerBalance ?? 0)));
 
   const formatBalance = (v: number) =>
+    isDemoMode ? `$${v.toFixed(2)}` :
     currency === "STRIKER" ? v.toLocaleString() : v.toFixed(4);
 
   const { data: activeData }  = useGetTradingPositionsActive({
@@ -216,6 +233,13 @@ export function Trading() {
   });
   const { data: historyData } = useGetTradingPositions({
     query: { queryKey: getGetTradingPositionsQueryKey(), refetchInterval: isAuthed ? 10_000 : false, enabled: isAuthed },
+  });
+
+  const { data: demoActiveData }  = useGetDemoPositionsActive({
+    query: { queryKey: getGetDemoPositionsActiveQueryKey(), refetchInterval: isAuthed && isDemoMode ? 3000 : false, enabled: isAuthed && isDemoMode },
+  });
+  const { data: demoHistoryData } = useGetDemoPositions({
+    query: { queryKey: getGetDemoPositionsQueryKey(), refetchInterval: isAuthed && isDemoMode ? 10_000 : false, enabled: isAuthed && isDemoMode },
   });
 
   // Seed current prices from REST poll
@@ -260,6 +284,8 @@ export function Trading() {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetTradingPositionsActiveQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetTradingPositionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDemoPositionsActiveQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDemoPositionsQueryKey() });
 
       const newStreak = Number(data.streak ?? 0);
       setStreak(newStreak);
@@ -305,9 +331,28 @@ export function Trading() {
     },
   });
 
+  const demoTradeMut = usePostDemoPositions({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetDemoPositionsActiveQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetDemoPositionsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        setTab("active");
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to open demo position";
+        toast({ title: "Demo Error", description: msg, variant: "destructive" });
+      },
+    },
+  });
+
   const apiAssets       = assetsData?.assets ?? [];
-  const activePositions = activeData?.positions ?? [];
-  const history         = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
+  const activePositions = isDemoMode
+    ? (demoActiveData?.positions ?? [])
+    : (activeData?.positions ?? []);
+  const history = isDemoMode
+    ? (demoHistoryData?.positions ?? []).filter((p: { outcome: string }) => p.outcome !== "pending")
+    : (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
 
   const selectedAssetData = apiAssets.find((a) => a.symbol === selectedAsset);
   const basePayoutRatio   = selectedAssetData?.payoutRatio ?? 1.82;
@@ -343,17 +388,29 @@ export function Trading() {
     if (!player) { toast({ title: "Not logged in", variant: "destructive" }); return; }
     if (stakeNum <= 0)    { toast({ title: "Enter a stake amount", variant: "destructive" }); return; }
     if (stakeNum < minStake) { toast({ title: `Min stake is ${minStake} ${currency}`, variant: "destructive" }); return; }
-    if (stakeNum > balance)  { toast({ title: `Insufficient ${currency} balance`, variant: "destructive" }); return; }
-    openPositionMutation.mutate({
-      data: {
-        assetSymbol:          selectedAsset,
-        direction:            direction as "UP" | "DOWN" | "EVEN" | "ODD" | "OVER" | "UNDER" | "IN" | "OUT",
-        contractType,
-        currency,
-        stake:                stakeNum,
-        contractDurationSecs: duration,
-      },
-    });
+    if (stakeNum > balance)  { toast({ title: isDemoMode ? "Insufficient demo balance" : `Insufficient ${currency} balance`, variant: "destructive" }); return; }
+    if (isDemoMode) {
+      demoTradeMut.mutate({
+        data: {
+          assetSymbol:          selectedAsset,
+          direction,
+          contractType,
+          stake:                stakeNum,
+          contractDurationSecs: duration,
+        },
+      });
+    } else {
+      openPositionMutation.mutate({
+        data: {
+          assetSymbol:          selectedAsset,
+          direction:            direction as "UP" | "DOWN" | "EVEN" | "ODD" | "OVER" | "UNDER" | "IN" | "OUT",
+          contractType,
+          currency,
+          stake:                stakeNum,
+          contractDurationSecs: duration,
+        },
+      });
+    }
   }
 
   const selectedChange = changes24h[selectedAsset];
@@ -361,11 +418,35 @@ export function Trading() {
   const formatStakeDisplay = (v: number) =>
     currency === "STRIKER" ? (v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : String(v)) : `${v}`;
 
-  const isStakeDisabled = openPositionMutation.isPending || stakeNum <= 0 || stakeNum < minStake || stakeNum > maxStake || stakeNum > balance;
+  const activeMutation  = isDemoMode ? demoTradeMut : openPositionMutation;
+  const isStakeDisabled = activeMutation.isPending || stakeNum <= 0 || stakeNum < minStake || stakeNum > maxStake || stakeNum > balance;
 
   return (
     <Layout>
       <div className="flex flex-col min-h-full pb-4">
+
+        {/* ── Demo mode toggle ──────────────────────────────── */}
+        <div className="px-3 pt-2 pb-0 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <FlaskConical size={10} className={isDemoMode ? "text-amber-400" : "text-muted-foreground/50"} />
+            <span className={`text-[10px] font-bold ${isDemoMode ? "text-amber-400" : "text-muted-foreground/50"}`}>
+              {isDemoMode ? "DEMO MODE" : "REAL MODE"}
+            </span>
+            {isDemoMode && (
+              <span className="text-[9px] font-mono text-amber-300/70 ml-1">${demoUsdtBalance.toFixed(2)} USDT</span>
+            )}
+          </div>
+          <button
+            onClick={() => toggleDemo(!isDemoMode)}
+            className={`relative w-9 h-4.5 rounded-full transition-colors ${isDemoMode ? "bg-amber-500/40" : "bg-white/10"}`}
+            style={{ height: "18px", width: "36px" }}
+          >
+            <div
+              className={`absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all ${isDemoMode ? "bg-amber-400" : "bg-white/40"}`}
+              style={{ [isDemoMode ? "right" : "left"]: "2px" }}
+            />
+          </button>
+        </div>
 
         {/* ── Category tabs ─────────────────────────────────── */}
         <div className="px-3 pt-3 pb-1 flex gap-1">

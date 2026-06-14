@@ -1100,6 +1100,134 @@ paths:
         "404":
           description: Not found
 
+  /trading/demo/positions:
+    post:
+      operationId: postDemoPositions
+      tags: [trading]
+      summary: Open a demo trade position
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemoPositionInput"
+      responses:
+        "200":
+          description: Demo position opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoPositionOpenResponse"
+    get:
+      operationId: getDemoPositions
+      tags: [trading]
+      summary: Demo trade history
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Demo positions list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoPositionsResponse"
+
+  /trading/demo/positions/active:
+    get:
+      operationId: getDemoPositionsActive
+      tags: [trading]
+      summary: Active demo positions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active demo positions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoPositionsResponse"
+
+  /trading/demo/reset:
+    post:
+      operationId: postDemoReset
+      tags: [trading]
+      summary: Reset demo balance to starting amount
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Demo balance reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoResetResponse"
+
+  /players/me/portfolio:
+    get:
+      operationId: getMyPortfolio
+      tags: [players]
+      summary: Aggregate trading P&L stats for the authenticated player
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Portfolio stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioStats"
+
+  /players/me/portfolio/chart:
+    get:
+      operationId: getMyPortfolioChart
+      tags: [players]
+      summary: Daily P&L chart data for the last N days
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: days
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chart data points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioChartResponse"
+
+  /leaderboard/trading:
+    get:
+      operationId: getTradingLeaderboard
+      tags: [leaderboard]
+      summary: Top traders by P&L
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [week, month, alltime]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trading leaderboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingLeaderboardResponse"
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2130,3 +2258,194 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TradingPositionDetail"
+
+    DemoPositionInput:
+      type: object
+      required: [assetSymbol, direction, stake, contractDurationSecs]
+      properties:
+        assetSymbol:
+          type: string
+        direction:
+          type: string
+        contractType:
+          type: string
+          enum: [UP_DOWN, EVEN_ODD, OVER_UNDER, IN_OUT]
+        stake:
+          type: number
+        contractDurationSecs:
+          type: integer
+
+    DemoPositionOpenResponse:
+      type: object
+      required: [success, positionId, entryPrice, expiresAt]
+      properties:
+        success:
+          type: boolean
+        positionId:
+          type: integer
+        entryPrice:
+          type: number
+        expiresAt:
+          type: string
+        lowerBarrier:
+          type: ["number", "null"]
+        upperBarrier:
+          type: ["number", "null"]
+
+    DemoPositionItem:
+      type: object
+      required: [id, assetSymbol, direction, contractType, stake, entryPrice, payoutRatio, outcome, contractDurationSecs, expiresAt, createdAt]
+      properties:
+        id:
+          type: integer
+        assetSymbol:
+          type: string
+        direction:
+          type: string
+        contractType:
+          type: string
+        stake:
+          type: number
+        entryPrice:
+          type: number
+        exitPrice:
+          type: ["number", "null"]
+        lowerBarrier:
+          type: ["number", "null"]
+        upperBarrier:
+          type: ["number", "null"]
+        payoutRatio:
+          type: number
+        winAmount:
+          type: number
+        outcome:
+          type: string
+          enum: [pending, win, loss, cancelled]
+        contractDurationSecs:
+          type: integer
+        expiresAt:
+          type: string
+        settledAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    DemoPositionsResponse:
+      type: object
+      required: [positions, demoBalance]
+      properties:
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DemoPositionItem"
+        demoBalance:
+          type: number
+
+    DemoResetResponse:
+      type: object
+      required: [success, demoBalance, resetsUsed, resetsRemaining]
+      properties:
+        success:
+          type: boolean
+        demoBalance:
+          type: number
+        resetsUsed:
+          type: integer
+        resetsRemaining:
+          type: integer
+
+    PeriodStats:
+      type: object
+      required: [totalTrades, netPnl, wins]
+      properties:
+        totalTrades:
+          type: integer
+        netPnl:
+          type: number
+        wins:
+          type: integer
+
+    PortfolioStats:
+      type: object
+      required: [allTime, today, thisWeek]
+      properties:
+        allTime:
+          type: object
+          required: [totalTrades, wins, losses, winRate, netPnl, volume, biggestWin, currentStreak]
+          properties:
+            totalTrades:
+              type: integer
+            wins:
+              type: integer
+            losses:
+              type: integer
+            winRate:
+              type: number
+            netPnl:
+              type: number
+            volume:
+              type: number
+            biggestWin:
+              type: number
+            currentStreak:
+              type: integer
+        today:
+          $ref: "#/components/schemas/PeriodStats"
+        thisWeek:
+          $ref: "#/components/schemas/PeriodStats"
+
+    DailyPnlPoint:
+      type: object
+      required: [date, trades, wins, pnl]
+      properties:
+        date:
+          type: string
+        trades:
+          type: integer
+        wins:
+          type: integer
+        pnl:
+          type: number
+
+    PortfolioChartResponse:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyPnlPoint"
+
+    TradingLeaderboardEntry:
+      type: object
+      required: [rank, playerId, username, vipTier, totalTrades, wins, winRate, netPnl, volume]
+      properties:
+        rank:
+          type: integer
+        playerId:
+          type: integer
+        username:
+          type: string
+        vipTier:
+          type: string
+        totalTrades:
+          type: integer
+        wins:
+          type: integer
+        winRate:
+          type: number
+        netPnl:
+          type: number
+        volume:
+          type: number
+
+    TradingLeaderboardResponse:
+      type: object
+      required: [entries, period]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingLeaderboardEntry"
+        period:
+          type: string
