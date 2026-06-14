@@ -14,14 +14,14 @@ import {
 
 interface TradingChartProps {
   symbol: string;
-  interval: "1m" | "5m" | "15m";
+  interval: "1m" | "5m" | "15m" | "30m" | "1h";
   currentPrice: number | null;
   entryPrice: number | null;
   chartMode: "candle" | "line";
   token?: string | null;
 }
 
-const INTERVAL_SECS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900 };
+const INTERVAL_SECS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600 };
 
 type LiveCandle = CandlestickData<UTCTimestamp>;
 
