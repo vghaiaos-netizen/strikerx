@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,12 +86,24 @@ function fmtChange(pct: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
+// Asset decimal precision — must mirror server-side ASSET_DECIMAL_PLACES
+// Used for EVEN_ODD and OVER_UNDER live P&L calculation
+const ASSET_DECIMAL_PLACES: Record<string, number> = {
+  BTC: 2, ETH: 2, SOL: 3, BNB: 2, TON: 4,
+  EURUSD: 5, GBPUSD: 5, USDJPY: 3, AUDUSD: 5, USDCHF: 5,
+  XAUUSD: 2, XAGUSD: 3, USOIL: 2, NATGAS: 3, COPPER: 4,
+};
+
+function lastDigitAt(price: number, decimals: number): number {
+  return Math.round(Math.abs(price) * Math.pow(10, decimals)) % 10;
+}
+
 // Contract type metadata
 const CONTRACT_META: Record<ContractType, { label: string; desc: string; btnA: string; btnB: string; dirA: string; dirB: string }> = {
-  UP_DOWN:    { label: "Up / Down",    desc: "Will price be higher or lower at expiry?",             btnA: "UP",   btnB: "DOWN",  dirA: "UP",   dirB: "DOWN"  },
-  EVEN_ODD:   { label: "Even / Odd",   desc: "Will the integer part of price end in an even or odd digit?", btnA: "EVEN", btnB: "ODD",   dirA: "EVEN", dirB: "ODD"   },
-  OVER_UNDER: { label: "Over / Under", desc: "Last digit of price: Over 4 (5-9) or Under 5 (0-4)?", btnA: "OVER", btnB: "UNDER", dirA: "OVER", dirB: "UNDER" },
-  IN_OUT:     { label: "In / Out",     desc: "Will price stay IN ±0.5% band, or break OUT?",         btnA: "IN",   btnB: "OUT",   dirA: "IN",   dirB: "OUT"   },
+  UP_DOWN:    { label: "Up / Down",    desc: "Will price be higher or lower at expiry?",                   btnA: "UP",   btnB: "DOWN",  dirA: "UP",   dirB: "DOWN"  },
+  EVEN_ODD:   { label: "Even / Odd",   desc: "Last decimal digit of exit price: even (0,2,4,6,8) or odd?", btnA: "EVEN", btnB: "ODD",   dirA: "EVEN", dirB: "ODD"   },
+  OVER_UNDER: { label: "Over / Under", desc: "Last decimal digit: 5-9 (Over) or 0-4 (Under)?",             btnA: "OVER", btnB: "UNDER", dirA: "OVER", dirB: "UNDER" },
+  IN_OUT:     { label: "In / Out",     desc: "Will price stay IN ±0.5% band, or break OUT?",               btnA: "IN",   btnB: "OUT",   dirA: "IN",   dirB: "OUT"   },
 };
 
 // ─── Countdown timer ──────────────────────────────────────────────────────────
@@ -183,6 +196,15 @@ export function Trading() {
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
   const isAuthed = !!player;
+
+  // Settlement result overlay — shows on every real trade settlement
+  const [settlementResult, setSettlementResult] = useState<{
+    outcome: "win" | "loss" | "cancelled";
+    symbol: string; direction: string; credit: number; currency: string; streak: number;
+  } | null>(null);
+
+  // Trade direction sentiment for current asset (UP_DOWN only)
+  const [sentiment, setSentiment] = useState<{ upPct: number; downPct: number; total: number } | null>(null);
 
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() =>
     typeof localStorage !== "undefined" && localStorage.getItem("strikerx_demo_mode") === "true",
@@ -278,7 +300,7 @@ export function Trading() {
     return undefined;
   }, [selectedPrice, selectedAsset]);
 
-  // WS trade_settled → toast + refresh + streak update
+  // WS trade_settled → overlay + toast + refresh + streak update
   useEffect(() => {
     return subscribeWsEvent("trade_settled", (data) => {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
@@ -297,17 +319,26 @@ export function Trading() {
       const dir       = String(data.direction ?? "");
       const creditFmt = ccy === "STRIKER" ? `${Math.round(credit).toLocaleString()} STRK` : `${credit.toFixed(4)} ${ccy}`;
 
+      // Show overlay on real (non-demo) trades
+      if (!data.isDemo) {
+        setSettlementResult({
+          outcome: outcome as "win" | "loss" | "cancelled",
+          symbol: sym, direction: dir, credit, currency: ccy, streak: newStreak,
+        });
+        setTimeout(() => setSettlementResult(null), 2800);
+      }
+
       if (outcome === "win") {
         toast({
           title: `WIN  +${creditFmt}`,
           description: newStreak >= 2
             ? `${sym} ${dir} — ${newStreak} in a row!`
-            : `${sym} ${dir} — you called it right`,
+            : `${sym} ${dir} — called it`,
         });
       } else if (outcome === "loss") {
         toast({
           title: "Position closed",
-          description: `${sym} ${dir} — better luck next trade`,
+          description: `${sym} ${dir} — better luck next time`,
           variant: "destructive",
         });
       } else {
@@ -315,6 +346,51 @@ export function Trading() {
       }
     });
   }, [subscribeWsEvent, queryClient, toast]);
+
+  // WS deposit_confirmed → balance refresh + celebration toast
+  useEffect(() => {
+    return subscribeWsEvent("deposit_confirmed", (data) => {
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      const asset      = String(data.asset ?? "TON");
+      const amtReal    = Number(data.amount ?? 0);
+      const amtStriker = Number(data.amountStriker ?? 0);
+      const precision  = asset === "TON" ? 4 : 2;
+      toast({
+        title: "Deposit confirmed!",
+        description: `+${amtReal.toFixed(precision)} ${asset}  ·  +${Math.round(amtStriker).toLocaleString()} STRK`,
+      });
+    });
+  }, [subscribeWsEvent, queryClient, toast]);
+
+  // WS consolation_boot → BOOT reward toast
+  useEffect(() => {
+    return subscribeWsEvent("consolation_boot", (data) => {
+      const boot   = Number(data.boot ?? 0);
+      const streak = Number(data.streak ?? 0);
+      toast({
+        title: `+${boot} BOOT earned`,
+        description: `Consolation for your ${streak}-trade run — keep going!`,
+      });
+    });
+  }, [subscribeWsEvent, toast]);
+
+  // WS trade_sentiment → live market bias for current asset
+  useEffect(() => {
+    return subscribeWsEvent("trade_sentiment", (data) => {
+      if (String(data.symbol ?? "") === selectedAsset) {
+        setSentiment({
+          upPct:   Number(data.upPct   ?? 50),
+          downPct: Number(data.downPct ?? 50),
+          total:   Number(data.total   ?? 0),
+        });
+      }
+    });
+  }, [subscribeWsEvent, selectedAsset]);
+
+  // Reset sentiment when switching assets
+  useEffect(() => {
+    setSentiment(null);
+  }, [selectedAsset]);
 
   const openPositionMutation = usePostTradingPositions({
     mutation: {
@@ -367,6 +443,28 @@ export function Trading() {
   const displayAssets   = categorySymbols
     .map((sym) => apiAssets.find((a) => a.symbol === sym) ?? { symbol: sym, displayName: ASSET_META[sym]?.label ?? sym, payoutRatio: 1.82, minStakeStriker: 10, maxStakeStriker: 10000, minStakeTon: 0.1, maxStakeTon: 500 })
     .filter(Boolean);
+
+  // Handle quick-trade deep-link from home page (sessionStorage params)
+  useEffect(() => {
+    const sym = sessionStorage.getItem("strikerx_quick_symbol");
+    const dir = sessionStorage.getItem("strikerx_quick_dir");
+    if (sym) {
+      sessionStorage.removeItem("strikerx_quick_symbol");
+      sessionStorage.removeItem("strikerx_quick_dir");
+      const cat = Object.entries(ASSET_CATEGORIES).find(([, syms]) => syms.includes(sym))?.[0] as "Crypto" | "Forex" | "Commodities" | undefined;
+      if (cat) setCategory(cat);
+      setSelected(sym);
+      setContractType("UP_DOWN");
+      if (dir === "DOWN" || dir === "UP") {
+        // Pre-focus the stake field and set a sensible default
+        setTimeout(() => {
+          const stakeInput = document.querySelector<HTMLInputElement>('input[type="number"]');
+          stakeInput?.focus();
+        }, 300);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities") => {
     setCategory(cat);
@@ -731,12 +829,35 @@ export function Trading() {
             </div>
           )}
 
-          {currency !== "STRIKER" && balance === 0 && isAuthed && (
-            <p className="text-[10px] text-amber-400/80 mt-1 px-0.5">
-              Deposit {currency} to start trading — or switch to STRIKER
-            </p>
+          {currency !== "STRIKER" && balance === 0 && isAuthed && !isDemoMode && (
+            <div className="mt-2 flex items-center gap-2 px-0.5">
+              <span className="text-[10px] text-amber-400/70 flex-1">No {currency} balance</span>
+              <Link href="/deposit">
+                <span className="text-[10px] font-bold px-3 py-1 rounded-lg bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors cursor-pointer">
+                  Add Funds
+                </span>
+              </Link>
+            </div>
           )}
         </div>
+
+        {/* ── Market sentiment bar ──────────────────────────── */}
+        {contractType === "UP_DOWN" && sentiment && sentiment.total >= 3 && (
+          <div className="px-3 mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">Market Sentiment</span>
+              <span className="text-[9px] text-muted-foreground/40">{sentiment.total} trades</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden flex bg-white/5">
+              <div className="bg-green-500/60 h-full transition-all duration-500 rounded-l-full" style={{ width: `${sentiment.upPct}%` }} />
+              <div className="bg-red-500/60 h-full transition-all duration-500 rounded-r-full" style={{ width: `${sentiment.downPct}%` }} />
+            </div>
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[8px] font-bold text-green-400">UP {sentiment.upPct}%</span>
+              <span className="text-[8px] font-bold text-red-400">{sentiment.downPct}% DOWN</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Trade buttons ─────────────────────────────────── */}
         <div className="px-3 mt-3 grid grid-cols-2 gap-3">
@@ -817,19 +938,19 @@ export function Trading() {
                       const pCurrency  = (p.currency ?? "TON");
                       const priceDiff  = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
 
-                      // Live "winning?" logic varies by contract type
+                      // Live "winning?" logic — matches server determineOutcome exactly
                       let isWinning: boolean | null = null;
                       if (livePrice !== undefined) {
                         if (pCType === "UP_DOWN") {
                           isWinning = priceDiff !== null ? (p.direction === "UP" ? priceDiff > 0 : priceDiff < 0) : null;
                         } else if (pCType === "EVEN_ODD") {
-                          const lastDigit = Math.floor(Math.abs(livePrice)) % 10;
-                          const isEven = lastDigit % 2 === 0;
-                          isWinning = p.direction === "EVEN" ? isEven : !isEven;
+                          const dec = ASSET_DECIMAL_PLACES[p.assetSymbol] ?? 2;
+                          const d   = lastDigitAt(livePrice, dec);
+                          isWinning = p.direction === "EVEN" ? d % 2 === 0 : d % 2 !== 0;
                         } else if (pCType === "OVER_UNDER") {
-                          const lastDigit = Math.floor(Math.abs(livePrice)) % 10;
-                          const isOver = lastDigit >= 5;
-                          isWinning = p.direction === "OVER" ? isOver : !isOver;
+                          const dec = ASSET_DECIMAL_PLACES[p.assetSymbol] ?? 2;
+                          const d   = lastDigitAt(livePrice, dec);
+                          isWinning = p.direction === "OVER" ? d >= 5 : d < 5;
                         } else if (pCType === "IN_OUT" && p.lowerBarrier && p.upperBarrier) {
                           const isIn = livePrice >= p.lowerBarrier && livePrice <= p.upperBarrier;
                           isWinning = p.direction === "IN" ? isIn : !isIn;
@@ -959,6 +1080,73 @@ export function Trading() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Trade settlement overlay ──────────────────────── */}
+      <AnimatePresence>
+        {settlementResult && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+          >
+            <motion.div
+              initial={{ scale: 0.85, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              className={`mx-8 rounded-2xl border px-8 py-7 text-center shadow-2xl ${
+                settlementResult.outcome === "win"
+                  ? "bg-[#00150a]/95 border-green-500/40 shadow-green-500/20"
+                  : settlementResult.outcome === "loss"
+                  ? "bg-[#150000]/95 border-red-500/30 shadow-red-500/10"
+                  : "bg-card border-border"
+              }`}
+            >
+              {settlementResult.outcome === "win" ? (
+                <>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1.3, 1] }}
+                    transition={{ delay: 0.05, duration: 0.4 }}
+                    className="text-4xl mb-2 font-black text-green-400"
+                  >
+                    WIN
+                  </motion.div>
+                  <div className="text-2xl font-black text-white tabular-nums">
+                    +{settlementResult.currency === "STRIKER"
+                      ? `${Math.round(settlementResult.credit).toLocaleString()} STRK`
+                      : `${settlementResult.credit.toFixed(4)} ${settlementResult.currency}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {settlementResult.symbol} · {settlementResult.direction}
+                  </div>
+                  {settlementResult.streak >= 2 && (
+                    <div className="mt-2 text-[11px] font-bold text-orange-300">
+                      {settlementResult.streak}× streak  +{
+                        settlementResult.streak >= 5 ? 7 : settlementResult.streak >= 4 ? 5 : settlementResult.streak >= 3 ? 3 : 2
+                      }% boost active
+                    </div>
+                  )}
+                </>
+              ) : settlementResult.outcome === "loss" ? (
+                <>
+                  <div className="text-2xl font-black text-red-400 mb-1">CLOSED</div>
+                  <div className="text-sm text-muted-foreground">
+                    {settlementResult.symbol} · {settlementResult.direction}
+                  </div>
+                  <div className="text-xs text-muted-foreground/60 mt-1.5">Better luck next trade</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-xl font-black text-yellow-400 mb-1">REFUNDED</div>
+                  <div className="text-sm text-muted-foreground">Price settled at entry</div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }
