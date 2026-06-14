@@ -1155,7 +1155,7 @@ components:
 
     Player:
       type: object
-      required: [id, telegramId, username, strikerBalance, bootBalance, captainBalance, vipTier, streakDays, referralCode, createdAt]
+      required: [id, telegramId, username, strikerBalance, bootBalance, captainBalance, tonBalance, usdtBalance, vipTier, streakDays, referralCode, createdAt]
       properties:
         id:
           type: integer
@@ -1168,6 +1168,10 @@ components:
         bootBalance:
           type: number
         captainBalance:
+          type: number
+        tonBalance:
+          type: number
+        usdtBalance:
           type: number
         vipTier:
           type: string
@@ -1942,7 +1946,7 @@ components:
 
     TradingAssetItem:
       type: object
-      required: [symbol, displayName, binanceSymbol, payoutRatio, minStakeStriker, maxStakeStriker]
+      required: [symbol, displayName, binanceSymbol, payoutRatio, minStakeStriker, maxStakeStriker, minStakeTon, maxStakeTon]
       properties:
         symbol:
           type: string
@@ -1956,12 +1960,16 @@ components:
           type: number
         maxStakeStriker:
           type: number
+        minStakeTon:
+          type: number
+        maxStakeTon:
+          type: number
         currentPrice:
           type: ["number", "null"]
 
     TradingConfigResponse:
       type: object
-      required: [enabled, availableDurations, defaultDuration, payoutRatio, minStake, maxStake]
+      required: [enabled, availableDurations, defaultDuration, payoutRatio, minStake, maxStake, minStakeTon, maxStakeTon, inOutSpread]
       properties:
         enabled:
           type: boolean
@@ -1977,6 +1985,12 @@ components:
           type: integer
         maxStake:
           type: integer
+        minStakeTon:
+          type: number
+        maxStakeTon:
+          type: number
+        inOutSpread:
+          type: number
 
     TradingKlinesResponse:
       type: object
@@ -2012,7 +2026,7 @@ components:
 
     TradingPricesResponse:
       type: object
-      required: [prices, at]
+      required: [prices, changes24h, at]
       properties:
         prices:
           type: object
@@ -2027,15 +2041,26 @@ components:
 
     OpenPositionInput:
       type: object
-      required: [assetSymbol, direction, stakeStriker, contractDurationSecs]
+      required: [assetSymbol, direction, contractDurationSecs]
       properties:
         assetSymbol:
           type: string
         direction:
           type: string
-          enum: [UP, DOWN]
+          enum: [UP, DOWN, EVEN, ODD, OVER, UNDER, IN, OUT]
+        contractType:
+          type: string
+          enum: [UP_DOWN, EVEN_ODD, OVER_UNDER, IN_OUT]
+          default: UP_DOWN
+        currency:
+          type: string
+          enum: [TON, USDT, STRIKER]
+          default: TON
+        stake:
+          type: number
         stakeStriker:
           type: number
+          description: Deprecated alias for stake
         contractDurationSecs:
           type: integer
 
@@ -2049,10 +2074,14 @@ components:
           type: number
         expiresAt:
           type: string
+        lowerBarrier:
+          type: ["number", "null"]
+        upperBarrier:
+          type: ["number", "null"]
 
     TradingPositionDetail:
       type: object
-      required: [id, assetSymbol, direction, stakeStriker, entryPrice, payoutRatio, winAmount, outcome, contractDurationSecs, expiresAt, createdAt]
+      required: [id, assetSymbol, direction, contractType, currency, stakeStriker, entryPrice, payoutRatio, winAmount, outcome, contractDurationSecs, expiresAt, createdAt]
       properties:
         id:
           type: integer
@@ -2060,12 +2089,22 @@ components:
           type: string
         direction:
           type: string
-          enum: [UP, DOWN]
+          enum: [UP, DOWN, EVEN, ODD, OVER, UNDER, IN, OUT]
+        contractType:
+          type: string
+          enum: [UP_DOWN, EVEN_ODD, OVER_UNDER, IN_OUT]
+        currency:
+          type: string
+          enum: [TON, USDT, STRIKER]
         stakeStriker:
           type: number
         entryPrice:
           type: number
         exitPrice:
+          type: ["number", "null"]
+        lowerBarrier:
+          type: ["number", "null"]
+        upperBarrier:
           type: ["number", "null"]
         payoutRatio:
           type: number

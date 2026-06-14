@@ -23,9 +23,13 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, Clock, CheckCircle, XCircle,
-  MinusCircle, Zap, Flame, CandlestickChart, LineChart,
+  MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
+
+// ─── Local types ────────────────────────────────────────────────────────────
+type ContractType    = "UP_DOWN" | "EVEN_ODD" | "OVER_UNDER" | "IN_OUT";
+type TradingCurrency = "TON" | "USDT" | "STRIKER";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -35,8 +39,7 @@ function secsToLabel(secs: number): string {
   return `${secs / 3600}h`;
 }
 
-const DEFAULT_DURATIONS    = [30, 60, 300, 900];
-const QUICK_STAKES_DEFAULT = [50, 100, 500, 1000];
+const DEFAULT_DURATIONS = [30, 60, 300, 900];
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
   Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON"],
@@ -76,6 +79,14 @@ function formatPrice(symbol: string, price: number): string {
 function fmtChange(pct: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
+
+// Contract type metadata
+const CONTRACT_META: Record<ContractType, { label: string; desc: string; btnA: string; btnB: string; dirA: string; dirB: string }> = {
+  UP_DOWN:    { label: "Up / Down",    desc: "Will price be higher or lower at expiry?",             btnA: "UP",   btnB: "DOWN",  dirA: "UP",   dirB: "DOWN"  },
+  EVEN_ODD:   { label: "Even / Odd",   desc: "Will the integer part of price end in an even or odd digit?", btnA: "EVEN", btnB: "ODD",   dirA: "EVEN", dirB: "ODD"   },
+  OVER_UNDER: { label: "Over / Under", desc: "Last digit of price: Over 4 (5-9) or Under 5 (0-4)?", btnA: "OVER", btnB: "UNDER", dirA: "OVER", dirB: "UNDER" },
+  IN_OUT:     { label: "In / Out",     desc: "Will price stay IN ±0.5% band, or break OUT?",         btnA: "IN",   btnB: "OUT",   dirA: "IN",   dirB: "OUT"   },
+};
 
 // ─── Countdown timer ──────────────────────────────────────────────────────────
 
@@ -122,6 +133,26 @@ function PositionProgressBar({ createdAt, expiresAt, isWinning }: { createdAt: s
   );
 }
 
+// ─── Barrier band display ─────────────────────────────────────────────────────
+
+function BarrierBand({ symbol, lowerBarrier, upperBarrier, currentPrice }: {
+  symbol: string; lowerBarrier: number | null; upperBarrier: number | null; currentPrice: number | undefined;
+}) {
+  if (!lowerBarrier || !upperBarrier) return null;
+  const isIn = currentPrice ? (currentPrice >= lowerBarrier && currentPrice <= upperBarrier) : null;
+  return (
+    <div className="flex items-center gap-1.5 text-[9px] font-mono mt-0.5">
+      <span className="text-muted-foreground/50">Band:</span>
+      <span className="text-muted-foreground">{formatPrice(symbol, lowerBarrier)}</span>
+      <span className="text-muted-foreground/30">—</span>
+      <span className="text-muted-foreground">{formatPrice(symbol, upperBarrier)}</span>
+      {isIn !== null && (
+        <span className={`ml-1 font-bold ${isIn ? "text-green-400" : "text-red-400"}`}>{isIn ? "IN" : "OUT"}</span>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function Trading() {
@@ -130,15 +161,17 @@ export function Trading() {
   const queryClient       = useQueryClient();
   const { subscribeWsEvent } = useNotifications();
 
-  const [category, setCategory]       = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
-  const [selectedAsset, setSelected]  = useState("BTC");
+  const [category, setCategory]           = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
+  const [selectedAsset, setSelected]      = useState("BTC");
   const [chartInterval, setChartInterval] = useState<"1m" | "5m" | "15m" | "30m" | "1h">("1m");
-  const [chartMode, setChartMode]     = useState<"candle" | "line">("candle");
-  const [duration, setDuration]       = useState(60);
-  const [stake, setStake]             = useState("100");
-  const [streak, setStreak]           = useState(0);
-  const [tab, setTab]                 = useState<"active" | "history">("active");
-  const [priceFlash, setPriceFlash]   = useState<"up" | "down" | "flat">("flat");
+  const [chartMode, setChartMode]         = useState<"candle" | "line">("candle");
+  const [duration, setDuration]           = useState(60);
+  const [stake, setStake]                 = useState("1");
+  const [streak, setStreak]               = useState(0);
+  const [tab, setTab]                     = useState<"active" | "history">("active");
+  const [priceFlash, setPriceFlash]       = useState<"up" | "down" | "flat">("flat");
+  const [contractType, setContractType]   = useState<ContractType>("UP_DOWN");
+  const [currency, setCurrency]           = useState<TradingCurrency>("TON");
 
   const currentPriceRef = useRef<Record<string, number>>({});
   const prevPriceRef    = useRef<Record<string, number>>({});
@@ -146,22 +179,37 @@ export function Trading() {
 
   const isAuthed = !!player;
 
-  const { data: configData }  = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
-  const { data: pricesData }  = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
-  const { data: assetsData }  = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
+  const { data: configData } = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
+  const { data: pricesData } = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
+  const { data: assetsData } = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
 
   const availableDurations = configData?.availableDurations ?? DEFAULT_DURATIONS;
-  const minStake           = configData?.minStake ?? 10;
-  const maxStake           = configData?.maxStake ?? 10000;
 
-  // 24h % changes (comes from pricesData.changes24h — bonus field not in generated type yet)
-  const changes24h = (pricesData as unknown as { changes24h?: Record<string, number> })?.changes24h ?? {};
+  // Stake limits per currency
+  const minStake = currency === "STRIKER" ? (configData?.minStake ?? 10) : (configData?.minStakeTon ?? 0.1);
+  const maxStake = currency === "STRIKER" ? (configData?.maxStake ?? 10000) : (configData?.maxStakeTon ?? 500);
 
-  const quickStakes = (() => {
-    const base    = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
-    const deduped = [...new Set(base)].filter((v) => v > 0 && v <= maxStake).sort((a, b) => a - b);
-    return deduped.length >= 2 ? deduped : QUICK_STAKES_DEFAULT;
-  })();
+  // 24h changes — now properly typed after codegen
+  const changes24h = pricesData?.changes24h ?? {};
+
+  // Quick stake amounts adapt to currency
+  const quickStakes: number[] = currency === "STRIKER"
+    ? (() => {
+        const base    = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
+        const deduped = [...new Set(base)].filter((v) => v > 0 && v <= maxStake).sort((a, b) => a - b);
+        return deduped.length >= 2 ? deduped : [50, 100, 500, 1000];
+      })()
+    : [0.5, 1, 5, 10].filter((v) => v <= maxStake);
+
+  // Balance for the active currency
+  const balance = currency === "TON"
+    ? parseFloat(String(player?.tonBalance ?? 0))
+    : currency === "USDT"
+    ? parseFloat(String(player?.usdtBalance ?? 0))
+    : Math.floor(parseFloat(String(player?.strikerBalance ?? 0)));
+
+  const formatBalance = (v: number) =>
+    currency === "STRIKER" ? v.toLocaleString() : v.toFixed(4);
 
   const { data: activeData }  = useGetTradingPositionsActive({
     query: { queryKey: getGetTradingPositionsActiveQueryKey(), refetchInterval: isAuthed ? 3000 : false, enabled: isAuthed },
@@ -216,21 +264,24 @@ export function Trading() {
       const newStreak = Number(data.streak ?? 0);
       setStreak(newStreak);
 
-      const outcome = String(data.outcome ?? "");
-      const credit  = Number(data.creditAmount ?? 0);
-      const sym     = String(data.assetSymbol ?? "");
+      const outcome   = String(data.outcome ?? "");
+      const credit    = Number(data.creditAmount ?? 0);
+      const sym       = String(data.assetSymbol ?? "");
+      const ccy       = String(data.currency ?? "STRIKER");
+      const dir       = String(data.direction ?? "");
+      const creditFmt = ccy === "STRIKER" ? `${Math.round(credit).toLocaleString()} STRK` : `${credit.toFixed(4)} ${ccy}`;
 
       if (outcome === "win") {
         toast({
-          title: `WIN! +${Math.round(credit).toLocaleString()} STRK`,
+          title: `WIN  +${creditFmt}`,
           description: newStreak >= 2
-            ? `${sym} ${data.direction} — ${newStreak} in a row!`
-            : `${sym} ${data.direction} — you called it right`,
+            ? `${sym} ${dir} — ${newStreak} in a row!`
+            : `${sym} ${dir} — you called it right`,
         });
       } else if (outcome === "loss") {
         toast({
           title: "Position closed",
-          description: `${sym} ${data.direction} — better luck next trade`,
+          description: `${sym} ${dir} — better luck next trade`,
           variant: "destructive",
         });
       } else {
@@ -258,20 +309,18 @@ export function Trading() {
   const activePositions = activeData?.positions ?? [];
   const history         = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
 
-  // Derive payout for selected asset (with possible streak boost)
   const selectedAssetData = apiAssets.find((a) => a.symbol === selectedAsset);
   const basePayoutRatio   = selectedAssetData?.payoutRatio ?? 1.82;
   const streakBoostPct    = streak >= 5 ? 7 : streak >= 4 ? 5 : streak >= 3 ? 3 : streak >= 2 ? 2 : 0;
   const effectivePayout   = streakBoostPct > 0 ? Math.min(1.95, basePayoutRatio + basePayoutRatio * streakBoostPct / 100) : basePayoutRatio;
   const payoutPct         = Math.round((effectivePayout - 1) * 100);
   const stakeNum          = parseFloat(stake) || 0;
-  const potentialWin      = Math.round(stakeNum * effectivePayout);
-  const potentialProfit   = Math.round(stakeNum * (effectivePayout - 1));
+  const potentialWin      = parseFloat((stakeNum * effectivePayout).toFixed(currency === "STRIKER" ? 0 : 4));
+  const potentialProfit   = parseFloat((stakeNum * (effectivePayout - 1)).toFixed(currency === "STRIKER" ? 0 : 4));
 
-  // Assets available per current category
   const categorySymbols = ASSET_CATEGORIES[category] ?? [];
   const displayAssets   = categorySymbols
-    .map((sym) => apiAssets.find((a) => a.symbol === sym) ?? { symbol: sym, displayName: ASSET_META[sym]?.label ?? sym, payoutRatio: 1.82, minStakeStriker: 10, maxStakeStriker: 10000 })
+    .map((sym) => apiAssets.find((a) => a.symbol === sym) ?? { symbol: sym, displayName: ASSET_META[sym]?.label ?? sym, payoutRatio: 1.82, minStakeStriker: 10, maxStakeStriker: 10000, minStakeTon: 0.1, maxStakeTon: 500 })
     .filter(Boolean);
 
   const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities") => {
@@ -280,25 +329,39 @@ export function Trading() {
     if (first) setSelected(first);
   }, []);
 
-  // Active position for selected asset (entry price for chart line + expiresAt for badge)
   const activeForAsset = activePositions.filter((p) => p.assetSymbol === selectedAsset);
   const entryPrice     = activeForAsset[0]?.entryPrice ?? null;
   const expiresAt      = activeForAsset[0]?.expiresAt ?? null;
 
   const meta        = ASSET_META[selectedAsset];
   const accentColor = meta?.color ?? "#00ff88";
+  const cMeta       = CONTRACT_META[contractType];
 
-  const balance = Math.floor(player?.strikerBalance ?? 0);
+  const stakeInvalid = stakeNum > 0 && (stakeNum < minStake || stakeNum > maxStake || stakeNum > balance);
 
-  function handleTrade(direction: "UP" | "DOWN") {
+  function handleTrade(direction: string) {
     if (!player) { toast({ title: "Not logged in", variant: "destructive" }); return; }
-    if (stakeNum <= 0) { toast({ title: "Enter a stake amount", variant: "destructive" }); return; }
+    if (stakeNum <= 0)    { toast({ title: "Enter a stake amount", variant: "destructive" }); return; }
+    if (stakeNum < minStake) { toast({ title: `Min stake is ${minStake} ${currency}`, variant: "destructive" }); return; }
+    if (stakeNum > balance)  { toast({ title: `Insufficient ${currency} balance`, variant: "destructive" }); return; }
     openPositionMutation.mutate({
-      data: { assetSymbol: selectedAsset, direction, stakeStriker: stakeNum, contractDurationSecs: duration },
+      data: {
+        assetSymbol:          selectedAsset,
+        direction:            direction as "UP" | "DOWN" | "EVEN" | "ODD" | "OVER" | "UNDER" | "IN" | "OUT",
+        contractType,
+        currency,
+        stake:                stakeNum,
+        contractDurationSecs: duration,
+      },
     });
   }
 
   const selectedChange = changes24h[selectedAsset];
+
+  const formatStakeDisplay = (v: number) =>
+    currency === "STRIKER" ? (v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : String(v)) : `${v}`;
+
+  const isStakeDisabled = openPositionMutation.isPending || stakeNum <= 0 || stakeNum < minStake || stakeNum > maxStake || stakeNum > balance;
 
   return (
     <Layout>
@@ -364,8 +427,6 @@ export function Trading() {
         {/* ── Chart panel ───────────────────────────────────── */}
         <div className="px-3 mb-2">
           <div className="rounded-xl border border-border bg-card overflow-hidden">
-
-            {/* Chart header */}
             <div className="px-4 pt-3 pb-1.5 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-[9px] text-muted-foreground font-mono tracking-widest uppercase mb-0.5">
@@ -403,7 +464,6 @@ export function Trading() {
               </div>
 
               <div className="flex flex-col items-end gap-1.5 ml-2 shrink-0">
-                {/* Payout badge */}
                 <div
                   className="px-2.5 py-1 rounded-lg text-xs font-black tabular-nums"
                   style={{ background: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}44` }}
@@ -411,8 +471,6 @@ export function Trading() {
                   {payoutPct}% payout
                   {streakBoostPct > 0 && <span className="text-orange-300 ml-1">+{streakBoostPct}%</span>}
                 </div>
-
-                {/* Controls */}
                 <div className="flex gap-1 items-center">
                   {(["1m", "5m", "15m", "30m", "1h"] as const).map((iv) => (
                     <button
@@ -435,7 +493,6 @@ export function Trading() {
               </div>
             </div>
 
-            {/* Chart canvas — taller now */}
             <div className="h-[240px] w-full">
               <TradingChart
                 symbol={selectedAsset}
@@ -452,7 +509,7 @@ export function Trading() {
 
         {/* ── Streak badge ───────────────────────────────────── */}
         {streak >= 2 && (
-          <div className="px-3 mb-1">
+          <div className="px-3 mb-2">
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/25">
               <Flame size={14} className="text-orange-400 shrink-0" />
               <span className="text-xs font-bold text-orange-300">{streak}× win streak</span>
@@ -461,8 +518,29 @@ export function Trading() {
           </div>
         )}
 
-        {/* ── Duration ──────────────────────────────────────── */}
+        {/* ── Contract type selector ─────────────────────────── */}
         <div className="px-3 mt-1">
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Type</p>
+          <div className="grid grid-cols-4 gap-1">
+            {(["UP_DOWN", "EVEN_ODD", "OVER_UNDER", "IN_OUT"] as ContractType[]).map((ct) => (
+              <button
+                key={ct}
+                onClick={() => setContractType(ct)}
+                className={`py-1.5 px-1 rounded-lg border text-[10px] font-bold transition-all leading-tight text-center ${
+                  contractType === ct
+                    ? "border-primary/60 bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:border-white/20 hover:text-white"
+                }`}
+              >
+                {CONTRACT_META[ct].label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[9px] text-muted-foreground/60 mt-1 px-0.5">{cMeta.desc}</p>
+        </div>
+
+        {/* ── Duration ──────────────────────────────────────── */}
+        <div className="px-3 mt-3">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Duration</p>
           <div className={`grid gap-1.5 ${availableDurations.length <= 4 ? "grid-cols-4" : "grid-cols-5"}`}>
             {availableDurations.map((secs) => (
@@ -482,63 +560,87 @@ export function Trading() {
 
         {/* ── Stake ─────────────────────────────────────────── */}
         <div className="px-3 mt-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Stake (STRK)</p>
-            <div className="flex items-center gap-2">
-              {player && (
-                <p className="text-[10px] text-muted-foreground">
-                  Bal: <span className="text-white font-bold">{balance.toLocaleString()}</span>
-                </p>
-              )}
-              {player && balance > 0 && (
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setStake(String(Math.max(minStake, Math.floor(balance / 2))))}
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
-                  >
-                    ½
-                  </button>
-                  <button
-                    onClick={() => setStake(String(Math.min(maxStake, balance)))}
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
-                  >
-                    Max
-                  </button>
-                </div>
-              )}
+          {/* Currency selector + balance */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex gap-1">
+              {(["TON", "USDT", "STRIKER"] as TradingCurrency[]).map((ccy) => (
+                <button
+                  key={ccy}
+                  onClick={() => { setCurrency(ccy); setStake(ccy === "STRIKER" ? "100" : "1"); }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all ${
+                    currency === ccy
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-white/20"
+                  }`}
+                >
+                  <Coins size={10} />
+                  {ccy}
+                </button>
+              ))}
             </div>
+            {player && (
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] text-muted-foreground">
+                  Bal: <span className={`font-bold ${balance > 0 ? "text-white" : "text-red-400"}`}>{formatBalance(balance)}</span>
+                </p>
+                {balance > 0 && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        const half = currency === "STRIKER" ? String(Math.max(minStake, Math.floor(balance / 2))) : String(Math.max(minStake, parseFloat((balance / 2).toFixed(4))));
+                        setStake(half);
+                      }}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
+                    >
+                      ½
+                    </button>
+                    <button
+                      onClick={() => setStake(currency === "STRIKER" ? String(Math.min(maxStake, balance)) : String(Math.min(maxStake, balance).toFixed(4)))}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
+                    >
+                      Max
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
           <div className="flex gap-1.5 mb-1.5">
             {quickStakes.map((q) => (
               <button
                 key={q}
-                onClick={() => setStake(String(q))}
+                onClick={() => setStake(currency === "STRIKER" ? String(q) : String(q))}
                 className={`flex-1 py-1.5 rounded-md border text-xs font-bold transition-all ${
-                  stake === String(q)
+                  parseFloat(stake) === q
                     ? "border-white/30 text-white bg-white/5"
                     : "border-border text-muted-foreground hover:text-white hover:border-white/20"
                 }`}
               >
-                {q >= 1000 ? `${(q / 1000).toFixed(q % 1000 === 0 ? 0 : 1)}k` : q}
+                {formatStakeDisplay(q)}
               </button>
             ))}
           </div>
+
           <Input
             type="number"
             value={stake}
             onChange={(e) => setStake(e.target.value)}
-            placeholder="Custom amount"
-            className={`font-mono text-base h-11 ${stakeNum > 0 && (stakeNum < minStake || stakeNum > maxStake) ? "border-red-500/50" : ""}`}
+            placeholder="Amount"
+            className={`font-mono text-base h-11 ${stakeInvalid ? "border-red-500/50" : ""}`}
           />
+
           {stakeNum > 0 && (
             <div className="flex items-center justify-between mt-1.5 px-0.5">
               {stakeNum < minStake ? (
-                <p className="text-[10px] text-red-400">Min stake: {minStake.toLocaleString()} STRK</p>
+                <p className="text-[10px] text-red-400">Min: {minStake} {currency}</p>
               ) : stakeNum > maxStake ? (
-                <p className="text-[10px] text-red-400">Max stake: {maxStake.toLocaleString()} STRK</p>
+                <p className="text-[10px] text-red-400">Max: {maxStake} {currency}</p>
+              ) : stakeNum > balance ? (
+                <p className="text-[10px] text-red-400">Insufficient {currency}</p>
               ) : (
                 <p className="text-[10px] text-muted-foreground">
-                  To win: <span className="text-green-400 font-bold text-xs">+{potentialProfit.toLocaleString()} STRK</span>
+                  To win: <span className="text-green-400 font-bold text-xs">+{potentialProfit} {currency === "STRIKER" ? "STRK" : currency}</span>
                 </p>
               )}
               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -547,30 +649,49 @@ export function Trading() {
               </p>
             </div>
           )}
+
+          {currency !== "STRIKER" && balance === 0 && isAuthed && (
+            <p className="text-[10px] text-amber-400/80 mt-1 px-0.5">
+              Deposit {currency} to start trading — or switch to STRIKER
+            </p>
+          )}
         </div>
 
         {/* ── Trade buttons ─────────────────────────────────── */}
         <div className="px-3 mt-3 grid grid-cols-2 gap-3">
+          {/* Button A */}
           <Button
-            className="h-16 font-black bg-green-600 hover:bg-green-500 active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform"
-            onClick={() => handleTrade("UP")}
-            disabled={openPositionMutation.isPending || !stakeNum || stakeNum < minStake || stakeNum > maxStake}
+            className={`h-16 font-black active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform ${
+              contractType === "UP_DOWN" ? "bg-green-600 hover:bg-green-500"
+              : contractType === "EVEN_ODD" ? "bg-blue-600 hover:bg-blue-500"
+              : contractType === "OVER_UNDER" ? "bg-violet-600 hover:bg-violet-500"
+              : "bg-teal-600 hover:bg-teal-500"
+            }`}
+            onClick={() => handleTrade(cMeta.dirA)}
+            disabled={isStakeDisabled}
           >
-            <TrendingUp size={20} />
-            <span className="text-sm font-black">UP</span>
+            {contractType === "UP_DOWN" ? <TrendingUp size={20} /> : <span className="text-lg font-black">{cMeta.btnA[0]}</span>}
+            <span className="text-sm font-black">{cMeta.btnA}</span>
             <span className="text-[10px] font-bold opacity-80">
-              {stakeNum > 0 ? `+${potentialProfit.toLocaleString()} STRK` : `${payoutPct}% payout`}
+              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
             </span>
           </Button>
+
+          {/* Button B */}
           <Button
-            className="h-16 font-black bg-red-600 hover:bg-red-500 active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform"
-            onClick={() => handleTrade("DOWN")}
-            disabled={openPositionMutation.isPending || !stakeNum || stakeNum < minStake || stakeNum > maxStake}
+            className={`h-16 font-black active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform ${
+              contractType === "UP_DOWN" ? "bg-red-600 hover:bg-red-500"
+              : contractType === "EVEN_ODD" ? "bg-orange-600 hover:bg-orange-500"
+              : contractType === "OVER_UNDER" ? "bg-pink-600 hover:bg-pink-500"
+              : "bg-amber-600 hover:bg-amber-500"
+            }`}
+            onClick={() => handleTrade(cMeta.dirB)}
+            disabled={isStakeDisabled}
           >
-            <TrendingDown size={20} />
-            <span className="text-sm font-black">DOWN</span>
+            {contractType === "UP_DOWN" ? <TrendingDown size={20} /> : <span className="text-lg font-black">{cMeta.btnB[0]}</span>}
+            <span className="text-sm font-black">{cMeta.btnB}</span>
             <span className="text-[10px] font-bold opacity-80">
-              {stakeNum > 0 ? `+${potentialProfit.toLocaleString()} STRK` : `${payoutPct}% payout`}
+              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
             </span>
           </Button>
         </div>
@@ -610,17 +731,38 @@ export function Trading() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {activePositions.map((p) => {
-                      const livePrice = currentPrices[p.assetSymbol];
-                      const priceDiff = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
-                      const isWinning: boolean | null = priceDiff !== null
-                        ? (p.direction === "UP" ? priceDiff > 0 : priceDiff < 0)
-                        : null;
-                      const assetPayout    = apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio ?? 1.82;
-                      const liveProfit     = isWinning === true
-                        ? Math.round(p.stakeStriker * (assetPayout - 1))
+                      const livePrice  = currentPrices[p.assetSymbol];
+                      const pCType     = (p.contractType ?? "UP_DOWN") as ContractType;
+                      const pCurrency  = (p.currency ?? "TON");
+                      const priceDiff  = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
+
+                      // Live "winning?" logic varies by contract type
+                      let isWinning: boolean | null = null;
+                      if (livePrice !== undefined) {
+                        if (pCType === "UP_DOWN") {
+                          isWinning = priceDiff !== null ? (p.direction === "UP" ? priceDiff > 0 : priceDiff < 0) : null;
+                        } else if (pCType === "EVEN_ODD") {
+                          const lastDigit = Math.floor(Math.abs(livePrice)) % 10;
+                          const isEven = lastDigit % 2 === 0;
+                          isWinning = p.direction === "EVEN" ? isEven : !isEven;
+                        } else if (pCType === "OVER_UNDER") {
+                          const lastDigit = Math.floor(Math.abs(livePrice)) % 10;
+                          const isOver = lastDigit >= 5;
+                          isWinning = p.direction === "OVER" ? isOver : !isOver;
+                        } else if (pCType === "IN_OUT" && p.lowerBarrier && p.upperBarrier) {
+                          const isIn = livePrice >= p.lowerBarrier && livePrice <= p.upperBarrier;
+                          isWinning = p.direction === "IN" ? isIn : !isIn;
+                        }
+                      }
+
+                      const assetPayout = apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio ?? 1.82;
+                      const liveProfit  = isWinning === true
+                        ? parseFloat((p.stakeStriker * (assetPayout - 1)).toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : isWinning === false
-                        ? -Math.round(p.stakeStriker)
+                        ? -parseFloat(p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : null;
+
+                      const dirColor = ["UP","EVEN","OVER","IN"].includes(p.direction) ? "text-green-400 bg-green-500/15" : "text-red-400 bg-red-500/15";
 
                       return (
                         <motion.div
@@ -633,19 +775,15 @@ export function Trading() {
                             : "border-border"
                           }`}
                         >
-                          {/* Row 1: direction badge + asset + countdown */}
                           <div className="flex items-center justify-between mb-0.5">
                             <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                                p.direction === "UP"
-                                  ? "bg-green-500/15 text-green-400"
-                                  : "bg-red-500/15 text-red-400"
-                              }`}>
-                                {p.direction === "UP" ? "↑ UP" : "↓ DN"}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${dirColor}`}>
+                                {p.direction}
                               </span>
                               <span className="font-bold text-sm">{p.assetSymbol}</span>
+                              <span className="text-[9px] text-muted-foreground/50 font-mono">{pCType.replace("_", "/")}</span>
                               <span className="text-[10px] text-muted-foreground font-mono">
-                                {Math.round(p.stakeStriker).toLocaleString()} STRK
+                                {p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4)} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
@@ -654,14 +792,8 @@ export function Trading() {
                             </div>
                           </div>
 
-                          {/* Progress bar */}
-                          <PositionProgressBar
-                            createdAt={p.createdAt}
-                            expiresAt={p.expiresAt}
-                            isWinning={isWinning}
-                          />
+                          <PositionProgressBar createdAt={p.createdAt} expiresAt={p.expiresAt} isWinning={isWinning} />
 
-                          {/* Row 2: entry → now + live P&L */}
                           <div className="flex items-center gap-1.5 text-[10px]">
                             <span className="text-muted-foreground font-mono">{formatPrice(p.assetSymbol, p.entryPrice)}</span>
                             <span className="text-muted-foreground/40">→</span>
@@ -672,10 +804,15 @@ export function Trading() {
                             </span>
                             {liveProfit !== null && (
                               <span className={`ml-auto text-xs font-black tabular-nums ${liveProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
-                                {liveProfit >= 0 ? `+${liveProfit.toLocaleString()}` : liveProfit.toLocaleString()} STRK
+                                {liveProfit >= 0 ? `+${liveProfit}` : liveProfit} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
                               </span>
                             )}
                           </div>
+
+                          {/* IN/OUT barrier band */}
+                          {pCType === "IN_OUT" && (
+                            <BarrierBand symbol={p.assetSymbol} lowerBarrier={p.lowerBarrier ?? null} upperBarrier={p.upperBarrier ?? null} currentPrice={livePrice} />
+                          )}
                         </motion.div>
                       );
                     })}
@@ -691,11 +828,13 @@ export function Trading() {
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     {history.slice(0, 20).map((p) => {
-                      const netPnl = p.outcome === "win"
-                        ? Math.round(p.winAmount - p.stakeStriker)
+                      const pCurrency = p.currency ?? "TON";
+                      const netPnl    = p.outcome === "win"
+                        ? parseFloat((p.winAmount - p.stakeStriker).toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : p.outcome === "cancelled"
                         ? 0
-                        : -Math.round(p.stakeStriker);
+                        : -parseFloat(p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4));
+                      const ccyLabel = pCurrency === "STRIKER" ? "STRK" : pCurrency;
 
                       return (
                         <div key={p.id} className="bg-card border border-border rounded-xl px-3 py-2 flex items-center justify-between gap-2">
@@ -708,10 +847,12 @@ export function Trading() {
                             <div className="min-w-0">
                               <p className="text-xs font-bold truncate">
                                 {p.assetSymbol}{" "}
-                                <span className={p.direction === "UP" ? "text-green-400" : "text-red-400"}>
-                                  {p.direction === "UP" ? "↑" : "↓"}
+                                <span className={["UP","EVEN","OVER","IN"].includes(p.direction) ? "text-green-400" : "text-red-400"}>
+                                  {p.direction}
                                 </span>
-                                <span className="text-muted-foreground font-normal ml-1">{Math.round(p.stakeStriker).toLocaleString()} staked</span>
+                                <span className="text-muted-foreground font-normal text-[10px] ml-1">
+                                  {(p.contractType ?? "UP_DOWN").replace("_","/")}
+                                </span>
                               </p>
                               <p className="text-[9px] text-muted-foreground font-mono">
                                 {formatPrice(p.assetSymbol, p.entryPrice)} → {formatPrice(p.assetSymbol, p.exitPrice ?? p.entryPrice)}
@@ -723,9 +864,9 @@ export function Trading() {
                             <p className={`text-sm font-black tabular-nums ${
                               netPnl > 0 ? "text-green-400" : netPnl < 0 ? "text-red-400" : "text-yellow-400"
                             }`}>
-                              {netPnl > 0 ? `+${netPnl.toLocaleString()}` : netPnl === 0 ? "±0" : netPnl.toLocaleString()}
+                              {netPnl > 0 ? `+${netPnl}` : netPnl === 0 ? "±0" : netPnl}
                             </p>
-                            <p className="text-[9px] text-muted-foreground">STRK</p>
+                            <p className="text-[9px] text-muted-foreground">{ccyLabel}</p>
                           </div>
                         </div>
                       );

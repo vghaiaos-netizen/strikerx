@@ -11,6 +11,8 @@ export const playersTable = pgTable("players", {
   strikerBalance: real("striker_balance").notNull().default(0),
   bootBalance: real("boot_balance").notNull().default(0),
   captainBalance: real("captain_balance").notNull().default(0),
+  tonBalance: real("ton_balance").notNull().default(0),
+  usdtBalance: real("usdt_balance").notNull().default(0),
   tonWageredLifetime: real("ton_wagered_lifetime").notNull().default(0),
   strikerWageredSinceBonus: real("striker_wagered_since_bonus").notNull().default(0),
   vipTier: text("vip_tier").notNull().default("sunday_league"),
