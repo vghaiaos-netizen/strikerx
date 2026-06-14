@@ -22,9 +22,8 @@ function useDevAuth() {
   const { setToken } = useAuth();
   const telegramAuth = useTelegramAuth();
   const tried = useRef(false);
-  useEffect(() => {
-    if (tried.current) return;
-    tried.current = true;
+
+  const runAuth = () => {
     const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string } } } | undefined;
     const initData = tg?.WebApp?.initData;
     const startParam = tg?.WebApp?.initDataUnsafe?.start_param;
@@ -36,6 +35,19 @@ function useDevAuth() {
     } else if (import.meta.env.DEV) {
       telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
     }
+  };
+
+  useEffect(() => {
+    if (tried.current) return;
+    tried.current = true;
+    runAuth();
+  }, []);
+
+  // Re-auth when WS signals the token is stale/expired
+  useEffect(() => {
+    const handler = () => runAuth();
+    window.addEventListener("strikerx:reauth", handler);
+    return () => window.removeEventListener("strikerx:reauth", handler);
   }, []);
 }
 

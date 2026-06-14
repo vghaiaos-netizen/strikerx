@@ -101,6 +101,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           const msg = String(data.message ?? "");
           if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
             if (authRetryTimer.current) clearTimeout(authRetryTimer.current);
+            // Signal the app to re-authenticate with Telegram
+            window.dispatchEvent(new CustomEvent("strikerx:reauth"));
             const failedToken = localStorage.getItem("strikerx_token");
             let pollCount = 0;
             const waitForFreshToken = () => {
@@ -108,7 +110,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
               const current = localStorage.getItem("strikerx_token");
               if (current && current !== failedToken) {
                 ws.send(JSON.stringify({ type: "auth", token: current }));
-              } else if (pollCount < 60) {
+              } else if (pollCount < 20) {
                 pollCount++;
                 authRetryTimer.current = setTimeout(waitForFreshToken, 500);
               } else {
