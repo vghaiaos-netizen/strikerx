@@ -750,18 +750,14 @@ router.get("/admin/trading/positions", requireAdmin, async (req, res): Promise<v
   const { asset, outcome, limit: limitStr } = req.query as Record<string, string | undefined>;
   const limit = Math.min(parseInt(limitStr ?? "200", 10) || 200, 500);
 
-  let query = db.select().from(tradingPositionsTable).$dynamic();
-
-  if (asset && asset !== "ALL") {
-    query = query.where(eq(tradingPositionsTable.assetSymbol, asset.toUpperCase())) as typeof query;
-  }
-  if (outcome && outcome !== "ALL") {
-    query = query.where(eq(tradingPositionsTable.outcome, outcome)) as typeof query;
-  }
+  const conditions = [];
+  if (asset && asset !== "ALL") conditions.push(eq(tradingPositionsTable.assetSymbol, asset.toUpperCase()));
+  if (outcome && outcome !== "ALL") conditions.push(eq(tradingPositionsTable.outcome, outcome));
 
   const positions = await db
     .select()
     .from(tradingPositionsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(tradingPositionsTable.createdAt))
     .limit(limit);
 
@@ -772,22 +768,35 @@ router.get("/admin/trading/positions", requireAdmin, async (req, res): Promise<v
 router.get("/admin/trading/stats", requireAdmin, async (_req, res): Promise<void> => {
   const [row] = await db.execute(sql`
     SELECT
-      COUNT(*)::int                                   AS "totalPositions",
-      COUNT(*) FILTER (WHERE outcome = 'pending')::int AS "openPositions",
-      COALESCE(SUM(stake_striker), 0)::float          AS "totalVolume",
-      COALESCE(SUM(win_amount), 0)::float             AS "totalWinAmount",
-      COALESCE(SUM(stake_striker) - SUM(win_amount) FILTER (WHERE outcome = 'win'), SUM(stake_striker))::float AS "houseProfit",
-      CASE WHEN COUNT(*) FILTER (WHERE outcome IN ('win','loss')) > 0
-        THEN (COUNT(*) FILTER (WHERE outcome = 'win')::float / COUNT(*) FILTER (WHERE outcome IN ('win','loss'))::float * 100)
+      COUNT(*)::bigint                                        AS "totalPositions",
+      COUNT(*) FILTER (WHERE outcome = 'pending')::bigint     AS "openPositions",
+      COALESCE(SUM(stake_striker), 0)::double precision       AS "totalVolume",
+      COALESCE(SUM(win_amount), 0)::double precision          AS "totalWinAmount",
+      COALESCE(
+        SUM(stake_striker) - COALESCE(SUM(win_amount) FILTER (WHERE outcome = 'win'), 0),
+        0
+      )::double precision                                     AS "houseProfit",
+      CASE
+        WHEN COUNT(*) FILTER (WHERE outcome IN ('win','loss')) > 0
+        THEN ROUND(
+          (COUNT(*) FILTER (WHERE outcome = 'win'))::numeric
+          / (COUNT(*) FILTER (WHERE outcome IN ('win','loss')))::numeric * 100,
+          1
+        )
         ELSE 0
       END AS "winRate"
     FROM trading_positions
-  `) as unknown as Array<{
-    totalPositions: number; openPositions: number; totalVolume: number;
-    totalWinAmount: number; houseProfit: number; winRate: number;
-  }>;
+  `) as unknown as Array<Record<string, unknown>>;
 
-  res.json(row ?? { totalPositions: 0, openPositions: 0, totalVolume: 0, totalWinAmount: 0, houseProfit: 0, winRate: 0 });
+  const safeNum = (v: unknown) => v === null || v === undefined ? 0 : Number(v);
+  res.json({
+    totalPositions: safeNum(row?.totalPositions),
+    openPositions:  safeNum(row?.openPositions),
+    totalVolume:    safeNum(row?.totalVolume),
+    totalWinAmount: safeNum(row?.totalWinAmount),
+    houseProfit:    safeNum(row?.houseProfit),
+    winRate:        safeNum(row?.winRate),
+  });
 });
 
 // ── Admin: Trading assets management ─────────────────────────────────────────

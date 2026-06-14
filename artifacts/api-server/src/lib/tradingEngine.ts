@@ -151,8 +151,10 @@ export async function openPosition(params: {
 > {
   const { playerId, assetSymbol, direction, stakeStriker, contractDurationSecs } = params;
 
+  // Default to enabled: if the config key is missing (e.g. first boot before migration),
+  // treat as enabled rather than silently blocking all trades.
   const tradingEnabled = await getConfig("trading_enabled");
-  if (tradingEnabled !== "true") return { success: false, error: "Trading is currently disabled" };
+  if (tradingEnabled === "false") return { success: false, error: "Trading is currently disabled" };
 
   // Validate asset is enabled
   const [asset] = await db
