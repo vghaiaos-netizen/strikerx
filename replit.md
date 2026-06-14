@@ -1,8 +1,8 @@
 # StrikerX
 
-A Telegram Mini App combining **binary crypto prediction trading** (BTC/ETH/SOL/BNB/TON vs Binance live prices) with **The Shot** crash game. Players trade with STRIKER tokens using fixed odds (1.82×), deposit/withdraw via CryptoBot, and refer friends for lifetime commission. Dual Telegram bot architecture, private admin dashboard, real-time WebSocket price feed.
+A **binary prediction trading terminal** inside Telegram, styled around football/World Cup. Primary product: fixed-odds UP/DOWN contracts on crypto, forex, and commodities (1.82× payout). Secondary: four casino games (Shot, Penalty, Minefield, Free Kick) as retention tools. Players trade with STRIKER tokens, practice with demo USDT, deposit/withdraw via CryptoBot, and refer friends for lifetime commission. Dual Telegram bot architecture, private admin dashboard, real-time WebSocket price feed.
 
-> **Active refactor in progress — see `docs/refactor-plan.md` for Phase 2 agent tasks.**
+> **Trading system complete — see `docs/refactor-plan.md` and `docs/AGENT_HANDOFF.md` for current state.**
 > **Railway DB connection string: `docs/railway-db.md`**
 
 ## User preferences
@@ -62,7 +62,7 @@ The Railway URL (`*.up.railway.app`) is permanent. BotFather and CryptoBot webho
 | `ADMIN_PASSWORD` | SET | Not "admin123" — strong value confirmed |
 | `GAMEBOT_TOKEN` | SET | @StrykkerXBot — GameBot (player DMs, /start, /balance) |
 | `GROUPBOT_TOKEN` | SET | GroupBot (community channel broadcasts) |
-| `CRYPTOBOT_API_TOKEN` | SET | Verified working — app_id=592023, name="StrikerX" |
+| `CRYPTOBOT_TOKEN` | SET | Verified working — app_id=592023, name="StrikerX" (key is CRYPTOBOT_TOKEN, NOT CRYPTOBOT_API_TOKEN) |
 | `DATABASE_URL` | SET | Replit-managed PostgreSQL (dev only) |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | SET | Used by `node scripts/github-push.mjs` |
 
@@ -213,24 +213,33 @@ scripts/github-push.mjs          — GitHub file push script (use instead of git
 
 ---
 
-## Database schema (key tables)
+## Database schema (23 tables)
 
 | Table | Purpose |
 |---|---|
-| `players` | All player data — balances, VIP tier, KYC status, streak, referral/affiliate codes |
-| `games` | Completed game records — gameType, betStriker, winAmount, outcome, multiplier |
+| `players` | All player data — striker/boot/captain/ton/usdt/demo_usdt balances, VIP tier, KYC status, streak, referral/affiliate codes, trading_win_streak |
+| `games` | Completed game records — gameType, betStriker, winAmount, outcome, multiplier, affiliate_commission_paid |
 | `transactions` | All financial movements — deposit, withdrawal, bet, win, cashback, referral, jackpot |
 | `crash_rounds` | One row per Shot round — serverSeed, crashPoint, status, startedAt, endedAt |
 | `minefield_sessions` | Active/completed Minefield sessions — minePositions, revealedPositions, currentMultiplier |
 | `jackpot` | Single-row jackpot pool — currentAmountTon, status, lastWinnerId, lastTriggeredAt |
 | `withdrawals` | Withdrawal requests — amountTon, status (pending/under_review/approved/rejected) |
 | `tournaments` | Tournament records — startAt, endAt, prizePool, status |
-| `kyc_submissions` | KYC submissions — playerId, fullName, country, docType, status |
+| `tournament_entries` | Tournament participation records |
+| `kyc_verifications` | KYC submissions — playerId, fullName, country, docType, status (table name is `kyc_verifications` NOT `kyc_submissions`) |
 | `affiliates` | Affiliate/influencer records — code, ownerId, commissionRate, totalEarned, totalReferred |
 | `audit_log` | Admin action history — adminAction, targetPlayerId, oldValue, newValue, performedBy |
 | `app_config` | DB-backed key/value config store — key, value, updatedAt |
-| `achievements` | Achievement definitions — key, title, description, rarity, condition |
-| `player_achievements` | Junction: which player unlocked which achievement |
+| `player_achievements` | Junction: which player unlocked which achievement key (no separate definitions table — they live in achievementsService.ts) |
+| `referrals` | 2-tier referral tracking |
+| `vip_cashback` | VIP cashback payment records |
+| `trading_assets` | Enabled trading assets — symbol, displayName, binanceSymbol, payoutRatio, stake limits (STRIKER + TON) |
+| `trading_positions` | Real-money trade records — entry/exit price, outcome, contract type, barriers |
+| `demo_positions` | Demo trade records — uses demoUsdtBalance, same settlement logic, no real money |
+| `daily_missions` | Daily mission tracking per player |
+| `outreach_groups` | Telegram groups for outreach service |
+| `outreach_posts` | Post history for outreach service |
+| `outreach_templates` | Message templates for outreach service |
 
 ---
 
@@ -307,6 +316,9 @@ Login at `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD` e
 | `/admin/broadcast` | Send mass Telegram message to all players |
 | `/admin/config` | Edit live DB config values |
 | `/admin/audit-log` | Full admin action history |
+| `/admin/trading` | Trading positions + aggregate stats |
+| `/admin/trading-assets` | Asset toggle/payout ratio management |
+| `/admin/outreach` | Outreach service management |
 
 ---
 
@@ -323,7 +335,7 @@ Login at `POST /api/auth/admin/login` with `ADMIN_USERNAME` / `ADMIN_PASSWORD` e
 
 1. Player visits Profile page → sees KYC status section.
 2. If status is `none` or `rejected`, they fill fullName / country / docType and submit.
-3. `POST /api/players/me/kyc` creates a `kyc_submissions` record with status `pending`.
+3. `POST /api/players/me/kyc` creates a `kyc_verifications` record with status `pending`.
 4. Admin reviews at `/admin/kyc` → can approve (sets player.kycStatus = "verified") or reject.
 5. Player KYC status is returned in the auth response (`/api/auth/telegram`) and `/api/players/me`.
 
