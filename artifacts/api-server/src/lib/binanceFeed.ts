@@ -29,34 +29,69 @@ let broadcastFn: ((symbol: string, price: number) => void) | null = null;
 let restTimer: NodeJS.Timeout | null = null;
 let wsConnected = false;
 
-/** REST fallback — polls Binance HTTP API every 4s when WebSocket is blocked */
+// CoinGecko → Binance symbol mapping
+const COINGECKO_IDS: Record<string, string> = {
+  BTC: "bitcoin", ETH: "ethereum", SOL: "solana", BNB: "binancecoin", TON: "the-open-network",
+};
+
+async function pollCoinGecko() {
+  try {
+    const ids = Object.values(COINGECKO_IDS).join(",");
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
+    const r   = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!r.ok) return;
+    const data = await r.json() as Record<string, { usd: number; usd_24h_change?: number }>;
+    let updated = 0;
+    for (const [base, geckoId] of Object.entries(COINGECKO_IDS)) {
+      const entry = data[geckoId];
+      if (!entry?.usd || entry.usd <= 0) continue;
+      priceCache.set(base, entry.usd);
+      if (entry.usd_24h_change != null && !isNaN(entry.usd_24h_change)) {
+        changeCache.set(base, entry.usd_24h_change);
+      }
+      broadcastFn?.(base, entry.usd);
+      updated++;
+    }
+    if (updated > 0) logger.debug({ updated }, "Crypto prices updated (CoinGecko)");
+  } catch (err) {
+    logger.warn({ err }, "CoinGecko price poll failed");
+  }
+}
+
+/** REST fallback — tries Binance REST first, falls back to CoinGecko when blocked */
 async function pollBinanceRest() {
+  let binanceOk = false;
   try {
     const syms = JSON.stringify(CRYPTO_REST_SYMBOLS);
-    const r = await fetch(
+    const r    = await fetch(
       `https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(syms)}`,
       { signal: AbortSignal.timeout(5_000) },
     );
-    if (!r.ok) return;
-    const data = await r.json() as Array<{ symbol: string; lastPrice: string; priceChangePercent: string }>;
-    for (const { symbol, lastPrice, priceChangePercent } of data) {
-      const base  = symbol.replace(/USDT$/, "").toUpperCase();
-      const price = parseFloat(lastPrice);
-      const pct   = parseFloat(priceChangePercent);
-      if (isNaN(price) || price <= 0) continue;
-      priceCache.set(base, price);
-      if (!isNaN(pct)) changeCache.set(base, pct);
-      broadcastFn?.(base, price);
+    if (r.ok) {
+      const data = await r.json() as Array<{ symbol: string; lastPrice: string; priceChangePercent: string }>;
+      for (const { symbol, lastPrice, priceChangePercent } of data) {
+        const base  = symbol.replace(/USDT$/, "").toUpperCase();
+        const price = parseFloat(lastPrice);
+        const pct   = parseFloat(priceChangePercent);
+        if (isNaN(price) || price <= 0) continue;
+        priceCache.set(base, price);
+        if (!isNaN(pct)) changeCache.set(base, pct);
+        broadcastFn?.(base, price);
+        binanceOk = true;
+      }
     }
-  } catch { /* non-fatal — WebSocket may be providing data */ }
+  } catch { /* fall through to CoinGecko */ }
+
+  // If Binance REST is also blocked, use CoinGecko
+  if (!binanceOk) await pollCoinGecko();
 }
 
 function startRestFallback() {
   if (restTimer) return;
-  // Poll immediately, then every 4 seconds
   void pollBinanceRest();
-  restTimer = setInterval(pollBinanceRest, 4_000);
-  logger.info("Binance REST price feed started (WebSocket unavailable)");
+  // Crypto updates every 5s via Binance REST or CoinGecko
+  restTimer = setInterval(pollBinanceRest, 5_000);
+  logger.info("Binance price REST fallback started (will use CoinGecko if Binance is blocked)");
 }
 
 function connect() {

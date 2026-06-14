@@ -266,7 +266,14 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   const VALID_INTERVALS = ["1m", "5m", "15m", "30m", "1h"];
   if (!VALID_INTERVALS.includes(interval)) { res.status(400).json({ error: "invalid interval" }); return; }
 
-  // ── Crypto: Binance REST ─────────────────────────────────────────────────
+  // Realistic seed prices for synthetic fallback (used when all live sources fail)
+  const SEED_PRICES: Record<string, number> = {
+    BTC: 107000, ETH: 2600, SOL: 175, BNB: 640, TON: 3.2,
+    EURUSD: 1.085, GBPUSD: 1.27, USDJPY: 155, AUDUSD: 0.65, USDCHF: 0.90,
+    XAUUSD: 2380, XAGUSD: 29.5, USOIL: 79, NATGAS: 2.2, COPPER: 4.5,
+  };
+
+  // ── Crypto: Binance REST → synthetic fallback ────────────────────────────
   const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON"];
   if (CRYPTO.includes(symbol)) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
@@ -285,12 +292,12 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
       if (candles.length > 0) { res.json({ candles }); return; }
     } catch { /* fall through to synthetic */ }
 
-    // Synthetic fallback for crypto
-    const currentPrice = getPrice(symbol);
+    // Use live price if available, else seed price — always return synthetic candles
+    const currentPrice = getPrice(symbol) ?? SEED_PRICES[symbol] ?? null;
     const fallback = currentPrice
       ? generateSyntheticCandles(symbol, currentPrice, interval, limit)
       : [];
-    res.json({ candles: fallback });
+    res.json({ candles: fallback, synthetic: true });
     return;
   }
 
@@ -345,12 +352,25 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
         )
         .slice(-limit) as { time: number; open: number; high: number; low: number; close: number; volume: number }[];
 
-      if (candles.length > 0) { res.json({ candles }); return; }
+      if (candles.length > 0) {
+        // Detect flat candles (e.g. forex market closed on weekends — all OHLC identical)
+        // Switch to synthetic so the chart has realistic movement
+        const hasVariance = candles.some((c) => c.high > c.low || c.open !== c.close);
+        if (!hasVariance) {
+          const basePrice = candles[candles.length - 1]?.close ?? (getPrice(symbol) ?? SEED_PRICES[symbol] ?? null);
+          if (basePrice) {
+            res.json({ candles: generateSyntheticCandles(symbol, basePrice, interval, limit), synthetic: true });
+            return;
+          }
+        }
+        res.json({ candles });
+        return;
+      }
     } catch { /* try next range */ }
   }
 
   // Synthetic fallback for forex/commodities when Yahoo is unreachable
-  const currentPrice = getPrice(symbol);
+  const currentPrice = getPrice(symbol) ?? SEED_PRICES[symbol] ?? null;
   const fallback = currentPrice
     ? generateSyntheticCandles(symbol, currentPrice, interval, limit)
     : [];
