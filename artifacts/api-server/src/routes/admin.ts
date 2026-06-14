@@ -816,7 +816,7 @@ router.patch("/admin/trading/assets/:symbol", requireAdmin, async (req, res): Pr
       ...(minStakeStriker !== undefined && { minStakeStriker: parseFloat(String(minStakeStriker)) }),
       ...(maxStakeStriker !== undefined && { maxStakeStriker: parseFloat(String(maxStakeStriker)) }),
     })
-    .where(eq(tradingAssetsTable.symbol, symbol.toUpperCase()));
+    .where(eq(tradingAssetsTable.symbol, String(symbol).toUpperCase()));
 
   res.json({ ok: true });
 });

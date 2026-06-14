@@ -149,7 +149,7 @@ router.get("/trading/positions", requireAuth, async (req, res): Promise<void> =>
 
 // ── GET /api/trading/positions/:id ──────────────────────────────────────────
 router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void> => {
-  const positionId = parseInt(req.params.id, 10);
+  const positionId = parseInt(String(req.params.id), 10);
   if (isNaN(positionId)) { res.status(400).json({ error: "Invalid position ID" }); return; }
 
   try {
