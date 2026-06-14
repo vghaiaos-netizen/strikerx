@@ -4,153 +4,144 @@
 
 ---
 
-## What we're building
+## Current state (as of 2026-06-14) — Phase 2 COMPLETE
 
-StrikerX is pivoting from a pure football casino to a **crypto prediction trading platform + crash game**. Players predict whether BTC, ETH, SOL, BNB, or TON will be UP or DOWN at expiry. The Shot (crash game) stays exactly as-is.
+All backend and frontend work for binary prediction trading is shipped to Railway production.
 
-This is NOT a real exchange. It uses Binance public WebSocket prices for settlement but players trade against the house at fixed odds — no order book, no custody of actual crypto. Players deposit TON/USDT via CryptoBot into their STRIKER wallet and trade with that balance.
+### What is done
 
----
+**Backend:**
+- [x] `lib/db/src/schema/trading.ts` — `trading_assets` and `trading_positions` tables
+- [x] `artifacts/api-server/src/lib/binanceFeed.ts` — Binance WebSocket price feed (BTC/ETH/SOL/BNB/TON); geo-blocked on Replit dev (451 error, harmless — works on Railway)
+- [x] `artifacts/api-server/src/lib/tradingEngine.ts` — fixed-odds engine: open position, 1s settlement scheduler, affiliate commission, big-win broadcast
+- [x] `artifacts/api-server/src/routes/trading.ts` — REST endpoints with try/catch on every handler:
+  - `GET /api/trading/assets` — list enabled assets + prices (no auth)
+  - `GET /api/trading/prices` — current Binance price snapshot (no auth)
+  - `POST /api/trading/positions` — open a position (auth required)
+  - `GET /api/trading/positions/active` — open positions for player (auth) — MUST be declared before `/:id`
+  - `GET /api/trading/positions` — history for player (auth)
+  - `GET /api/trading/positions/:id` — single position (auth)
+- [x] `artifacts/api-server/src/routes/admin.ts` — admin trading endpoints:
+  - `GET /api/admin/trading/positions` — all positions with asset/outcome filters (filters actually applied)
+  - `GET /api/admin/trading/stats` — aggregate stats (NULL-safe SQL)
+  - `GET /api/admin/trading/assets` — list all assets
+  - `PATCH /api/admin/trading/assets/:symbol` — toggle enabled, update ratios
+- [x] `artifacts/api-server/src/index.ts` — DB migrations for trading tables auto-run on every server start
+- [x] `artifacts/api-server/src/app.ts` — `/api/trading` rate limiter (60 req/min)
 
-## What's already done (Phase 1 — complete)
+**Frontend:**
+- [x] `artifacts/strikerx/src/pages/games/trading.tsx` — full trading page (auth-gated polling, price display, UP/DOWN buttons, active positions with countdown, history)
+- [x] `artifacts/strikerx/src/pages/admin/trading.tsx` — admin trading dashboard (stats, positions table with filters)
+- [x] `artifacts/strikerx/src/components/layout.tsx` — Trade tab added to bottom nav (2nd position)
+- [x] `artifacts/strikerx/src/components/admin-layout.tsx` — Trading link added to admin sidebar
+- [x] `artifacts/strikerx/src/App.tsx` — `/games/trading` and `/admin/trading` routes added
 
-- [x] `lib/db/src/schema/trading.ts` — `trading_assets` and `trading_positions` tables defined
-- [x] `artifacts/api-server/src/lib/binanceFeed.ts` — Binance WebSocket price feed (BTC/ETH/SOL/BNB/TON)
-- [x] `artifacts/api-server/src/lib/tradingEngine.ts` — fixed-odds engine: open position, 1s settlement scheduler, affiliate commission
-- [x] `artifacts/api-server/src/routes/trading.ts` — REST endpoints: assets, prices, open position, list positions
-- [x] `artifacts/api-server/src/routes/index.ts` — trading router mounted
-- [x] `artifacts/api-server/src/index.ts` — Binance feed + settlement scheduler started on server init
-- [x] `artifacts/api-server/src/app.ts` — `/api/trading` rate limiter added
-- [x] DB migrations auto-run in `index.ts` startup (trading_assets seeded with 5 assets)
-- [x] OpenAPI spec updated with trading endpoints + codegen run
-
----
-
-## Phase 2 tasks (for parallel agents)
-
-### Agent A — Backend: Admin trading management
-
-**Files to touch:**
-- `artifacts/api-server/src/routes/admin.ts` — add trading admin endpoints
-- `lib/api-spec/openapi.yaml` — add admin trading endpoints (then run codegen)
-
-**Endpoints to add:**
-```
-GET  /admin/trading/positions        — all positions with filters (asset, outcome, playerId)
-GET  /admin/trading/assets           — list all assets (including disabled)
-PUT  /admin/trading/assets/:symbol   — enable/disable asset, update payoutRatio / min/max stake
-GET  /admin/trading/stats            — aggregate: total volume, win rate, house profit
-```
-
-**Notes:**
-- Use existing `requireAdmin` middleware from `lib/auth.ts`
-- Use `tradingAssetsTable`, `tradingPositionsTable` from `@workspace/db`
-- After editing openapi.yaml, run: `pnpm --filter @workspace/api-spec run codegen`
+**Codegen:**
+- [x] `lib/api-spec/openapi.yaml` — trading endpoints added
+- [x] `lib/api-client-react/src/generated/api.ts` — hooks generated: `useGetTradingAssets`, `useGetTradingPrices`, `useGetTradingPositionsActive`, `useGetTradingPositions`, `usePostTradingPositions`
 
 ---
 
-### Agent B — Frontend: Trading game UI
+## Bugs fixed (important for next agent to know)
 
-**Files to create:**
-- `artifacts/strikerx/src/pages/games/trading.tsx` — main trading page
-- `artifacts/strikerx/src/components/TradingChart.tsx` — live candlestick/price chart
-- `artifacts/strikerx/src/components/ActivePositions.tsx` — live position tracker
+### 1. Admin positions filter was dead code
+**Old code:** Built a `$dynamic()` query then ran a completely separate unfiltered `db.select()` and ignored the dynamic query entirely.
+**Fix:** Use `and(...conditions)` pattern directly on the single query.
 
-**Page: `/games/trading`**
+### 2. Trading routes had no try/catch
+**Symptom:** Express 5 passed unhandled async throws to the global error handler → Railway logs showed "Unhandled error" + "request errored" on every API call.
+**Fix:** Wrapped every route handler body in `try/catch` with a logged `res.status(500).json(...)` fallback.
 
-The trading page must:
-1. Show a horizontal asset selector (BTC | ETH | SOL | BNB | TON) — switches the active asset
-2. Show a live price display with direction indicator (big number, green/red)
-3. Show contract duration selector — tabs: 30s | 1m | 5m | 15m (durations from `trading_available_durations` config)
-4. Show UP and DOWN buttons with the payout ratio (e.g. "UP × 1.82")
-5. Show a stake input (STRIKER amount, validated against min/max)
-6. Show the player's active open positions below the chart (live countdown to expiry)
-7. Show recent settled positions (win/loss/cancelled) with price delta shown
+### 3. trading_enabled defaulted to disabled
+**Old logic:** `if (tradingEnabled !== "true") return disabled` — if the config key was missing (first boot before migration completes), this blocks ALL position opens.
+**Fix:** `if (tradingEnabled === "false") return disabled` — only explicitly disabled blocks trades; missing key = enabled.
 
-**WebSocket events to handle:**
-- `price_update` — `{ symbol, price, at }` — update the live price display
-- `trade_settled` — `{ positionId, outcome, exitPrice, winAmount }` — animate win/loss result, update balance
+### 4. Auth-gated endpoints polled before JWT available
+**Symptom:** `useGetTradingPositionsActive` and `useGetTradingPositions` fired requests before player auth completed, generating 401 errors.
+**Fix:** Added `enabled: isAuthed` to both query hooks. Public endpoints (prices, assets) still poll immediately.
 
-**API hooks to use** (already generated via codegen):
-- `useGetTradingAssets()` — list assets with current prices
-- `useGetTradingPositions()` — player's trade history
-- `useGetTradingPositionsActive()` — open positions
-- `usePostTradingPositions()` — open a new position
-
-**Design:**
-- Dark mode (deep navy background) with green for UP, red for DOWN
-- The active price number should be large and prominent (like a trading terminal)
-- No emojis — use lucide-react icons (TrendingUp, TrendingDown, Clock, DollarSign)
-- Match the existing shadcn/ui component style already used throughout the app
-
-**Navigation:** Add "Trade" to the bottom navigation bar in `artifacts/strikerx/src/components/Layout.tsx`
+### 5. Admin stats SQL was not NULL-safe
+**Old COALESCE:** `SUM(stake_striker) - SUM(win_amount) FILTER (WHERE outcome = 'win')` — outer COALESCE still returned NULL when table was empty.
+**Fix:** Used nested `COALESCE(SUM(...), 0)` and `::double precision` casts; added `safeNum()` helper for JS-side safety.
 
 ---
 
-### Agent C — Frontend: Admin trading dashboard pages
-
-**Files to create:**
-- `artifacts/strikerx/src/pages/admin/trading.tsx` — trading overview (volume, win rate, positions table)
-- `artifacts/strikerx/src/pages/admin/trading-assets.tsx` — asset management (toggle enabled, edit payout ratio)
-
-**Navigation:** Add both pages to `artifacts/strikerx/src/pages/admin/layout.tsx` (or wherever admin sidebar links live)
-
----
-
-## Architecture decisions (do not change these)
+## Architecture decisions (do not change)
 
 | Decision | Rationale |
 |---|---|
-| Fixed odds (1.82x) not pool-based | Simpler to build, controlled house edge, predictable for players |
+| Fixed odds (1.82×) not pool-based | Simpler, controlled house edge, predictable for players |
 | Binance public WebSocket, no API key | Free, reliable, zero marginal cost, verifiable by players |
-| Settlement on 1s interval in `tradingEngine.ts` | Simple and reliable — no queue or worker needed at current scale |
-| `trading_positions.outcome = "cancelled"` on exact same price | Edge case protection — refund is fairer than arbitrary win/loss |
-| Payout ratio stored per-position at open time | Prevents in-flight positions being affected by admin ratio changes |
-| Logging in gamesTable with `gameType = "trading"` | Keeps existing VIP tier wager tracking and analytics working without changes |
-| No early close (cashout) for binary trades | Adds complexity; binary is designed to be held to expiry |
+| Settlement on 1s interval | Simple and reliable at current scale |
+| `outcome = "cancelled"` on exact same price | Refund is fairer than arbitrary win/loss on push |
+| Payout ratio stored per-position at open time | Admin ratio changes don't affect in-flight positions |
+| `gameType = "trading"` in gamesTable | Keeps VIP tier wager tracking and analytics working |
+| `/positions/active` route declared BEFORE `/:id` | Express route ordering — "active" would match as an id param otherwise |
+| `trading_enabled = "false"` disables trading | Missing key = enabled (safe default), explicit "false" = disabled |
 
 ---
 
 ## What NOT to do
 
-- Do NOT call `setWebhook` from any new code — webhook registration is centralised in `app.ts`
+- Do NOT call `setWebhook` from any new code — centralised in `app.ts`
 - Do NOT use `console.log` — use `logger` (from `lib/logger.ts`) or `req.log` in routes
 - Do NOT edit generated files in `lib/api-client-react/src/generated/` or `lib/api-zod/src/generated/`
-- Do NOT run `pnpm --filter @workspace/db run push` against Railway — use the migration pattern in `index.ts` instead
-- Do NOT add real exchange integration or custody of actual crypto assets
-- After any server-side change: rebuild with `pnpm --filter @workspace/api-server run build`, then push with `node scripts/github-push.mjs`
-- After editing `openapi.yaml`: run `pnpm --filter @workspace/api-spec run codegen` before frontend work
+- Do NOT run `pnpm --filter @workspace/db run push` against Railway — use the migration pattern in `index.ts`
+- Do NOT import `zod` directly in `api-server` — it's not a direct dep and esbuild can't resolve it
+- After any server change: rebuild with `pnpm --filter @workspace/api-server run build`, then push
 
 ---
 
 ## Key file locations
 
 ```
-Server (trading-specific):
-  artifacts/api-server/src/lib/binanceFeed.ts     — Binance WS price feed
-  artifacts/api-server/src/lib/tradingEngine.ts   — open position + settlement scheduler
-  artifacts/api-server/src/routes/trading.ts      — REST API routes
+Server (trading):
+  artifacts/api-server/src/lib/binanceFeed.ts     — Binance WS feed (geo-blocked on Replit dev, works on Railway)
+  artifacts/api-server/src/lib/tradingEngine.ts   — openPosition(), startTradingSettlementScheduler()
+  artifacts/api-server/src/routes/trading.ts      — player-facing trading REST endpoints
+  artifacts/api-server/src/routes/admin.ts        — admin trading endpoints (bottom of file, before export default)
 
-DB:
-  lib/db/src/schema/trading.ts                    — trading_assets + trading_positions tables
+DB schema:
+  lib/db/src/schema/trading.ts                    — trading_assets + trading_positions
   lib/db/src/schema/index.ts                      — re-exports trading schema
 
-Frontend (to be built in Phase 2):
-  artifacts/strikerx/src/pages/games/trading.tsx  — main trading page (create this)
-  artifacts/strikerx/src/components/Layout.tsx    — add "Trade" nav link here
+Frontend:
+  artifacts/strikerx/src/pages/games/trading.tsx  — main trading page
+  artifacts/strikerx/src/pages/admin/trading.tsx  — admin trading dashboard
+  artifacts/strikerx/src/components/layout.tsx    — bottom nav (Trade is 2nd tab)
+  artifacts/strikerx/src/components/admin-layout.tsx — admin sidebar
 
-Spec + codegen:
+Codegen:
   lib/api-spec/openapi.yaml                       — OpenAPI spec (source of truth)
-  lib/api-client-react/src/generated/api.ts       — generated hooks (do NOT edit directly)
+  lib/api-client-react/src/generated/api.ts       — generated hooks (do NOT edit)
 ```
 
 ---
 
-## Dev auth bypass
+## DB config keys (seeded by migration on first boot)
 
-`POST /api/auth/telegram` with `{ "initData": "dev:123456:player_dev" }` only works in `NODE_ENV=development`.
+| Key | Default | Purpose |
+|---|---|---|
+| `trading_enabled` | `"true"` | `"false"` to disable all trading |
+| `trading_available_durations` | `"30,60,300,900"` | Comma-separated seconds |
+| `trading_default_duration` | `"60"` | Default contract duration |
+| `trading_global_payout_ratio` | `"1.82"` | Win multiplier |
+| `trading_min_stake` | `"10"` | Min STRIKER per trade |
+| `trading_max_stake` | `"10000"` | Max STRIKER per trade |
+| `trading_big_win_threshold` | `"1000"` | Min STRIKER win to broadcast |
 
-For the trading UI: open `/games/trading` in the Replit preview (port 5000), auth will auto-run via home.tsx, then you can open trade positions.
+Edit these at `/admin/config` in the admin dashboard, or directly via `configService.setConfig()`.
+
+---
+
+## WebSocket events (trading-specific)
+
+| Event | Direction | Payload |
+|---|---|---|
+| `price_update` | Server → Client | `{ symbol, price, at }` |
+| `trade_settled` | Server → Client (player only) | `{ positionId, assetSymbol, direction, outcome, entryPrice, exitPrice, winAmount, stakeStriker, creditAmount }` |
+
+---
 
 ## After any change
 
@@ -159,10 +150,19 @@ For the trading UI: open `/games/trading` in the Replit preview (port 5000), aut
 pnpm --filter @workspace/api-server run build
 node scripts/github-push.mjs
 
-# Frontend change: Vite HMR handles it. Just push when done:
+# Frontend change (Vite HMR in dev — just push when done):
 node scripts/github-push.mjs
 
 # OpenAPI spec change:
 pnpm --filter @workspace/api-spec run codegen
 # then push
 ```
+
+---
+
+## Potential future improvements
+
+- Add a `trade_settled` WebSocket handler in the frontend to animate win/loss without waiting for the poll interval
+- Add a `TradingChart` component with candlestick or line chart (needs a historical price endpoint)
+- Asset management UI at `/admin/trading/assets` (the backend PATCH endpoint exists, needs a frontend page)
+- Expose `trading_available_durations` config to the trading page (currently hardcoded in frontend as `[30, 60, 300, 900]`)
