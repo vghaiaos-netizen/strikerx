@@ -305,6 +305,12 @@ server.listen(port, async () => {
       name: "demo_positions.expires_at_idx",
       sql: `CREATE INDEX IF NOT EXISTS demo_positions_expires_at_idx ON demo_positions (expires_at)`,
     },
+    {
+      name: "demo_positions.barriers",
+      sql: `ALTER TABLE demo_positions
+              ADD COLUMN IF NOT EXISTS lower_barrier REAL,
+              ADD COLUMN IF NOT EXISTS upper_barrier REAL`,
+    },
   ];
 
   for (const { name, sql } of migrations) {
