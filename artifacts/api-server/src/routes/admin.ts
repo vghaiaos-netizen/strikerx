@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, playersTable, gamesTable, withdrawalsTable, transactionsTable, jackpotTable, tournamentsTable, auditLogTable, appConfigTable } from "@workspace/db";
+import { db, playersTable, gamesTable, withdrawalsTable, transactionsTable, jackpotTable, tournamentsTable, auditLogTable, appConfigTable, tradingPositionsTable, tradingAssetsTable } from "@workspace/db";
 import { eq, desc, ilike, and, sql, gte, lt } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth";
 import { broadcastMessage } from "../lib/groupBot";
@@ -743,6 +743,73 @@ router.get("/admin/analytics/export", requireAdmin, async (req, res): Promise<vo
     logger.error({ err }, "Analytics export failed");
     res.status(500).json({ error: "Export failed" });
   }
+});
+
+// ── Admin: Trading positions ─────────────────────────────────────────────────
+router.get("/admin/trading/positions", requireAdmin, async (req, res): Promise<void> => {
+  const { asset, outcome, limit: limitStr } = req.query as Record<string, string | undefined>;
+  const limit = Math.min(parseInt(limitStr ?? "200", 10) || 200, 500);
+
+  let query = db.select().from(tradingPositionsTable).$dynamic();
+
+  if (asset && asset !== "ALL") {
+    query = query.where(eq(tradingPositionsTable.assetSymbol, asset.toUpperCase())) as typeof query;
+  }
+  if (outcome && outcome !== "ALL") {
+    query = query.where(eq(tradingPositionsTable.outcome, outcome)) as typeof query;
+  }
+
+  const positions = await db
+    .select()
+    .from(tradingPositionsTable)
+    .orderBy(desc(tradingPositionsTable.createdAt))
+    .limit(limit);
+
+  res.json({ positions });
+});
+
+// ── Admin: Trading stats ─────────────────────────────────────────────────────
+router.get("/admin/trading/stats", requireAdmin, async (_req, res): Promise<void> => {
+  const [row] = await db.execute(sql`
+    SELECT
+      COUNT(*)::int                                   AS "totalPositions",
+      COUNT(*) FILTER (WHERE outcome = 'pending')::int AS "openPositions",
+      COALESCE(SUM(stake_striker), 0)::float          AS "totalVolume",
+      COALESCE(SUM(win_amount), 0)::float             AS "totalWinAmount",
+      COALESCE(SUM(stake_striker) - SUM(win_amount) FILTER (WHERE outcome = 'win'), SUM(stake_striker))::float AS "houseProfit",
+      CASE WHEN COUNT(*) FILTER (WHERE outcome IN ('win','loss')) > 0
+        THEN (COUNT(*) FILTER (WHERE outcome = 'win')::float / COUNT(*) FILTER (WHERE outcome IN ('win','loss'))::float * 100)
+        ELSE 0
+      END AS "winRate"
+    FROM trading_positions
+  `) as unknown as Array<{
+    totalPositions: number; openPositions: number; totalVolume: number;
+    totalWinAmount: number; houseProfit: number; winRate: number;
+  }>;
+
+  res.json(row ?? { totalPositions: 0, openPositions: 0, totalVolume: 0, totalWinAmount: 0, houseProfit: 0, winRate: 0 });
+});
+
+// ── Admin: Trading assets management ─────────────────────────────────────────
+router.get("/admin/trading/assets", requireAdmin, async (_req, res): Promise<void> => {
+  const assets = await db.select().from(tradingAssetsTable).orderBy(tradingAssetsTable.sortOrder);
+  res.json({ assets });
+});
+
+router.patch("/admin/trading/assets/:symbol", requireAdmin, async (req, res): Promise<void> => {
+  const { symbol } = req.params;
+  const { enabled, payoutRatio, minStakeStriker, maxStakeStriker } = req.body ?? {};
+
+  await db.update(tradingAssetsTable)
+    .set({
+      ...(enabled !== undefined && { enabled: Boolean(enabled) }),
+      ...(payoutRatio !== undefined && { payoutRatio: parseFloat(String(payoutRatio)) }),
+      ...(minStakeStriker !== undefined && { minStakeStriker: parseFloat(String(minStakeStriker)) }),
+      ...(maxStakeStriker !== undefined && { maxStakeStriker: parseFloat(String(maxStakeStriker)) }),
+    })
+    .where(eq(tradingAssetsTable.symbol, symbol.toUpperCase()));
+
+  res.json({ ok: true });
 });
 
 export default router;
