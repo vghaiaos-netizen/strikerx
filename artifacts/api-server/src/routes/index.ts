@@ -13,6 +13,7 @@ import kycRouter from "./kyc";
 import publicRouter from "./public";
 import rateEventsRouter from "./rateEvents";
 import outreachRouter from "./outreach";
+import tradingRouter from "./trading";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(kycRouter);
 router.use(publicRouter);
 router.use(rateEventsRouter);
 router.use(outreachRouter);
+router.use(tradingRouter);
 
 export default router;

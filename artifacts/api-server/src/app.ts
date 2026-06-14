@@ -30,12 +30,15 @@ const paymentLimiter = rateLimit({ windowMs: 15 * 60_000, max: 15, standardHeade
 const gameLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 // Tighter limit for admin endpoints — 200 req / 15 min per IP
 const adminLimiter = rateLimit({ windowMs: 15 * 60_000, max: 200, standardHeaders: true, legacyHeaders: false });
+// Trading: 60 position opens per minute (generous for polling asset prices)
+const tradingLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 app.use(globalLimiter);
 app.use("/api/auth", authLimiter);
 app.use("/api/payments", paymentLimiter);
 app.use("/api/games", gameLimiter);
 app.use("/api/admin", adminLimiter);
+app.use("/api/trading", tradingLimiter);
 
 app.use(
   pinoHttp({

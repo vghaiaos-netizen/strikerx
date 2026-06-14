@@ -1,9 +1,11 @@
 import http from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { initWebSocketServer } from "./lib/wsServer";
+import { initWebSocketServer, broadcastToAll } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
 import { startScheduler } from "./lib/scheduler";
+import { initBinanceFeed } from "./lib/binanceFeed";
+import { startTradingSettlementScheduler } from "./lib/tradingEngine";
 import { pool } from "@workspace/db";
 
 // ── Production secret validation ─────────────────────────────────────────────
@@ -139,6 +141,77 @@ server.listen(port, async () => {
       name: "games.affiliate_commission_paid",
       sql: `ALTER TABLE games ADD COLUMN IF NOT EXISTS affiliate_commission_paid BOOLEAN NOT NULL DEFAULT FALSE`,
     },
+    // ── Trading tables (binary prediction feature) ───────────────────────────
+    {
+      name: "trading_assets.create",
+      sql: `CREATE TABLE IF NOT EXISTS trading_assets (
+        id               SERIAL PRIMARY KEY,
+        symbol           TEXT NOT NULL UNIQUE,
+        display_name     TEXT NOT NULL,
+        binance_symbol   TEXT NOT NULL,
+        enabled          BOOLEAN NOT NULL DEFAULT true,
+        payout_ratio     REAL NOT NULL DEFAULT 1.82,
+        min_stake_striker REAL NOT NULL DEFAULT 10,
+        max_stake_striker REAL NOT NULL DEFAULT 10000,
+        sort_order       INTEGER NOT NULL DEFAULT 0,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "trading_assets.seed",
+      sql: `INSERT INTO trading_assets (symbol, display_name, binance_symbol, enabled, payout_ratio, min_stake_striker, max_stake_striker, sort_order) VALUES
+        ('BTC', 'Bitcoin',  'BTCUSDT', true, 1.82, 10, 10000, 1),
+        ('ETH', 'Ethereum', 'ETHUSDT', true, 1.82, 10, 10000, 2),
+        ('SOL', 'Solana',   'SOLUSDT', true, 1.82, 10, 10000, 3),
+        ('BNB', 'BNB',      'BNBUSDT', true, 1.82, 10, 10000, 4),
+        ('TON', 'Toncoin',  'TONUSDT', true, 1.82, 10, 10000, 5)
+        ON CONFLICT (symbol) DO NOTHING`,
+    },
+    {
+      name: "trading_positions.create",
+      sql: `CREATE TABLE IF NOT EXISTS trading_positions (
+        id                    SERIAL PRIMARY KEY,
+        player_id             INTEGER NOT NULL,
+        asset_symbol          TEXT NOT NULL,
+        direction             TEXT NOT NULL,
+        stake_striker         REAL NOT NULL,
+        entry_price           REAL NOT NULL,
+        exit_price            REAL,
+        payout_ratio          REAL NOT NULL,
+        win_amount            REAL NOT NULL DEFAULT 0,
+        outcome               TEXT NOT NULL DEFAULT 'pending',
+        contract_duration_secs INTEGER NOT NULL,
+        expires_at            TIMESTAMPTZ NOT NULL,
+        settled_at            TIMESTAMPTZ,
+        created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "trading_positions.indexes",
+      sql: `DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'trading_positions_player_id_idx') THEN
+          CREATE INDEX trading_positions_player_id_idx ON trading_positions (player_id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'trading_positions_outcome_idx') THEN
+          CREATE INDEX trading_positions_outcome_idx ON trading_positions (outcome);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'trading_positions_expires_at_idx') THEN
+          CREATE INDEX trading_positions_expires_at_idx ON trading_positions (expires_at);
+        END IF;
+      END $$`,
+    },
+    {
+      name: "app_config.trading_keys",
+      sql: `INSERT INTO app_config (key, value, category, label, description) VALUES
+        ('trading_enabled',              'true',       'trading', 'Trading Enabled',              'Enable/disable binary trading'),
+        ('trading_default_duration',     '60',         'trading', 'Default Duration (s)',          'Default contract duration in seconds'),
+        ('trading_available_durations',  '30,60,300,900', 'trading', 'Available Durations',       'Comma-separated durations in seconds'),
+        ('trading_global_payout_ratio',  '1.82',       'trading', 'Global Payout Ratio',          'Win multiplier applied globally'),
+        ('trading_min_stake',            '10',         'trading', 'Min Stake (STRIKER)',           'Minimum trade stake'),
+        ('trading_max_stake',            '10000',      'trading', 'Max Stake (STRIKER)',           'Maximum trade stake'),
+        ('trading_big_win_threshold',    '1000',       'trading', 'Big Win Threshold (STRIKER)',   'Min STRIKER win to announce to group')
+        ON CONFLICT (key) DO NOTHING`,
+    },
   ];
 
   for (const { name, sql } of migrations) {
@@ -155,6 +228,16 @@ server.listen(port, async () => {
 
   // Start scheduler (tournament auto-end, cron jobs)
   startScheduler();
+
+  // Binance price feed — streams real-time prices for all trading assets.
+  // broadcastToAll pushes price_update events to every connected WS client.
+  initBinanceFeed((symbol, price) => {
+    broadcastToAll("price_update", { symbol, price, at: Date.now() });
+  });
+
+  // Settlement scheduler — checks for expired trading positions every second
+  // and settles them against the Binance price snapshot.
+  startTradingSettlementScheduler();
 });
 
 server.on("error", (err) => {
