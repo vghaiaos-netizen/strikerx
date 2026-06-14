@@ -1,6 +1,6 @@
 import { useAuth } from "@/lib/auth";
-import { useTelegramAuth, useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
-import { useEffect, useRef, useState } from "react";
+import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -18,38 +18,6 @@ interface TonPrice { usd: number | null; cachedAt: number | null; stale?: boolea
 interface DailyMission { key: string; title: string; description: string; target: number; progress: number; completed: boolean; }
 interface DailyMissionsRow { id: number; missions: DailyMission[]; allCompleted: boolean; bonusClaimed: boolean; bonusStriker: number; date: string; }
 
-function useDevAuth() {
-  const { setToken } = useAuth();
-  const telegramAuth = useTelegramAuth();
-  const tried = useRef(false);
-
-  const runAuth = () => {
-    const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string } } } | undefined;
-    const initData = tg?.WebApp?.initData;
-    const startParam = tg?.WebApp?.initDataUnsafe?.start_param;
-    if (initData) {
-      telegramAuth.mutate(
-        { data: { initData, referralCode: startParam || undefined } },
-        { onSuccess: d => setToken(d.token) },
-      );
-    } else if (import.meta.env.DEV) {
-      telegramAuth.mutate({ data: { initData: "dev:123456:player_dev" } }, { onSuccess: d => setToken(d.token) });
-    }
-  };
-
-  useEffect(() => {
-    if (tried.current) return;
-    tried.current = true;
-    runAuth();
-  }, []);
-
-  // Re-auth when WS signals the token is stale/expired
-  useEffect(() => {
-    const handler = () => runAuth();
-    window.addEventListener("strikerx:reauth", handler);
-    return () => window.removeEventListener("strikerx:reauth", handler);
-  }, []);
-}
 
 const GAMES = [
   { href: "/games/shot",      name: "The Shot",  sub: "Crash",    icon: TrendingUp, color: "#00ff88", bg: "from-[#00ff88]/10" },
@@ -67,7 +35,6 @@ const SEED_WINS: RecentWin[] = [
 ];
 
 export function Home() {
-  useDevAuth();
   const { t } = useTranslation();
   const { player, token } = useAuth();
   const { notifications } = useNotifications();
