@@ -1,3 +1,4 @@
+// v3 — removed server-side auth timeout; auth loop eliminated
 import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
 import { ACHIEVEMENT_MAP } from "@/lib/achievement-defs";
 
