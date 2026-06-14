@@ -260,11 +260,23 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
 
     const strikerAmount = Math.floor(tonEquivalent * depositRate);
 
+    // Credit the real-asset wallet balance (used for trading)
+    const isUsdt = asset === "USDT";
+    const realAmount = isUsdt ? amount : tonEquivalent; // USDT credited as USDT, all others as TON-equivalent
+
     const [player] = await db.select().from(playersTable).where(eq(playersTable.id, playerId));
     if (player) {
       await db
         .update(playersTable)
-        .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerAmount}` })
+        .set({
+          // Real wallet for trading
+          ...(isUsdt
+            ? { usdtBalance: sql`${playersTable.usdtBalance} + ${realAmount}` }
+            : { tonBalance: sql`${playersTable.tonBalance} + ${realAmount}` }
+          ),
+          // STRIKER for casino games
+          strikerBalance: sql`${playersTable.strikerBalance} + ${strikerAmount}`,
+        })
         .where(eq(playersTable.id, playerId));
 
       await db
@@ -277,7 +289,7 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
         })
         .where(eq(transactionsTable.externalId, payload.payload?.invoice_id ?? ""));
 
-      logger.info({ playerId, strikerAmount, currency, depositRate }, "Deposit credited");
+      logger.info({ playerId, strikerAmount, realAmount, asset, currency, depositRate }, "Deposit credited");
     }
   } catch (err) {
     logger.error({ err }, "Failed to process CryptoBot webhook");

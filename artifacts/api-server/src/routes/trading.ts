@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../lib/auth";
-import { openPosition, getEnabledAssets } from "../lib/tradingEngine";
+import { openPosition, getEnabledAssets, type ContractType, type TradingCurrency, type Direction } from "../lib/tradingEngine";
 import { getPrice, getAllPrices, get24hChanges } from "../lib/binanceFeed";
 import { db, tradingPositionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -10,20 +10,21 @@ import { getConfig, getConfigFloat } from "../lib/configService";
 const router = Router();
 
 // ── GET /api/trading/assets ──────────────────────────────────────────────────
-// List all enabled trading pairs with current prices
 router.get("/trading/assets", async (_req, res): Promise<void> => {
   try {
     const assets = await getEnabledAssets();
     const prices = getAllPrices();
     res.json({
       assets: assets.map((a) => ({
-        symbol: a.symbol,
-        displayName: a.displayName,
-        binanceSymbol: a.binanceSymbol,
-        payoutRatio: parseFloat(String(a.payoutRatio)),
+        symbol:          a.symbol,
+        displayName:     a.displayName,
+        binanceSymbol:   a.binanceSymbol,
+        payoutRatio:     parseFloat(String(a.payoutRatio)),
         minStakeStriker: parseFloat(String(a.minStakeStriker)),
         maxStakeStriker: parseFloat(String(a.maxStakeStriker)),
-        currentPrice: prices[a.symbol] ?? null,
+        minStakeTon:     parseFloat(String(a.minStakeTon ?? 0.1)),
+        maxStakeTon:     parseFloat(String(a.maxStakeTon ?? 500)),
+        currentPrice:    prices[a.symbol] ?? null,
       })),
     });
   } catch (err) {
@@ -33,45 +34,68 @@ router.get("/trading/assets", async (_req, res): Promise<void> => {
 });
 
 // ── GET /api/trading/prices ──────────────────────────────────────────────────
-// Current Binance prices for all subscribed symbols
 router.get("/trading/prices", (_req, res): void => {
   res.json({ prices: getAllPrices(), changes24h: get24hChanges(), at: Date.now() });
 });
 
 // ── POST /api/trading/positions ──────────────────────────────────────────────
-// Open a new binary trading position
 router.post("/trading/positions", requireAuth, async (req, res): Promise<void> => {
-  const { assetSymbol, direction, stakeStriker, contractDurationSecs } = req.body ?? {};
+  const {
+    assetSymbol,
+    direction,
+    stakeStriker,   // legacy alias kept for backwards compat
+    stake,
+    currency        = "TON",
+    contractType    = "UP_DOWN",
+    contractDurationSecs,
+  } = req.body ?? {};
+
+  const stakeAmount = typeof stake === "number" ? stake : (typeof stakeStriker === "number" ? stakeStriker : NaN);
+
+  const VALID_CONTRACT_TYPES: ContractType[] = ["UP_DOWN", "EVEN_ODD", "OVER_UNDER", "IN_OUT"];
+  const VALID_CURRENCIES:     TradingCurrency[] = ["TON", "USDT", "STRIKER"];
+  const VALID_DIRECTIONS:     Direction[] = ["UP", "DOWN", "EVEN", "ODD", "OVER", "UNDER", "IN", "OUT"];
 
   if (typeof assetSymbol !== "string" || assetSymbol.length < 2 || assetSymbol.length > 10) {
     res.status(400).json({ error: "Invalid assetSymbol" }); return;
   }
-  if (direction !== "UP" && direction !== "DOWN") {
-    res.status(400).json({ error: "direction must be UP or DOWN" }); return;
+  if (!VALID_DIRECTIONS.includes(direction)) {
+    res.status(400).json({ error: `direction must be one of: ${VALID_DIRECTIONS.join(", ")}` }); return;
   }
-  if (typeof stakeStriker !== "number" || stakeStriker <= 0) {
-    res.status(400).json({ error: "stakeStriker must be a positive number" }); return;
+  if (!VALID_CONTRACT_TYPES.includes(contractType)) {
+    res.status(400).json({ error: `contractType must be one of: ${VALID_CONTRACT_TYPES.join(", ")}` }); return;
+  }
+  if (!VALID_CURRENCIES.includes(currency)) {
+    res.status(400).json({ error: `currency must be one of: ${VALID_CURRENCIES.join(", ")}` }); return;
+  }
+  if (isNaN(stakeAmount) || stakeAmount <= 0) {
+    res.status(400).json({ error: "stake must be a positive number" }); return;
   }
   if (typeof contractDurationSecs !== "number" || !Number.isInteger(contractDurationSecs) || contractDurationSecs <= 0) {
     res.status(400).json({ error: "contractDurationSecs must be a positive integer" }); return;
   }
 
   try {
-    const normalizedSymbol = assetSymbol.toUpperCase();
     const playerId = req.player!.playerId;
+    const result = await openPosition({
+      playerId,
+      assetSymbol: assetSymbol.toUpperCase(),
+      direction:   direction.toUpperCase() as Direction,
+      contractType,
+      currency,
+      stake:       stakeAmount,
+      contractDurationSecs,
+    });
 
-    const result = await openPosition({ playerId, assetSymbol: normalizedSymbol, direction, stakeStriker, contractDurationSecs });
+    if (!result.success) { res.status(400).json({ error: result.error }); return; }
 
-    if (!result.success) {
-      res.status(400).json({ error: result.error });
-      return;
-    }
-
-    req.log.info({ playerId, assetSymbol, direction, stakeStriker, positionId: result.positionId }, "Trade opened");
+    req.log.info({ playerId, assetSymbol, direction, contractType, currency, stake: stakeAmount, positionId: result.positionId }, "Trade opened");
     res.status(201).json({
-      positionId: result.positionId,
-      entryPrice: result.entryPrice,
-      expiresAt: result.expiresAt.toISOString(),
+      positionId:   result.positionId,
+      entryPrice:   result.entryPrice,
+      expiresAt:    result.expiresAt.toISOString(),
+      lowerBarrier: result.lowerBarrier,
+      upperBarrier: result.upperBarrier,
     });
   } catch (err) {
     logger.error({ err }, "POST /trading/positions failed");
@@ -79,34 +103,39 @@ router.post("/trading/positions", requireAuth, async (req, res): Promise<void> =
   }
 });
 
+// ── Shared position serialiser ────────────────────────────────────────────────
+function serializePosition(p: typeof tradingPositionsTable.$inferSelect) {
+  return {
+    id:                   p.id,
+    assetSymbol:          p.assetSymbol,
+    direction:            p.direction,
+    contractType:         p.contractType ?? "UP_DOWN",
+    currency:             p.currency ?? "TON",
+    stakeStriker:         parseFloat(String(p.stakeStriker)),
+    entryPrice:           parseFloat(String(p.entryPrice)),
+    exitPrice:            p.exitPrice != null ? parseFloat(String(p.exitPrice)) : null,
+    lowerBarrier:         p.lowerBarrier != null ? parseFloat(String(p.lowerBarrier)) : null,
+    upperBarrier:         p.upperBarrier != null ? parseFloat(String(p.upperBarrier)) : null,
+    payoutRatio:          parseFloat(String(p.payoutRatio)),
+    winAmount:            parseFloat(String(p.winAmount)),
+    outcome:              p.outcome,
+    contractDurationSecs: p.contractDurationSecs,
+    expiresAt:            p.expiresAt.toISOString(),
+    settledAt:            p.settledAt?.toISOString() ?? null,
+    createdAt:            p.createdAt.toISOString(),
+  };
+}
+
 // ── GET /api/trading/positions/active ───────────────────────────────────────
-// Just pending (open) positions for the current player
-// NOTE: must be declared BEFORE /trading/positions/:id so Express doesn't match "active" as an id
 router.get("/trading/positions/active", requireAuth, async (req, res): Promise<void> => {
   try {
-    const playerId = req.player!.playerId;
+    const playerId  = req.player!.playerId;
     const positions = await db
       .select()
       .from(tradingPositionsTable)
-      .where(and(
-        eq(tradingPositionsTable.playerId, playerId),
-        eq(tradingPositionsTable.outcome, "pending"),
-      ))
+      .where(and(eq(tradingPositionsTable.playerId, playerId), eq(tradingPositionsTable.outcome, "pending")))
       .orderBy(desc(tradingPositionsTable.expiresAt));
-
-    res.json({
-      positions: positions.map((p) => ({
-        id: p.id,
-        assetSymbol: p.assetSymbol,
-        direction: p.direction,
-        stakeStriker: parseFloat(String(p.stakeStriker)),
-        entryPrice: parseFloat(String(p.entryPrice)),
-        payoutRatio: parseFloat(String(p.payoutRatio)),
-        contractDurationSecs: p.contractDurationSecs,
-        expiresAt: p.expiresAt.toISOString(),
-        createdAt: p.createdAt.toISOString(),
-      })),
-    });
+    res.json({ positions: positions.map(serializePosition) });
   } catch (err) {
     logger.error({ err }, "GET /trading/positions/active failed");
     res.status(500).json({ error: "Failed to fetch active positions" });
@@ -114,34 +143,16 @@ router.get("/trading/positions/active", requireAuth, async (req, res): Promise<v
 });
 
 // ── GET /api/trading/positions ──────────────────────────────────────────────
-// Player's recent positions (last 50, all outcomes)
 router.get("/trading/positions", requireAuth, async (req, res): Promise<void> => {
   try {
-    const playerId = req.player!.playerId;
+    const playerId  = req.player!.playerId;
     const positions = await db
       .select()
       .from(tradingPositionsTable)
       .where(eq(tradingPositionsTable.playerId, playerId))
       .orderBy(desc(tradingPositionsTable.createdAt))
       .limit(50);
-
-    res.json({
-      positions: positions.map((p) => ({
-        id: p.id,
-        assetSymbol: p.assetSymbol,
-        direction: p.direction,
-        stakeStriker: parseFloat(String(p.stakeStriker)),
-        entryPrice: parseFloat(String(p.entryPrice)),
-        exitPrice: p.exitPrice !== null ? parseFloat(String(p.exitPrice)) : null,
-        payoutRatio: parseFloat(String(p.payoutRatio)),
-        winAmount: parseFloat(String(p.winAmount)),
-        outcome: p.outcome,
-        contractDurationSecs: p.contractDurationSecs,
-        expiresAt: p.expiresAt.toISOString(),
-        settledAt: p.settledAt?.toISOString() ?? null,
-        createdAt: p.createdAt.toISOString(),
-      })),
-    });
+    res.json({ positions: positions.map(serializePosition) });
   } catch (err) {
     logger.error({ err }, "GET /trading/positions failed");
     res.status(500).json({ error: "Failed to fetch positions" });
@@ -152,31 +163,14 @@ router.get("/trading/positions", requireAuth, async (req, res): Promise<void> =>
 router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void> => {
   const positionId = parseInt(String(req.params.id), 10);
   if (isNaN(positionId)) { res.status(400).json({ error: "Invalid position ID" }); return; }
-
   try {
-    const playerId = req.player!.playerId;
+    const playerId  = req.player!.playerId;
     const [position] = await db
       .select()
       .from(tradingPositionsTable)
       .where(and(eq(tradingPositionsTable.id, positionId), eq(tradingPositionsTable.playerId, playerId)));
-
     if (!position) { res.status(404).json({ error: "Position not found" }); return; }
-
-    res.json({
-      id: position.id,
-      assetSymbol: position.assetSymbol,
-      direction: position.direction,
-      stakeStriker: parseFloat(String(position.stakeStriker)),
-      entryPrice: parseFloat(String(position.entryPrice)),
-      exitPrice: position.exitPrice !== null ? parseFloat(String(position.exitPrice)) : null,
-      payoutRatio: parseFloat(String(position.payoutRatio)),
-      winAmount: parseFloat(String(position.winAmount)),
-      outcome: position.outcome,
-      contractDurationSecs: position.contractDurationSecs,
-      expiresAt: position.expiresAt.toISOString(),
-      settledAt: position.settledAt?.toISOString() ?? null,
-      createdAt: position.createdAt.toISOString(),
-    });
+    res.json(serializePosition(position));
   } catch (err) {
     logger.error({ err }, "GET /trading/positions/:id failed");
     res.status(500).json({ error: "Failed to fetch position" });
@@ -184,38 +178,34 @@ router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void
 });
 
 // ── GET /api/trading/config ──────────────────────────────────────────────────
-// Public endpoint — returns all client-relevant trading config from app_config.
-// Lets the frontend adapt to admin-configured values without hardcoding.
 router.get("/trading/config", async (_req, res): Promise<void> => {
   try {
-    const [
-      enabled,
-      availableDurationsRaw,
-      defaultDuration,
-      payoutRatio,
-      minStake,
-      maxStake,
-    ] = await Promise.all([
-      getConfig("trading_enabled"),
-      getConfig("trading_available_durations"),
-      getConfigFloat("trading_default_duration", 60),
-      getConfigFloat("trading_global_payout_ratio", 1.82),
-      getConfigFloat("trading_min_stake", 10),
-      getConfigFloat("trading_max_stake", 10000),
-    ]);
+    const [enabled, availableDurationsRaw, defaultDuration, payoutRatio, minStake, maxStake, minStakeTon, maxStakeTon, inOutSpread] =
+      await Promise.all([
+        getConfig("trading_enabled"),
+        getConfig("trading_available_durations"),
+        getConfigFloat("trading_default_duration", 60),
+        getConfigFloat("trading_global_payout_ratio", 1.82),
+        getConfigFloat("trading_min_stake", 10),
+        getConfigFloat("trading_max_stake", 10000),
+        getConfigFloat("trading_min_stake_ton", 0.1),
+        getConfigFloat("trading_max_stake_ton", 500),
+        getConfigFloat("trading_inout_spread", 0.5),
+      ]);
 
     const availableDurations = (availableDurationsRaw ?? "30,60,300,900")
-      .split(",")
-      .map((d) => parseInt(d.trim(), 10))
-      .filter((d) => !isNaN(d) && d > 0);
+      .split(",").map((d) => parseInt(d.trim(), 10)).filter((d) => !isNaN(d) && d > 0);
 
     res.json({
       enabled: enabled !== "false",
       availableDurations,
       defaultDuration: Math.round(defaultDuration),
       payoutRatio,
-      minStake: Math.round(minStake),
-      maxStake: Math.round(maxStake),
+      minStake:    Math.round(minStake),
+      maxStake:    Math.round(maxStake),
+      minStakeTon,
+      maxStakeTon,
+      inOutSpread,
     });
   } catch (err) {
     logger.error({ err }, "GET /trading/config failed");
@@ -224,8 +214,7 @@ router.get("/trading/config", async (_req, res): Promise<void> => {
 });
 
 // ── GET /api/trading/klines ──────────────────────────────────────────────────
-// Historical OHLC candles for the chart.
-// Crypto: proxies Binance REST. Forex/Commodities: Yahoo Finance chart API.
+// Historical OHLC candles. Crypto → Binance REST. Forex/Commodities → Yahoo Finance.
 router.get("/trading/klines", async (req, res): Promise<void> => {
   const symbol   = String(req.query.symbol ?? "").toUpperCase().trim();
   const interval = String(req.query.interval ?? "1m");
@@ -236,7 +225,7 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   const VALID_INTERVALS = ["1m", "5m", "15m", "30m", "1h"];
   if (!VALID_INTERVALS.includes(interval)) { res.status(400).json({ error: "invalid interval" }); return; }
 
-  // ── Crypto assets: proxy Binance REST ──────────────────────────────────────
+  // ── Crypto assets: Binance REST ─────────────────────────────────────────────
   const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON"];
   if (CRYPTO.includes(symbol)) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
@@ -252,63 +241,86 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
         low:    parseFloat(c[3]),
         close:  parseFloat(c[4]),
         volume: parseFloat(c[5]) || 0,
-      }));
+      })).filter((c) => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 && !isNaN(c.open));
       res.json({ candles });
     } catch {
-      // Binance geo-blocked on Replit dev (HTTP 451) — return empty, chart uses live ticks
       res.json({ candles: [] });
     }
     return;
   }
 
-  // ── Forex / Commodity assets: Yahoo Finance chart API ─────────────────────
+  // ── Forex / Commodity assets: Yahoo Finance ────────────────────────────────
   const YAHOO_MAP: Record<string, string> = {
     EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "USDJPY=X",
     AUDUSD: "AUDUSD=X", USDCHF: "USDCHF=X",
-    XAUUSD: "GC=F",  XAGUSD: "SI=F",  USOIL: "CL=F", NATGAS: "NG=F", COPPER: "HG=F",
+    XAUUSD: "GC=F", XAGUSD: "SI=F", USOIL: "CL=F", NATGAS: "NG=F", COPPER: "HG=F",
   };
   const yahooSymbol = YAHOO_MAP[symbol];
   if (!yahooSymbol) { res.json({ candles: [] }); return; }
 
-  const RANGE_MAP: Record<string, string> = { "1m": "1d", "5m": "5d", "15m": "1mo", "30m": "1mo", "1h": "3mo" };
-  const range = RANGE_MAP[interval] ?? "1d";
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`;
+  // Try two ranges to handle weekends / gaps in forex data
+  const RANGE_MAP: Record<string, string[]> = {
+    "1m":  ["1d", "5d"],
+    "5m":  ["5d", "1mo"],
+    "15m": ["1mo", "3mo"],
+    "30m": ["1mo", "3mo"],
+    "1h":  ["3mo", "6mo"],
+  };
+  const ranges = RANGE_MAP[interval] ?? ["1d"];
 
-  try {
-    const r = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const json = await r.json() as any;
-    const result = json?.chart?.result?.[0];
-    if (!result) { res.json({ candles: [] }); return; }
+  for (const range of ranges) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`;
+    try {
+      const r = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!r.ok) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const json = await r.json() as any;
+      const result = json?.chart?.result?.[0];
+      if (!result) continue;
 
-    const timestamps: number[] = result.timestamp ?? [];
-    const q = result.indicators?.quote?.[0] ?? {};
-    const opens:   number[] = q.open   ?? [];
-    const highs:   number[] = q.high   ?? [];
-    const lows:    number[] = q.low    ?? [];
-    const closes:  number[] = q.close  ?? [];
-    const volumes: number[] = q.volume ?? [];
+      const timestamps: number[] = result.timestamp ?? [];
+      const q = result.indicators?.quote?.[0] ?? {};
+      const opens:   (number | null)[] = q.open   ?? [];
+      const highs:   (number | null)[] = q.high   ?? [];
+      const lows:    (number | null)[] = q.low    ?? [];
+      const closes:  (number | null)[] = q.close  ?? [];
+      const volumes: (number | null)[] = q.volume ?? [];
 
-    const candles = timestamps
-      .map((t: number, i: number) => ({
-        time:   t,
-        open:   opens[i],
-        high:   highs[i],
-        low:    lows[i],
-        close:  closes[i],
-        volume: volumes[i] ?? 0,
-      }))
-      .filter((c) => c.open != null && c.close != null && !isNaN(c.open) && !isNaN(c.close))
-      .slice(-limit);
+      const seen = new Set<number>();
+      const candles = timestamps
+        .map((t, i) => ({
+          time:   t,
+          open:   opens[i],
+          high:   highs[i],
+          low:    lows[i],
+          close:  closes[i],
+          volume: volumes[i] ?? 0,
+        }))
+        .filter((c) =>
+          c.open  != null && c.high  != null && c.low  != null && c.close != null &&
+          isFinite(c.open) && isFinite(c.high) && isFinite(c.low) && isFinite(c.close) &&
+          c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 &&
+          !seen.has(c.time) && seen.add(c.time)
+        )
+        .slice(-limit) as { time: number; open: number; high: number; low: number; close: number; volume: number }[];
 
-    res.json({ candles });
-  } catch {
-    res.json({ candles: [] });
+      if (candles.length > 0) {
+        res.json({ candles });
+        return;
+      }
+      // No usable candles in this range — try the next wider range
+    } catch {
+      // Try next range
+    }
   }
+
+  res.json({ candles: [] });
 });
 
 export default router;

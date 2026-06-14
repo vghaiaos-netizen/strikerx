@@ -27,6 +27,8 @@ router.get("/players/me", requireAuth, async (req, res): Promise<void> => {
     strikerBalance: player.strikerBalance,
     bootBalance: player.bootBalance,
     captainBalance: player.captainBalance,
+    tonBalance: parseFloat(String(player.tonBalance ?? 0)),
+    usdtBalance: parseFloat(String(player.usdtBalance ?? 0)),
     vipTier: player.vipTier,
     streakDays: player.streakDays,
     tonWageredLifetime: player.tonWageredLifetime,

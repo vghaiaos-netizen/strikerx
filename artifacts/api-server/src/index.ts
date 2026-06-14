@@ -232,6 +232,42 @@ server.listen(port, async () => {
         ('trading_big_win_threshold',    '1000',       'trading', 'Big Win Threshold (STRIKER)',   'Min STRIKER win to announce to group')
         ON CONFLICT (key) DO NOTHING`,
     },
+    {
+      name: "players.ton_balance",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS ton_balance REAL NOT NULL DEFAULT 0`,
+    },
+    {
+      name: "players.usdt_balance",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS usdt_balance REAL NOT NULL DEFAULT 0`,
+    },
+    {
+      name: "trading_positions.contract_type",
+      sql: `ALTER TABLE trading_positions ADD COLUMN IF NOT EXISTS contract_type TEXT NOT NULL DEFAULT 'UP_DOWN'`,
+    },
+    {
+      name: "trading_positions.barriers",
+      sql: `ALTER TABLE trading_positions
+              ADD COLUMN IF NOT EXISTS lower_barrier REAL,
+              ADD COLUMN IF NOT EXISTS upper_barrier REAL`,
+    },
+    {
+      name: "trading_positions.currency",
+      sql: `ALTER TABLE trading_positions ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TON'`,
+    },
+    {
+      name: "trading_assets.ton_stakes",
+      sql: `ALTER TABLE trading_assets
+              ADD COLUMN IF NOT EXISTS min_stake_ton REAL NOT NULL DEFAULT 0.1,
+              ADD COLUMN IF NOT EXISTS max_stake_ton REAL NOT NULL DEFAULT 500`,
+    },
+    {
+      name: "app_config.trading_ton_keys",
+      sql: `INSERT INTO app_config (key, value, category, label, description) VALUES
+        ('trading_min_stake_ton',  '0.1',  'trading', 'Min Stake (TON)',  'Minimum TON trade stake'),
+        ('trading_max_stake_ton',  '500',  'trading', 'Max Stake (TON)',  'Maximum TON trade stake'),
+        ('trading_inout_spread',   '0.5',  'trading', 'IN/OUT Spread %', 'Band width each side of entry price for IN/OUT contracts')
+        ON CONFLICT (key) DO NOTHING`,
+    },
   ];
 
   for (const { name, sql } of migrations) {
