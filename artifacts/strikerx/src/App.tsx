@@ -25,6 +25,10 @@ import { Minefield } from "./pages/games/minefield";
 import { FreeKick } from "./pages/games/freekick";
 import { Trading } from "./pages/games/trading";
 
+import { Markets }   from "./pages/markets";
+import { Portfolio } from "./pages/portfolio";
+import { Account }   from "./pages/account";
+
 import { Verify } from "./pages/verify";
 import { Achievements } from "./pages/achievements";
 import HowToPlay from "./pages/how-to-play";
@@ -74,6 +78,9 @@ function Router() {
       <Route path="/verify"          component={Verify} />
       <Route path="/achievements"    component={Achievements} />
       <Route path="/loyalty"         component={Loyalty} />
+      <Route path="/markets"         component={Markets} />
+      <Route path="/portfolio"       component={Portfolio} />
+      <Route path="/account"         component={Account} />
       <Route path="/guide"           component={HowToPlay} />
 
       {/* Admin Pages */}

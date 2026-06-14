@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, Star, User, Wallet, TrendingUp, Globe, Volume2, VolumeX } from "lucide-react";
+import { BarChart2, PieChart, User, Gamepad2, TrendingUp, Globe, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
@@ -114,11 +114,11 @@ export function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-card border-t border-border grid grid-cols-5 px-1 py-2 z-50">
-        <NavLink href="/"        icon={<TrendingUp size={18} />} label="Trade"             active={location === "/" || location.startsWith("/games/trading")} />
-        <NavLink href="/games"   icon={<Home       size={18} />} label={t('nav.home')}     active={location === "/games"} />
-        <NavLink href="/deposit" icon={<Wallet     size={18} />} label={t('nav.wallet')}   active={location === "/deposit" || location === "/withdraw"} />
-        <NavLink href="/loyalty" icon={<Star       size={18} />} label="Loyalty"           active={location === "/loyalty"} />
-        <NavLink href="/profile" icon={<User       size={18} />} label={t('nav.profile')}  active={location === "/profile"} />
+        <NavLink href="/"          icon={<TrendingUp size={18} />} label="Trade"     active={location === "/" || location.startsWith("/games/trading")} />
+        <NavLink href="/markets"   icon={<BarChart2  size={18} />} label="Markets"   active={location === "/markets"} />
+        <NavLink href="/games"     icon={<Gamepad2   size={18} />} label="Games"     active={location === "/games" || (location.startsWith("/games/") && !location.startsWith("/games/trading"))} />
+        <NavLink href="/portfolio" icon={<PieChart   size={18} />} label="Portfolio" active={location === "/portfolio" || location === "/loyalty"} />
+        <NavLink href="/account"   icon={<User       size={18} />} label="Account"   active={location === "/account" || location === "/profile" || location === "/deposit" || location === "/withdraw"} />
       </nav>
     </div>
   );
