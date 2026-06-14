@@ -5,6 +5,7 @@ import { getPrice, getAllPrices } from "../lib/binanceFeed";
 import { db, tradingPositionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { getConfig, getConfigFloat } from "../lib/configService";
 
 const router = Router();
 
@@ -179,6 +180,46 @@ router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void
   } catch (err) {
     logger.error({ err }, "GET /trading/positions/:id failed");
     res.status(500).json({ error: "Failed to fetch position" });
+  }
+});
+
+// ── GET /api/trading/config ──────────────────────────────────────────────────
+// Public endpoint — returns all client-relevant trading config from app_config.
+// Lets the frontend adapt to admin-configured values without hardcoding.
+router.get("/trading/config", async (_req, res): Promise<void> => {
+  try {
+    const [
+      enabled,
+      availableDurationsRaw,
+      defaultDuration,
+      payoutRatio,
+      minStake,
+      maxStake,
+    ] = await Promise.all([
+      getConfig("trading_enabled"),
+      getConfig("trading_available_durations"),
+      getConfigFloat("trading_default_duration", 60),
+      getConfigFloat("trading_global_payout_ratio", 1.82),
+      getConfigFloat("trading_min_stake", 10),
+      getConfigFloat("trading_max_stake", 10000),
+    ]);
+
+    const availableDurations = (availableDurationsRaw ?? "30,60,300,900")
+      .split(",")
+      .map((d) => parseInt(d.trim(), 10))
+      .filter((d) => !isNaN(d) && d > 0);
+
+    res.json({
+      enabled: enabled !== "false",
+      availableDurations,
+      defaultDuration: Math.round(defaultDuration),
+      payoutRatio,
+      minStake: Math.round(minStake),
+      maxStake: Math.round(maxStake),
+    });
+  } catch (err) {
+    logger.error({ err }, "GET /trading/config failed");
+    res.status(500).json({ error: "Failed to fetch trading config" });
   }
 });
 
