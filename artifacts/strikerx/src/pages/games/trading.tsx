@@ -65,24 +65,26 @@ export function Trading() {
   const [tab, setTab] = useState<"active" | "history">("active");
   const prevPriceRef = useRef<Record<string, number>>({});
 
-  // Poll prices every 2 seconds
+  const isAuthed = !!player;
+
+  // Poll prices every 2 seconds (no auth needed)
   const { data: pricesData } = useGetTradingPrices({
     query: { refetchInterval: 2000 },
   });
 
-  // Assets list (changes rarely)
+  // Assets list (no auth needed, refreshes rarely)
   const { data: assetsData } = useGetTradingAssets({
-    query: { refetchInterval: 10_000 },
+    query: { refetchInterval: 15_000 },
   });
 
-  // Active positions — poll every 3s so countdown + outcomes refresh
-  const { data: activeData, refetch: refetchActive } = useGetTradingPositionsActive({
-    query: { refetchInterval: 3000 },
+  // Active positions — only poll when authenticated, every 3s
+  const { data: activeData } = useGetTradingPositionsActive({
+    query: { refetchInterval: isAuthed ? 3000 : false, enabled: isAuthed },
   });
 
-  // Settled history
-  const { data: historyData, refetch: refetchHistory } = useGetTradingPositions({
-    query: { refetchInterval: 10_000 },
+  // Settled history — only poll when authenticated, every 10s
+  const { data: historyData } = useGetTradingPositions({
+    query: { refetchInterval: isAuthed ? 10_000 : false, enabled: isAuthed },
   });
 
   const openPosition = usePostTradingPositions({
