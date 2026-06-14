@@ -18,12 +18,46 @@ const BINANCE_STREAM_URL =
     .map((s) => `${s}@ticker`)
     .join("/");
 
+const CRYPTO_REST_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "TONUSDT"];
+
 const priceCache  = new Map<string, number>();
 const changeCache = new Map<string, number>(); // 24h % change
 
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let broadcastFn: ((symbol: string, price: number) => void) | null = null;
+let restTimer: NodeJS.Timeout | null = null;
+let wsConnected = false;
+
+/** REST fallback — polls Binance HTTP API every 4s when WebSocket is blocked */
+async function pollBinanceRest() {
+  try {
+    const syms = JSON.stringify(CRYPTO_REST_SYMBOLS);
+    const r = await fetch(
+      `https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(syms)}`,
+      { signal: AbortSignal.timeout(5_000) },
+    );
+    if (!r.ok) return;
+    const data = await r.json() as Array<{ symbol: string; lastPrice: string; priceChangePercent: string }>;
+    for (const { symbol, lastPrice, priceChangePercent } of data) {
+      const base  = symbol.replace(/USDT$/, "").toUpperCase();
+      const price = parseFloat(lastPrice);
+      const pct   = parseFloat(priceChangePercent);
+      if (isNaN(price) || price <= 0) continue;
+      priceCache.set(base, price);
+      if (!isNaN(pct)) changeCache.set(base, pct);
+      broadcastFn?.(base, price);
+    }
+  } catch { /* non-fatal — WebSocket may be providing data */ }
+}
+
+function startRestFallback() {
+  if (restTimer) return;
+  // Poll immediately, then every 4 seconds
+  void pollBinanceRest();
+  restTimer = setInterval(pollBinanceRest, 4_000);
+  logger.info("Binance REST price feed started (WebSocket unavailable)");
+}
 
 function connect() {
   if (ws) {
@@ -34,7 +68,8 @@ function connect() {
   ws = new WebSocket(BINANCE_STREAM_URL);
 
   ws.on("open", () => {
-    logger.info("Binance price feed connected");
+    wsConnected = true;
+    logger.info("Binance price feed connected (WebSocket)");
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   });
 
@@ -45,10 +80,8 @@ function connect() {
       if (!ticker?.s || !ticker?.c) return;
       const price = parseFloat(ticker.c);
       if (isNaN(price) || price <= 0) return;
-      // ticker.s is e.g. "BTCUSDT" → strip USDT to get "BTC"
       const symbol = ticker.s.replace(/USDT$/, "").toUpperCase();
       priceCache.set(symbol, price);
-      // P = price change percent over 24h (included in the @ticker stream)
       const pct = parseFloat(ticker.P ?? "");
       if (!isNaN(pct)) changeCache.set(symbol, pct);
       broadcastFn?.(symbol, price);
@@ -56,12 +89,16 @@ function connect() {
   });
 
   ws.on("close", () => {
+    wsConnected = false;
     logger.warn("Binance price feed disconnected — reconnecting in 5 s");
+    startRestFallback();
     scheduleReconnect();
   });
 
   ws.on("error", (err: Error) => {
+    wsConnected = false;
     logger.error({ err: err.message }, "Binance price feed error");
+    startRestFallback();
     scheduleReconnect();
   });
 }

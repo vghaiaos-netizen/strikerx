@@ -33,43 +33,56 @@ export async function initGameBot(): Promise<void> {
     return;
   }
 
-  // /start command — auto-register and open Mini App
+  // /start command — personalised greeting + DB lookup
   bot.command("start", async (ctx) => {
-    const username = ctx.from?.username ?? ctx.from?.first_name ?? "Player";
-    const startParam = (ctx.message as { text: string }).text?.split(" ")[1]; // referral code if any
+    const firstName  = ctx.from?.first_name ?? "Player";
+    const telegramId = String(ctx.from?.id ?? "");
+    const startParam = (ctx.message as { text: string }).text?.split(" ")[1];
 
     let miniAppUrl = getAppUrl();
-    if (startParam) {
-      miniAppUrl += `?startapp=${startParam}`;
-    }
+    if (startParam) miniAppUrl += `?startapp=${startParam}`;
 
-    // Read group invite link from config (non-fatal if unavailable)
     let groupInviteLink: string | null = null;
     try {
       const { getConfig } = await import("./configService.js");
       const link = await getConfig("telegram_group_invite_link");
       if (link) groupInviteLink = link;
-    } catch {
-      // not fatal — community button simply won't appear
+    } catch { /* non-fatal */ }
+
+    // Look up existing account
+    let existingPlayer: { strikerBalance: number; tonBalance: number; vipTier: string } | null = null;
+    if (telegramId) {
+      try {
+        const { db, playersTable } = await import("@workspace/db");
+        const { eq }               = await import("drizzle-orm");
+        const [row] = await db
+          .select({ strikerBalance: playersTable.strikerBalance, tonBalance: playersTable.tonBalance, vipTier: playersTable.vipTier })
+          .from(playersTable)
+          .where(eq(playersTable.telegramId, telegramId));
+        if (row) existingPlayer = row as typeof existingPlayer;
+      } catch { /* non-fatal — treat as new */ }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const buttons: any[][] = [
-      [Markup.button.webApp("Open StrikerX", miniAppUrl)],
+      [Markup.button.webApp(existingPlayer ? "Open StrikerX" : "Create Account & Play", miniAppUrl)],
       [Markup.button.callback("My Balance", "balance")],
     ];
     if (groupInviteLink) {
-      buttons.push([Markup.button.url("Join Community Channel", groupInviteLink)]);
+      buttons.push([Markup.button.url("Join Community", groupInviteLink)]);
     }
 
-    const communityLine = groupInviteLink
-      ? `\n\nJoin the StrikerX community — live scores, big-win alerts and jackpot updates:`
-      : "";
+    let message: string;
+    if (existingPlayer) {
+      const striker = parseFloat(String(existingPlayer.strikerBalance)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      const ton     = parseFloat(String(existingPlayer.tonBalance)).toFixed(2);
+      const vip     = existingPlayer.vipTier.replace(/_/g, " ").toUpperCase();
+      message = `Welcome back, ${firstName}!\n\nYour ID: ${telegramId}\n\nBalance:\nSTRIKER ${striker}  |  TON ${ton}\nVIP: ${vip}\n\nPredictions are live — WC2026 edition.\nTap to continue trading.`;
+    } else {
+      message = `Welcome to StrikerX, ${firstName}!\n\nYour Telegram ID ${telegramId} is ready.\n\nBinary predictions on crypto, forex & commodities.\n500 STRIKER welcome bonus when you sign up.\n\nRefer friends and earn 10% forever — your link is in the Profile tab.`;
+    }
 
-    await ctx.reply(
-      `Welcome to StrikerX, ${username}!\n\nThe stadium is live — WC2026 edition.\n\n500 STRIKER welcome bonus is waiting for you inside.\n\nRefer friends and earn 10% of everything they win. Forever.\nYour referral link is in the Profile tab.${communityLine}`,
-      Markup.inlineKeyboard(buttons)
-    );
+    await ctx.reply(message, Markup.inlineKeyboard(buttons));
   });
 
   // /balance command

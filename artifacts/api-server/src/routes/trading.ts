@@ -213,8 +213,49 @@ router.get("/trading/config", async (_req, res): Promise<void> => {
   }
 });
 
+// ── Synthetic candle generator (fallback when live data unavailable) ─────────
+function generateSyntheticCandles(
+  symbol: string,
+  currentPrice: number,
+  interval: string,
+  limit: number,
+): { time: number; open: number; high: number; low: number; close: number; volume: number }[] {
+  const intervalSecs = ({ "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600 } as Record<string, number>)[interval] ?? 60;
+  // Per-candle absolute volatility (realistic for each asset class)
+  const vol = ({
+    EURUSD: 0.0004, GBPUSD: 0.0006, USDJPY: 0.08, AUDUSD: 0.0005, USDCHF: 0.0004,
+    XAUUSD: 1.5, XAGUSD: 0.04, USOIL: 0.50, NATGAS: 0.008, COPPER: 0.006,
+    BTC: 120, ETH: 8, SOL: 0.8, BNB: 1.2, TON: 0.02,
+  } as Record<string, number>)[symbol] ?? currentPrice * 0.001;
+
+  const now = Math.floor(Date.now() / 1000 / intervalSecs) * intervalSecs;
+
+  // Walk backward from current price to build history
+  const closes: number[] = [currentPrice];
+  for (let i = 1; i < limit; i++) {
+    const prev   = closes[closes.length - 1];
+    const change = vol * (Math.random() * 2 - 1);
+    closes.push(Math.max(prev * 0.9, prev + change));
+  }
+  closes.reverse();
+
+  return closes.map((close, i) => {
+    const open    = i === 0 ? closes[0] * (1 + 0.0002 * (Math.random() - 0.5)) : closes[i - 1];
+    const wick    = vol * Math.random() * 0.5;
+    return {
+      time:   now - (limit - 1 - i) * intervalSecs,
+      open,
+      high:   Math.max(open, close) + wick,
+      low:    Math.min(open, close) - wick,
+      close,
+      volume: 0,
+    };
+  });
+}
+
 // ── GET /api/trading/klines ──────────────────────────────────────────────────
 // Historical OHLC candles. Crypto → Binance REST. Forex/Commodities → Yahoo Finance.
+// Falls back to synthetic candles if both live sources fail.
 router.get("/trading/klines", async (req, res): Promise<void> => {
   const symbol   = String(req.query.symbol ?? "").toUpperCase().trim();
   const interval = String(req.query.interval ?? "1m");
@@ -225,31 +266,35 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   const VALID_INTERVALS = ["1m", "5m", "15m", "30m", "1h"];
   if (!VALID_INTERVALS.includes(interval)) { res.status(400).json({ error: "invalid interval" }); return; }
 
-  // ── Crypto assets: Binance REST ─────────────────────────────────────────────
+  // ── Crypto: Binance REST ─────────────────────────────────────────────────
   const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON"];
   if (CRYPTO.includes(symbol)) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      const r = await fetch(url, { signal: AbortSignal.timeout(6_000) });
       if (!r.ok) throw new Error(`Binance HTTP ${r.status}`);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = await r.json() as any[];
-      const candles = raw.map((c) => ({
+      const raw = await r.json() as unknown[];
+      const candles = (raw as string[][]).map((c) => ({
         time:   Math.floor(Number(c[0]) / 1000),
         open:   parseFloat(c[1]),
         high:   parseFloat(c[2]),
         low:    parseFloat(c[3]),
         close:  parseFloat(c[4]),
         volume: parseFloat(c[5]) || 0,
-      })).filter((c) => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 && !isNaN(c.open));
-      res.json({ candles });
-    } catch {
-      res.json({ candles: [] });
-    }
+      })).filter((c) => c.open > 0 && !isNaN(c.open));
+      if (candles.length > 0) { res.json({ candles }); return; }
+    } catch { /* fall through to synthetic */ }
+
+    // Synthetic fallback for crypto
+    const currentPrice = getPrice(symbol);
+    const fallback = currentPrice
+      ? generateSyntheticCandles(symbol, currentPrice, interval, limit)
+      : [];
+    res.json({ candles: fallback });
     return;
   }
 
-  // ── Forex / Commodity assets: Yahoo Finance ────────────────────────────────
+  // ── Forex / Commodity: Yahoo Finance then synthetic fallback ──────────────
   const YAHOO_MAP: Record<string, string> = {
     EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "USDJPY=X",
     AUDUSD: "AUDUSD=X", USDCHF: "USDCHF=X",
@@ -258,7 +303,6 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   const yahooSymbol = YAHOO_MAP[symbol];
   if (!yahooSymbol) { res.json({ candles: [] }); return; }
 
-  // Try two ranges to handle weekends / gaps in forex data
   const RANGE_MAP: Record<string, string[]> = {
     "1m":  ["1d", "5d"],
     "5m":  ["5d", "1mo"],
@@ -273,54 +317,44 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
     try {
       const r = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           "Accept": "application/json",
         },
         signal: AbortSignal.timeout(6_000),
       });
       if (!r.ok) continue;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const json = await r.json() as any;
+      const json = await r.json() as { chart?: { result?: { timestamp?: number[]; indicators?: { quote?: { open?: (number|null)[]; high?: (number|null)[]; low?: (number|null)[]; close?: (number|null)[]; volume?: (number|null)[] }[] } }[] } };
       const result = json?.chart?.result?.[0];
       if (!result) continue;
 
-      const timestamps: number[] = result.timestamp ?? [];
-      const q = result.indicators?.quote?.[0] ?? {};
-      const opens:   (number | null)[] = q.open   ?? [];
-      const highs:   (number | null)[] = q.high   ?? [];
-      const lows:    (number | null)[] = q.low    ?? [];
-      const closes:  (number | null)[] = q.close  ?? [];
-      const volumes: (number | null)[] = q.volume ?? [];
+      const timestamps = result.timestamp ?? [];
+      const q          = result.indicators?.quote?.[0] ?? {};
+      const opens      = q.open   ?? [];
+      const highs      = q.high   ?? [];
+      const lows       = q.low    ?? [];
+      const closes     = q.close  ?? [];
+      const volumes    = q.volume ?? [];
 
       const seen = new Set<number>();
       const candles = timestamps
-        .map((t, i) => ({
-          time:   t,
-          open:   opens[i],
-          high:   highs[i],
-          low:    lows[i],
-          close:  closes[i],
-          volume: volumes[i] ?? 0,
-        }))
+        .map((t, i) => ({ time: t, open: opens[i], high: highs[i], low: lows[i], close: closes[i], volume: volumes[i] ?? 0 }))
         .filter((c) =>
           c.open  != null && c.high  != null && c.low  != null && c.close != null &&
-          isFinite(c.open) && isFinite(c.high) && isFinite(c.low) && isFinite(c.close) &&
-          c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 &&
-          !seen.has(c.time) && seen.add(c.time)
+          isFinite(c.open!) && isFinite(c.high!) && isFinite(c.low!) && isFinite(c.close!) &&
+          c.open! > 0 && !seen.has(c.time) && seen.add(c.time)
         )
         .slice(-limit) as { time: number; open: number; high: number; low: number; close: number; volume: number }[];
 
-      if (candles.length > 0) {
-        res.json({ candles });
-        return;
-      }
-      // No usable candles in this range — try the next wider range
-    } catch {
-      // Try next range
-    }
+      if (candles.length > 0) { res.json({ candles }); return; }
+    } catch { /* try next range */ }
   }
 
-  res.json({ candles: [] });
+  // Synthetic fallback for forex/commodities when Yahoo is unreachable
+  const currentPrice = getPrice(symbol);
+  const fallback = currentPrice
+    ? generateSyntheticCandles(symbol, currentPrice, interval, limit)
+    : [];
+  res.json({ candles: fallback, synthetic: true });
 });
 
 export default router;
