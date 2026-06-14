@@ -349,8 +349,32 @@ Admin login: `artifacts/strikerx/src/pages/admin/login.tsx`
   - `home.tsx` — live countdown banner (DD/HH/MM/SS blocks) before Jun 11 kick-off; switches to "THE TOURNAMENT IS LIVE" once started; game section relabelled "WC ORIGINALS 2026"
   - Layout fetches its own WC state so all pages inherit the badge automatically (shared React Query cache key `["wc-theme"]`)
 
-### Phase 9 (Next)
-- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) on Railway and go live
-- [ ] Deploy to Railway production via `node scripts/github-push.mjs`
+### Binary Trading — Phase 2 ✅ (completed 2026-06-14)
+- [x] `trading_assets` + `trading_positions` DB tables
+- [x] Binance WS price feed (BTC/ETH/SOL/BNB/TON) — geo-blocked on Replit dev (expected), works on Railway
+- [x] `tradingEngine.ts` — fixed-odds engine, 1s settlement scheduler, affiliate commission, big-win broadcast
+- [x] REST endpoints: assets, prices, positions (open/active/history/single)
+- [x] Admin trading endpoints: positions list, aggregate stats, asset toggle/ratio management
+- [x] `trading.tsx` — full trading page (asset selector, UP/DOWN buttons, payout display, active positions with countdown, history)
+- [x] `admin/trading.tsx` — admin trading dashboard
+- [x] `admin/trading-assets.tsx` — asset management UI
+- [x] `TradingChart` component using `lightweight-charts` (candlestick + line, timeframe selector)
+- [x] Route restructure: `/` → Trading (primary), `/games` → old Home (secondary)
+- [x] Bottom nav: Trade first, then Games, Wallet, Loyalty, Profile
+- [x] Win-streak mechanic: `trading_win_streak` on players table, payout boost up to 1.95×
+- [x] WS reauth fix: `useDevAuth()` extracted to `use-telegram-auth.ts`, called from `App.tsx` (always mounted)
+- [x] OpenAPI codegen: `useGetTradingAssets`, `useGetTradingPrices`, `useGetTradingPositionsActive`, `useGetTradingPositions`, `usePostTradingPositions`
+
+### Phase 9 (Next — binary trading improvements)
+The platform is now a binary trading app. All future work should serve the trading product:
+- [ ] Candlestick klines endpoint (`GET /api/trading/klines?symbol&interval&limit`) — Binance REST proxy for crypto, Yahoo Finance for forex/commodities
+- [ ] Forex + commodities live price feed (EURUSD, GBPUSD, GOLD, OIL, etc.) — server-side polling, no API key needed
+- [ ] Real-time `trade_settled` WS toast in trading.tsx (currently only refreshes via poll)
+- [ ] Expose `trading_available_durations` config to trading page (currently hardcoded as [30, 60, 300, 900])
+- [ ] Add env secrets (GAMEBOT_TOKEN, GROUPBOT_TOKEN, CRYPTOBOT_TOKEN) on Railway and activate bots
 - [ ] World Cup special tournament series (admin → /admin/tournaments)
-- [ ] Match reaction posts during live WC matches (GroupBot)
+
+### Lockfile discipline — CRITICAL (added 2026-06-14)
+`pnpm-lock.yaml` was never being pushed to GitHub (it was in `SKIP_FILES` in `github-push.mjs`). This caused every Railway build to fail after any dep change. **Fixed:** lockfile is now included in all pushes.
+
+**Rule:** Any time any `package.json` changes → run `pnpm install` → then push. Never push dep changes without the lockfile.

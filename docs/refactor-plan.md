@@ -4,6 +4,14 @@
 
 ---
 
+## Product vision
+
+StrikerX is a **binary prediction trading terminal** inside Telegram. The app competes with Pocket Option and Quotex — fixed-payout UP/DOWN contracts on crypto, forex, and commodities. The football/World Cup aesthetic is the brand wrapper. Trading is the core product. Games are retention tools.
+
+**Never revert the navigation structure.** `/` = Trading, `/games` = old Home. This is intentional product design, not a bug.
+
+---
+
 ## Current state (as of 2026-06-14) — Phase 2 COMPLETE
 
 All backend and frontend work for binary prediction trading is shipped to Railway production.
@@ -160,9 +168,53 @@ pnpm --filter @workspace/api-spec run codegen
 
 ---
 
-## Potential future improvements
+## Phase 3 — Trading terminal improvements (next up)
 
-- Add a `trade_settled` WebSocket handler in the frontend to animate win/loss without waiting for the poll interval
-- Add a `TradingChart` component with candlestick or line chart (needs a historical price endpoint)
-- Asset management UI at `/admin/trading/assets` (the backend PATCH endpoint exists, needs a frontend page)
-- Expose `trading_available_durations` config to the trading page (currently hardcoded in frontend as `[30, 60, 300, 900]`)
+Priority order for next agent session:
+
+### High priority
+1. **Klines/candlestick endpoint** — `GET /api/trading/klines?symbol&interval&limit`
+   - Crypto: proxy Binance REST `/api/v3/klines` (no API key needed)
+   - Forex/commodities: Yahoo Finance chart API (no API key needed)
+   - Feed into `TradingChart` so users see real historical candles, not a flat line
+
+2. **Forex + commodities live feed** — EURUSD, GBPUSD, USDJPY, GOLD, OIL
+   - Server-side polling every 1s via Yahoo Finance or similar free source
+   - Expose via `price_update` WS event (same as crypto)
+   - Add to `trading_assets` table with `forexCommoditySeed: true` flag
+
+3. **Real-time `trade_settled` toast** — currently trading.tsx only refreshes via poll interval
+   - WS event `trade_settled` is already broadcast by `tradingEngine.ts`
+   - Frontend needs to subscribe and show win/loss toast immediately
+
+### Medium priority
+4. **`trading_available_durations` from config** — currently hardcoded as `[30, 60, 300, 900]` in `trading.tsx`
+   - Read from `configService` key `trading_available_durations` (comma-separated string)
+   - Expose via a public config endpoint or include in assets response
+
+5. **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` secrets in Railway dashboard
+   - No code change needed — bots auto-register webhooks on Railway startup
+
+6. **World Cup tournament series** — use existing admin tournaments UI
+
+## After any change — mandatory steps
+
+```bash
+# After any server-side change:
+pnpm --filter @workspace/api-server run build
+node scripts/github-push.mjs
+
+# After any frontend change (Vite HMR handles dev; push when done):
+node scripts/github-push.mjs
+
+# After any OpenAPI spec change:
+pnpm --filter @workspace/api-spec run codegen
+node scripts/github-push.mjs
+
+# After any package.json change (add/remove/upgrade dep):
+pnpm install                    # updates pnpm-lock.yaml
+node scripts/github-push.mjs   # lockfile is now included — Railway will succeed
+
+# Full typecheck before any push:
+pnpm run typecheck
+```

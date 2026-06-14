@@ -4,6 +4,24 @@
 
 ---
 
+## What StrikerX is — primary product mission
+
+**StrikerX is a binary prediction trading platform** inside Telegram, styled around football/World Cup. The primary product is the **trading terminal** (binary UP/DOWN contracts on crypto/forex/commodities, fixed payout, 30s–15m durations). Think Pocket Option or Quotex, but as a Telegram Mini App with TON/crypto payments.
+
+The casino-style games (The Shot, Penalty, Minefield, Free Kick) are **secondary content** — engagement hooks and retention tools. They exist to keep players active between trades.
+
+### Navigation priority order (as implemented)
+| Route | Page | Priority |
+|---|---|---|
+| `/` | Trading terminal | PRIMARY — first thing users see |
+| `/games` | Games hub (former home) | Secondary |
+| `/games/shot`, `/games/penalty`, etc. | Individual games | Secondary |
+| `/wallet`, `/profile`, `/loyalty` | Utility pages | Supporting |
+
+**All new features should serve the trading product first.** Do not pivot the navigation structure back to games-first without explicit user instruction.
+
+---
+
 ## Production architecture
 
 **Railway is production.** Replit is the development environment only.
@@ -114,6 +132,15 @@ The server domain (Replit or Railway) is the API backend — it is not a valid T
 - Run `node scripts/github-push.mjs` from a bash shell (NOT from code_execution sandbox — PAT unavailable there)
 - The script pushes all files atomically via GitHub Contents API
 - If it fails with 422, it fetches the current SHA and retries automatically
+- **`pnpm-lock.yaml` IS now included in pushes** (fixed 2026-06-14 — it was previously excluded, causing Railway to always fail after any dep change)
+
+### CRITICAL — lockfile discipline
+Railway's Dockerfile runs `pnpm install --frozen-lockfile`. If `pnpm-lock.yaml` on GitHub is out of sync with any workspace `package.json`, the build fails instantly with `ERR_PNPM_OUTDATED_LOCKFILE`.
+
+**Rule:** Any time you add, remove, or upgrade a dependency in any `package.json`:
+1. Run `pnpm install` locally to regenerate `pnpm-lock.yaml`
+2. Run `node scripts/github-push.mjs` — the lockfile is included automatically
+3. Never push source changes without the matching lockfile
 
 ---
 
@@ -479,6 +506,30 @@ These are intentional or accepted limitations — do not try to "fix" them witho
 
 ---
 
+## Trading system — key facts for future agents
+
+| Fact | Detail |
+|---|---|
+| Primary route | `/` renders `Trading` component (not Home). `/games` renders the old Home. |
+| Assets | Crypto (BTC/ETH/SOL/BNB/TON) via Binance WS. Forex/commodities via external feed. |
+| Binance feed | Geo-blocked on Replit dev (451 error — harmless, expected). Works fine on Railway. |
+| Payout ratio | Fixed at 1.82× (stored per-position at open time — admin changes don't affect live trades) |
+| Settlement | 1-second scheduler in `tradingEngine.ts` — checks expired positions and settles |
+| Outcome on push | `"cancelled"` with full refund if entry price === exit price |
+| Trading config keys | `trading_enabled`, `trading_global_payout_ratio`, `trading_min_stake`, `trading_max_stake`, `trading_available_durations`, `trading_default_duration`, `trading_big_win_threshold` |
+| Admin trading | `GET/PATCH /api/admin/trading/assets` — toggle assets, update ratios. `GET /api/admin/trading/positions` — all positions. `GET /api/admin/trading/stats` — aggregate stats. |
+| Admin UI | `/admin/trading` (dashboard), `/admin/trading-assets` (asset management) |
+| WS events | `price_update { symbol, price, at }` — live prices. `trade_settled { positionId, ... }` — player-specific settlement. |
+
+### WS re-auth architecture (fixed 2026-06-14)
+The `useDevAuth()` hook (in `artifacts/strikerx/src/lib/use-telegram-auth.ts`) handles:
+- Initial Telegram `initData` auth on app open
+- Listening for `strikerx:reauth` events when the WS server rejects a stale JWT
+
+**It MUST be called from `App.tsx` (Router component), not from any page component.** Calling it from `home.tsx` broke when `/` was moved to Trading — the reauth listener would never mount. Current location: `App.tsx` line ~57, `useDevAuth()`.
+
+---
+
 ## Gotchas and non-obvious behaviors
 
 - **Drizzle numeric columns return as strings** — always `parseFloat(String(value))`. This is a Drizzle/pg driver quirk, not a bug.
@@ -492,6 +543,7 @@ These are intentional or accepted limitations — do not try to "fix" them witho
 - **WS client count** — `getConnectedClients()` in `lib/wsServer.ts` returns actual connected count. Used by admin overview.
 - **setChatMenuButton / setMyCommands** — called inside `initGameBot()` in `gameBot.ts`. These are non-fatal (errors are caught and warned). They set the persistent "Open StrikerX" button and the command list for ALL users globally.
 - **railway.toml** — present in repo but intentionally emptied. Railway uses `railway.json` (Dockerfile builder). The toml previously had a dangerous `pnpm db push` in its build command — it has been removed.
+- **Express 5 `req.params` type** — typed as `string | string[]`. Always wrap with `String(req.params.foo)` before calling string methods like `.toUpperCase()` or passing to typed functions expecting `string`.
 
 ---
 
