@@ -956,6 +956,50 @@ paths:
 
   # ── TRADING ──────────────────────────────────────────────────────────────────
 
+  /trading/config:
+    get:
+      operationId: getTradingConfig
+      tags: [trading]
+      summary: Public trading configuration (durations, payout ratio, stake limits)
+      responses:
+        "200":
+          description: Trading configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingConfigResponse"
+
+  /trading/klines:
+    get:
+      operationId: getTradingKlines
+      tags: [trading]
+      summary: Historical OHLC candles for a trading asset
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: interval
+          schema:
+            type: string
+            enum: ["1m", "5m", "15m", "30m", "1h"]
+            default: "1m"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+            maximum: 200
+      responses:
+        "200":
+          description: Candle data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingKlinesResponse"
+
   /trading/assets:
     get:
       operationId: getTradingAssets
@@ -1914,6 +1958,46 @@ components:
           type: number
         currentPrice:
           type: ["number", "null"]
+
+    TradingConfigResponse:
+      type: object
+      required: [enabled, availableDurations, defaultDuration, payoutRatio, minStake, maxStake]
+      properties:
+        enabled:
+          type: boolean
+        availableDurations:
+          type: array
+          items:
+            type: integer
+        defaultDuration:
+          type: integer
+        payoutRatio:
+          type: number
+        minStake:
+          type: integer
+        maxStake:
+          type: integer
+
+    TradingKlinesResponse:
+      type: object
+      required: [candles]
+      properties:
+        candles:
+          type: array
+          items:
+            type: object
+            required: [time, open, high, low, close]
+            properties:
+              time:
+                type: number
+              open:
+                type: number
+              high:
+                type: number
+              low:
+                type: number
+              close:
+                type: number
 
     TradingAssetsResponse:
       type: object

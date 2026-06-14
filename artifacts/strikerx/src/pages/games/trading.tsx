@@ -7,12 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useNotifications } from "@/lib/ws-notifications";
 import {
+  useGetTradingConfig,
   useGetTradingAssets,
   useGetTradingPrices,
   useGetTradingPositionsActive,
   useGetTradingPositions,
   usePostTradingPositions,
   getGetMeQueryKey,
+  getGetTradingConfigQueryKey,
   getGetTradingAssetsQueryKey,
   getGetTradingPricesQueryKey,
   getGetTradingPositionsActiveQueryKey,
@@ -27,14 +29,14 @@ import { TradingChart } from "@/components/trading-chart";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DURATIONS = [
-  { label: "30s",  secs: 30  },
-  { label: "1m",   secs: 60  },
-  { label: "5m",   secs: 300 },
-  { label: "15m",  secs: 900 },
-];
+function secsToLabel(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${secs / 60}m`;
+  return `${secs / 3600}h`;
+}
 
-const QUICK_STAKES = [50, 100, 500, 1000];
+const DEFAULT_DURATIONS = [30, 60, 300, 900];
+const QUICK_STAKES_DEFAULT = [50, 100, 500, 1000];
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
   Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON"],
@@ -98,15 +100,15 @@ export function Trading() {
   const queryClient       = useQueryClient();
   const { subscribeWsEvent } = useNotifications();
 
-  const [category, setCategory]     = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
-  const [selectedAsset, setSelected] = useState("BTC");
-  const [interval, setInterval]     = useState<"1m" | "5m" | "15m">("1m");
-  const [chartMode, setChartMode]   = useState<"candle" | "line">("candle");
-  const [duration, setDuration]     = useState(60);
-  const [stake, setStake]           = useState("100");
-  const [streak, setStreak]         = useState(0);
-  const [tab, setTab]               = useState<"active" | "history">("active");
-  const [priceFlash, setPriceFlash] = useState<"up" | "down" | "flat">("flat");
+  const [category, setCategory]       = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
+  const [selectedAsset, setSelected]  = useState("BTC");
+  const [chartInterval, setChartInterval] = useState<"1m" | "5m" | "15m" | "30m" | "1h">("1m");
+  const [chartMode, setChartMode]     = useState<"candle" | "line">("candle");
+  const [duration, setDuration]       = useState(60);
+  const [stake, setStake]             = useState("100");
+  const [streak, setStreak]           = useState(0);
+  const [tab, setTab]                 = useState<"active" | "history">("active");
+  const [priceFlash, setPriceFlash]   = useState<"up" | "down" | "flat">("flat");
 
   const currentPriceRef = useRef<Record<string, number>>({});
   const prevPriceRef    = useRef<Record<string, number>>({});
@@ -114,8 +116,20 @@ export function Trading() {
 
   const isAuthed = !!player;
 
+  const { data: configData }  = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
   const { data: pricesData }  = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
   const { data: assetsData }  = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
+
+  const availableDurations = configData?.availableDurations ?? DEFAULT_DURATIONS;
+  const minStake           = configData?.minStake ?? 10;
+  const maxStake           = configData?.maxStake ?? 10000;
+
+  const quickStakes = (() => {
+    const base = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
+    const deduped = [...new Set(base)].filter((v) => v > 0 && v <= maxStake).sort((a, b) => a - b);
+    return deduped.length >= 2 ? deduped : QUICK_STAKES_DEFAULT;
+  })();
+
   const { data: activeData }  = useGetTradingPositionsActive({
     query: { queryKey: getGetTradingPositionsActiveQueryKey(), refetchInterval: isAuthed ? 3000 : false, enabled: isAuthed },
   });
@@ -350,12 +364,12 @@ export function Trading() {
                 {/* Controls */}
                 <div className="flex gap-1">
                   {/* Interval */}
-                  {(["1m", "5m", "15m"] as const).map((iv) => (
+                  {(["1m", "5m", "15m", "30m", "1h"] as const).map((iv) => (
                     <button
                       key={iv}
-                      onClick={() => setInterval(iv)}
+                      onClick={() => setChartInterval(iv)}
                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                        interval === iv ? "bg-white/15 text-white" : "text-muted-foreground hover:text-white"
+                        chartInterval === iv ? "bg-white/15 text-white" : "text-muted-foreground hover:text-white"
                       }`}
                     >
                       {iv}
@@ -377,7 +391,7 @@ export function Trading() {
             <div className="h-[190px] w-full">
               <TradingChart
                 symbol={selectedAsset}
-                interval={interval}
+                interval={chartInterval}
                 currentPrice={selectedPrice ?? null}
                 entryPrice={entryPrice}
                 chartMode={chartMode}
@@ -401,17 +415,17 @@ export function Trading() {
         {/* ── Duration ──────────────────────────────────────── */}
         <div className="px-3 mt-1">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Duration</p>
-          <div className="grid grid-cols-4 gap-1.5">
-            {DURATIONS.map((d) => (
+          <div className={`grid gap-1.5 ${availableDurations.length <= 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+            {availableDurations.map((secs) => (
               <button
-                key={d.secs}
-                onClick={() => setDuration(d.secs)}
-                style={duration === d.secs ? { background: `${accentColor}22`, borderColor: accentColor, color: accentColor } : {}}
+                key={secs}
+                onClick={() => setDuration(secs)}
+                style={duration === secs ? { background: `${accentColor}22`, borderColor: accentColor, color: accentColor } : {}}
                 className={`py-2 rounded-lg border text-xs font-bold transition-all ${
-                  duration === d.secs ? "" : "border-border text-muted-foreground hover:border-white/30"
+                  duration === secs ? "" : "border-border text-muted-foreground hover:border-white/30"
                 }`}
               >
-                {d.label}
+                {secsToLabel(secs)}
               </button>
             ))}
           </div>
@@ -428,7 +442,7 @@ export function Trading() {
             )}
           </div>
           <div className="flex gap-1.5 mb-1.5">
-            {QUICK_STAKES.map((q) => (
+            {quickStakes.map((q) => (
               <button
                 key={q}
                 onClick={() => setStake(String(q))}
@@ -438,7 +452,7 @@ export function Trading() {
                     : "border-border text-muted-foreground hover:text-white hover:border-white/20"
                 }`}
               >
-                {q >= 1000 ? `${q / 1000}k` : q}
+                {q >= 1000 ? `${(q / 1000).toFixed(q % 1000 === 0 ? 0 : 1)}k` : q}
               </button>
             ))}
           </div>
@@ -456,7 +470,7 @@ export function Trading() {
               </p>
               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                 <Zap size={9} className="text-yellow-400" />
-                Settle in {DURATIONS.find((d) => d.secs === duration)?.label}
+                Settle in {secsToLabel(duration)}
               </p>
             </div>
           )}
