@@ -1998,6 +1998,8 @@ components:
                 type: number
               close:
                 type: number
+              volume:
+                type: number
 
     TradingAssetsResponse:
       type: object
@@ -2013,6 +2015,10 @@ components:
       required: [prices, at]
       properties:
         prices:
+          type: object
+          additionalProperties:
+            type: number
+        changes24h:
           type: object
           additionalProperties:
             type: number

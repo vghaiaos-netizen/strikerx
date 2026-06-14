@@ -35,7 +35,7 @@ function secsToLabel(secs: number): string {
   return `${secs / 3600}h`;
 }
 
-const DEFAULT_DURATIONS = [30, 60, 300, 900];
+const DEFAULT_DURATIONS    = [30, 60, 300, 900];
 const QUICK_STAKES_DEFAULT = [50, 100, 500, 1000];
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
@@ -47,21 +47,21 @@ const ASSET_CATEGORIES: Record<string, string[]> = {
 interface AssetMeta { color: string; icon: string; label: string; digits: number; prefix: string }
 
 const ASSET_META: Record<string, AssetMeta> = {
-  BTC:    { color: "#f7931a", icon: "₿",   label: "Bitcoin",     digits: 2, prefix: "$" },
-  ETH:    { color: "#627eea", icon: "Ξ",   label: "Ethereum",    digits: 2, prefix: "$" },
-  SOL:    { color: "#9945ff", icon: "◎",   label: "Solana",      digits: 3, prefix: "$" },
-  BNB:    { color: "#f0b90b", icon: "⬡",   label: "BNB",         digits: 2, prefix: "$" },
-  TON:    { color: "#0098ea", icon: "◆",   label: "Toncoin",     digits: 4, prefix: "$" },
-  EURUSD: { color: "#0ea5e9", icon: "€$",  label: "EUR/USD",     digits: 5, prefix: "" },
-  GBPUSD: { color: "#8b5cf6", icon: "£$",  label: "GBP/USD",     digits: 5, prefix: "" },
-  USDJPY: { color: "#f59e0b", icon: "$¥",  label: "USD/JPY",     digits: 3, prefix: "" },
-  AUDUSD: { color: "#22d3ee", icon: "A$",  label: "AUD/USD",     digits: 5, prefix: "" },
-  USDCHF: { color: "#ef4444", icon: "$₣",  label: "USD/CHF",     digits: 5, prefix: "" },
-  XAUUSD: { color: "#f59e0b", icon: "Au",  label: "Gold",        digits: 2, prefix: "$" },
-  XAGUSD: { color: "#94a3b8", icon: "Ag",  label: "Silver",      digits: 3, prefix: "$" },
-  USOIL:  { color: "#b45309", icon: "WTI", label: "Crude Oil",   digits: 2, prefix: "$" },
-  NATGAS: { color: "#059669", icon: "NG",  label: "Nat Gas",     digits: 3, prefix: "$" },
-  COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",      digits: 4, prefix: "$" },
+  BTC:    { color: "#f7931a", icon: "₿",   label: "Bitcoin",   digits: 2, prefix: "$" },
+  ETH:    { color: "#627eea", icon: "Ξ",   label: "Ethereum",  digits: 2, prefix: "$" },
+  SOL:    { color: "#9945ff", icon: "◎",   label: "Solana",    digits: 3, prefix: "$" },
+  BNB:    { color: "#f0b90b", icon: "⬡",   label: "BNB",       digits: 2, prefix: "$" },
+  TON:    { color: "#0098ea", icon: "◆",   label: "Toncoin",   digits: 4, prefix: "$" },
+  EURUSD: { color: "#0ea5e9", icon: "€$",  label: "EUR/USD",   digits: 5, prefix: "" },
+  GBPUSD: { color: "#8b5cf6", icon: "£$",  label: "GBP/USD",   digits: 5, prefix: "" },
+  USDJPY: { color: "#f59e0b", icon: "$¥",  label: "USD/JPY",   digits: 3, prefix: "" },
+  AUDUSD: { color: "#22d3ee", icon: "A$",  label: "AUD/USD",   digits: 5, prefix: "" },
+  USDCHF: { color: "#ef4444", icon: "$₣",  label: "USD/CHF",   digits: 5, prefix: "" },
+  XAUUSD: { color: "#f59e0b", icon: "Au",  label: "Gold",      digits: 2, prefix: "$" },
+  XAGUSD: { color: "#94a3b8", icon: "Ag",  label: "Silver",    digits: 3, prefix: "$" },
+  USOIL:  { color: "#b45309", icon: "WTI", label: "Crude Oil", digits: 2, prefix: "$" },
+  NATGAS: { color: "#059669", icon: "NG",  label: "Nat Gas",   digits: 3, prefix: "$" },
+  COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",    digits: 4, prefix: "$" },
 };
 
 function formatPrice(symbol: string, price: number): string {
@@ -73,7 +73,11 @@ function formatPrice(symbol: string, price: number): string {
   return `${meta.prefix}${formatted}`;
 }
 
-// ─── Countdown timer ─────────────────────────────────────────────────────────
+function fmtChange(pct: number): string {
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+// ─── Countdown timer ──────────────────────────────────────────────────────────
 
 function Countdown({ expiresAt }: { expiresAt: string }) {
   const [remaining, setRemaining] = useState(0);
@@ -92,7 +96,33 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+// ─── Position progress bar ────────────────────────────────────────────────────
+
+function PositionProgressBar({ createdAt, expiresAt, isWinning }: { createdAt: string; expiresAt: string; isWinning: boolean | null }) {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const created = new Date(createdAt).getTime();
+    const expires = new Date(expiresAt).getTime();
+    const total   = expires - created;
+    const update  = () => setProgress(Math.min(100, Math.max(0, (Date.now() - created) / total * 100)));
+    update();
+    const id = setInterval(update, 800);
+    return () => clearInterval(id);
+  }, [createdAt, expiresAt]);
+
+  return (
+    <div className="h-0.5 bg-white/6 rounded-full overflow-hidden my-1.5">
+      <div
+        className={`h-full rounded-full transition-colors duration-500 ${
+          isWinning === true ? "bg-green-400/80" : isWinning === false ? "bg-red-400/80" : "bg-white/20"
+        }`}
+        style={{ width: `${progress}%`, transition: "width 0.8s linear" }}
+      />
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export function Trading() {
   const { player, token } = useAuth();
@@ -124,8 +154,11 @@ export function Trading() {
   const minStake           = configData?.minStake ?? 10;
   const maxStake           = configData?.maxStake ?? 10000;
 
+  // 24h % changes (comes from pricesData.changes24h — bonus field not in generated type yet)
+  const changes24h = (pricesData as unknown as { changes24h?: Record<string, number> })?.changes24h ?? {};
+
   const quickStakes = (() => {
-    const base = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
+    const base    = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
     const deduped = [...new Set(base)].filter((v) => v > 0 && v <= maxStake).sort((a, b) => a - b);
     return deduped.length >= 2 ? deduped : QUICK_STAKES_DEFAULT;
   })();
@@ -221,9 +254,9 @@ export function Trading() {
     },
   });
 
-  const apiAssets      = assetsData?.assets ?? [];
+  const apiAssets       = assetsData?.assets ?? [];
   const activePositions = activeData?.positions ?? [];
-  const history        = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
+  const history         = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
 
   // Derive payout for selected asset (with possible streak boost)
   const selectedAssetData = apiAssets.find((a) => a.symbol === selectedAsset);
@@ -232,27 +265,30 @@ export function Trading() {
   const effectivePayout   = streakBoostPct > 0 ? Math.min(1.95, basePayoutRatio + basePayoutRatio * streakBoostPct / 100) : basePayoutRatio;
   const payoutPct         = Math.round((effectivePayout - 1) * 100);
   const stakeNum          = parseFloat(stake) || 0;
-  const potentialWin      = (stakeNum * effectivePayout).toFixed(0);
+  const potentialWin      = Math.round(stakeNum * effectivePayout);
+  const potentialProfit   = Math.round(stakeNum * (effectivePayout - 1));
 
-  // Assets available per current category that exist in the API
+  // Assets available per current category
   const categorySymbols = ASSET_CATEGORIES[category] ?? [];
   const displayAssets   = categorySymbols
     .map((sym) => apiAssets.find((a) => a.symbol === sym) ?? { symbol: sym, displayName: ASSET_META[sym]?.label ?? sym, payoutRatio: 1.82, minStakeStriker: 10, maxStakeStriker: 10000 })
     .filter(Boolean);
 
-  // Auto-select first asset when switching category
   const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities") => {
     setCategory(cat);
     const first = ASSET_CATEGORIES[cat]?.[0];
     if (first) setSelected(first);
   }, []);
 
-  // Active position for selected asset (for entry price line on chart)
+  // Active position for selected asset (entry price for chart line + expiresAt for badge)
   const activeForAsset = activePositions.filter((p) => p.assetSymbol === selectedAsset);
   const entryPrice     = activeForAsset[0]?.entryPrice ?? null;
+  const expiresAt      = activeForAsset[0]?.expiresAt ?? null;
 
-  const meta         = ASSET_META[selectedAsset];
-  const accentColor  = meta?.color ?? "#00ff88";
+  const meta        = ASSET_META[selectedAsset];
+  const accentColor = meta?.color ?? "#00ff88";
+
+  const balance = Math.floor(player?.strikerBalance ?? 0);
 
   function handleTrade(direction: "UP" | "DOWN") {
     if (!player) { toast({ title: "Not logged in", variant: "destructive" }); return; }
@@ -261,6 +297,8 @@ export function Trading() {
       data: { assetSymbol: selectedAsset, direction, stakeStriker: stakeNum, contractDurationSecs: duration },
     });
   }
+
+  const selectedChange = changes24h[selectedAsset];
 
   return (
     <Layout>
@@ -285,31 +323,37 @@ export function Trading() {
         <div className="px-3 pb-2">
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             {displayAssets.map((a) => {
-              const sym    = a.symbol;
-              const aPrice = currentPrices[sym];
-              const aMeta  = ASSET_META[sym];
+              const sym      = a.symbol;
+              const aPrice   = currentPrices[sym];
+              const aChange  = changes24h[sym];
+              const aMeta    = ASSET_META[sym];
               const isActive = sym === selectedAsset;
               return (
                 <button
                   key={sym}
                   onClick={() => setSelected(sym)}
                   style={isActive ? { borderColor: aMeta?.color ?? "#00ff88" } : {}}
-                  className={`flex-shrink-0 flex flex-col items-center px-2.5 py-2 rounded-xl border text-xs font-bold transition-all min-w-[64px] ${
+                  className={`flex-shrink-0 flex flex-col items-center px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all min-w-[62px] ${
                     isActive ? "bg-white/5" : "border-border text-muted-foreground hover:border-white/20"
                   }`}
                 >
-                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="text-sm font-black">
+                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="text-sm font-black leading-none mb-0.5">
                     {aMeta?.icon ?? sym[0]}
                   </span>
-                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="font-black text-[10px]">
+                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="font-black text-[10px] leading-none">
                     {sym.length > 6 ? sym.slice(0, 6) : sym}
                   </span>
                   {aPrice ? (
-                    <span className="text-[8px] font-mono mt-0.5 text-muted-foreground tabular-nums">
-                      {aPrice >= 1000 ? `$${Math.round(aPrice).toLocaleString()}` : aPrice.toFixed(meta?.digits ?? 2 > 3 ? 3 : meta?.digits ?? 2)}
+                    <span className="text-[8px] font-mono mt-0.5 text-muted-foreground tabular-nums leading-none">
+                      {aPrice >= 1000 ? `$${Math.round(aPrice).toLocaleString()}` : aPrice.toFixed(Math.min(meta?.digits ?? 2, 3))}
                     </span>
                   ) : (
-                    <span className="text-[8px] text-muted-foreground/50 mt-0.5">—</span>
+                    <span className="text-[8px] text-muted-foreground/40 mt-0.5 leading-none">—</span>
+                  )}
+                  {aChange !== undefined && (
+                    <span className={`text-[7px] font-bold tabular-nums leading-none mt-0.5 ${aChange >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {fmtChange(aChange)}
+                    </span>
                   )}
                 </button>
               );
@@ -331,24 +375,31 @@ export function Trading() {
                     : "Crypto"
                   }
                 </p>
-                <AnimatePresence mode="wait">
-                  <motion.p
-                    key={`${selectedAsset}-${(selectedPrice ?? 0).toFixed(2)}`}
-                    initial={{ opacity: 0.5, y: -2 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.12 }}
-                    className={`text-2xl font-mono font-black tabular-nums tracking-tight transition-colors duration-300 ${
-                      priceFlash === "up" ? "text-green-400"
-                      : priceFlash === "down" ? "text-red-400"
-                      : "text-white"
-                    }`}
-                  >
-                    {selectedPrice
-                      ? formatPrice(selectedAsset, selectedPrice)
-                      : <span className="text-muted-foreground text-base animate-pulse">Connecting…</span>
-                    }
-                  </motion.p>
-                </AnimatePresence>
+                <div className="flex items-baseline gap-2">
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={`${selectedAsset}-${(selectedPrice ?? 0).toFixed(2)}`}
+                      initial={{ opacity: 0.5, y: -2 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.12 }}
+                      className={`text-2xl font-mono font-black tabular-nums tracking-tight transition-colors duration-300 ${
+                        priceFlash === "up" ? "text-green-400"
+                        : priceFlash === "down" ? "text-red-400"
+                        : "text-white"
+                      }`}
+                    >
+                      {selectedPrice
+                        ? formatPrice(selectedAsset, selectedPrice)
+                        : <span className="text-muted-foreground text-base animate-pulse">Connecting…</span>
+                      }
+                    </motion.p>
+                  </AnimatePresence>
+                  {selectedChange !== undefined && selectedPrice && (
+                    <span className={`text-xs font-bold tabular-nums ${selectedChange >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {fmtChange(selectedChange)}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col items-end gap-1.5 ml-2 shrink-0">
@@ -362,8 +413,7 @@ export function Trading() {
                 </div>
 
                 {/* Controls */}
-                <div className="flex gap-1">
-                  {/* Interval */}
+                <div className="flex gap-1 items-center">
                   {(["1m", "5m", "15m", "30m", "1h"] as const).map((iv) => (
                     <button
                       key={iv}
@@ -375,11 +425,9 @@ export function Trading() {
                       {iv}
                     </button>
                   ))}
-                  {/* Chart mode */}
                   <button
                     onClick={() => setChartMode((m) => m === "candle" ? "line" : "candle")}
                     className="p-1 rounded text-muted-foreground hover:text-white transition-colors"
-                    title={chartMode === "candle" ? "Switch to line" : "Switch to candles"}
                   >
                     {chartMode === "candle" ? <LineChart size={11} /> : <CandlestickChart size={11} />}
                   </button>
@@ -387,13 +435,14 @@ export function Trading() {
               </div>
             </div>
 
-            {/* lightweight-charts chart */}
-            <div className="h-[190px] w-full">
+            {/* Chart canvas — taller now */}
+            <div className="h-[240px] w-full">
               <TradingChart
                 symbol={selectedAsset}
                 interval={chartInterval}
                 currentPrice={selectedPrice ?? null}
                 entryPrice={entryPrice}
+                expiresAt={expiresAt}
                 chartMode={chartMode}
                 token={token}
               />
@@ -407,7 +456,7 @@ export function Trading() {
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/25">
               <Flame size={14} className="text-orange-400 shrink-0" />
               <span className="text-xs font-bold text-orange-300">{streak}× win streak</span>
-              <span className="text-[10px] text-orange-400/70 ml-1">— +{streakBoostPct}% payout boost active</span>
+              <span className="text-[10px] text-orange-400/70 ml-1">+{streakBoostPct}% payout boost</span>
             </div>
           </div>
         )}
@@ -435,11 +484,29 @@ export function Trading() {
         <div className="px-3 mt-3">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Stake (STRK)</p>
-            {player && (
-              <p className="text-[10px] text-muted-foreground">
-                Bal: <span className="text-white font-bold">{Math.round(player.strikerBalance ?? 0).toLocaleString()}</span>
-              </p>
-            )}
+            <div className="flex items-center gap-2">
+              {player && (
+                <p className="text-[10px] text-muted-foreground">
+                  Bal: <span className="text-white font-bold">{balance.toLocaleString()}</span>
+                </p>
+              )}
+              {player && balance > 0 && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setStake(String(Math.max(minStake, Math.floor(balance / 2))))}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
+                  >
+                    ½
+                  </button>
+                  <button
+                    onClick={() => setStake(String(Math.min(maxStake, balance)))}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
+                  >
+                    Max
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex gap-1.5 mb-1.5">
             {quickStakes.map((q) => (
@@ -461,16 +528,22 @@ export function Trading() {
             value={stake}
             onChange={(e) => setStake(e.target.value)}
             placeholder="Custom amount"
-            className="font-mono text-base h-11"
+            className={`font-mono text-base h-11 ${stakeNum > 0 && (stakeNum < minStake || stakeNum > maxStake) ? "border-red-500/50" : ""}`}
           />
           {stakeNum > 0 && (
-            <div className="flex items-center justify-between mt-1 px-0.5">
-              <p className="text-[10px] text-muted-foreground">
-                To win: <span className="text-green-400 font-bold text-xs">+{Number(potentialWin).toLocaleString()} STRK</span>
-              </p>
+            <div className="flex items-center justify-between mt-1.5 px-0.5">
+              {stakeNum < minStake ? (
+                <p className="text-[10px] text-red-400">Min stake: {minStake.toLocaleString()} STRK</p>
+              ) : stakeNum > maxStake ? (
+                <p className="text-[10px] text-red-400">Max stake: {maxStake.toLocaleString()} STRK</p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">
+                  To win: <span className="text-green-400 font-bold text-xs">+{potentialProfit.toLocaleString()} STRK</span>
+                </p>
+              )}
               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                 <Zap size={9} className="text-yellow-400" />
-                Settle in {secsToLabel(duration)}
+                {secsToLabel(duration)}
               </p>
             </div>
           )}
@@ -479,20 +552,26 @@ export function Trading() {
         {/* ── Trade buttons ─────────────────────────────────── */}
         <div className="px-3 mt-3 grid grid-cols-2 gap-3">
           <Button
-            className="h-16 text-xl font-black bg-green-600 hover:bg-green-500 active:scale-95 text-white flex flex-col gap-0.5 disabled:opacity-40 transition-transform"
+            className="h-16 font-black bg-green-600 hover:bg-green-500 active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform"
             onClick={() => handleTrade("UP")}
-            disabled={openPositionMutation.isPending || !stakeNum}
+            disabled={openPositionMutation.isPending || !stakeNum || stakeNum < minStake || stakeNum > maxStake}
           >
-            <TrendingUp size={22} />
-            <span className="text-xs font-bold">UP · {payoutPct}%</span>
+            <TrendingUp size={20} />
+            <span className="text-sm font-black">UP</span>
+            <span className="text-[10px] font-bold opacity-80">
+              {stakeNum > 0 ? `+${potentialProfit.toLocaleString()} STRK` : `${payoutPct}% payout`}
+            </span>
           </Button>
           <Button
-            className="h-16 text-xl font-black bg-red-600 hover:bg-red-500 active:scale-95 text-white flex flex-col gap-0.5 disabled:opacity-40 transition-transform"
+            className="h-16 font-black bg-red-600 hover:bg-red-500 active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform"
             onClick={() => handleTrade("DOWN")}
-            disabled={openPositionMutation.isPending || !stakeNum}
+            disabled={openPositionMutation.isPending || !stakeNum || stakeNum < minStake || stakeNum > maxStake}
           >
-            <TrendingDown size={22} />
-            <span className="text-xs font-bold">DOWN · {payoutPct}%</span>
+            <TrendingDown size={20} />
+            <span className="text-sm font-black">DOWN</span>
+            <span className="text-[10px] font-bold opacity-80">
+              {stakeNum > 0 ? `+${potentialProfit.toLocaleString()} STRK` : `${payoutPct}% payout`}
+            </span>
           </Button>
         </div>
 
@@ -533,44 +612,69 @@ export function Trading() {
                     {activePositions.map((p) => {
                       const livePrice = currentPrices[p.assetSymbol];
                       const priceDiff = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
-                      const isWinning = priceDiff !== null
+                      const isWinning: boolean | null = priceDiff !== null
                         ? (p.direction === "UP" ? priceDiff > 0 : priceDiff < 0)
                         : null;
+                      const assetPayout    = apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio ?? 1.82;
+                      const liveProfit     = isWinning === true
+                        ? Math.round(p.stakeStriker * (assetPayout - 1))
+                        : isWinning === false
+                        ? -Math.round(p.stakeStriker)
+                        : null;
+
                       return (
                         <motion.div
                           key={p.id}
                           initial={{ opacity: 0, y: -4 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`bg-card border rounded-xl px-3 py-3 ${
-                            isWinning === true ? "border-green-500/30"
+                          className={`bg-card border rounded-xl px-3 py-2.5 transition-colors ${
+                            isWinning === true  ? "border-green-500/30"
                             : isWinning === false ? "border-red-500/30"
                             : "border-border"
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-1.5">
+                          {/* Row 1: direction badge + asset + countdown */}
+                          <div className="flex items-center justify-between mb-0.5">
                             <div className="flex items-center gap-2">
-                              {p.direction === "UP"
-                                ? <TrendingUp size={14} className="text-green-400 shrink-0" />
-                                : <TrendingDown size={14} className="text-red-400 shrink-0" />}
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                p.direction === "UP"
+                                  ? "bg-green-500/15 text-green-400"
+                                  : "bg-red-500/15 text-red-400"
+                              }`}>
+                                {p.direction === "UP" ? "↑ UP" : "↓ DN"}
+                              </span>
                               <span className="font-bold text-sm">{p.assetSymbol}</span>
-                              <span className={`text-xs font-bold ${p.direction === "UP" ? "text-green-400" : "text-red-400"}`}>
-                                {p.direction}
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {Math.round(p.stakeStriker).toLocaleString()} STRK
                               </span>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <Clock size={11} className="text-muted-foreground" />
+                            <div className="flex items-center gap-1">
+                              <Clock size={10} className="text-muted-foreground" />
                               <Countdown expiresAt={p.expiresAt} />
                             </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
-                            <div>Stake <span className="text-white font-bold">{p.stakeStriker.toLocaleString()}</span></div>
-                            <div>Entry <span className="text-white font-mono">{formatPrice(p.assetSymbol, p.entryPrice)}</span></div>
-                            <div>
-                              Now{" "}
-                              <span className={`font-mono font-bold ${isWinning === true ? "text-green-400" : isWinning === false ? "text-red-400" : "text-muted-foreground"}`}>
-                                {livePrice ? formatPrice(p.assetSymbol, livePrice) : "…"}
+
+                          {/* Progress bar */}
+                          <PositionProgressBar
+                            createdAt={p.createdAt}
+                            expiresAt={p.expiresAt}
+                            isWinning={isWinning}
+                          />
+
+                          {/* Row 2: entry → now + live P&L */}
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="text-muted-foreground font-mono">{formatPrice(p.assetSymbol, p.entryPrice)}</span>
+                            <span className="text-muted-foreground/40">→</span>
+                            <span className={`font-mono font-bold ${
+                              isWinning === true ? "text-green-400" : isWinning === false ? "text-red-400" : "text-muted-foreground"
+                            }`}>
+                              {livePrice ? formatPrice(p.assetSymbol, livePrice) : "…"}
+                            </span>
+                            {liveProfit !== null && (
+                              <span className={`ml-auto text-xs font-black tabular-nums ${liveProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
+                                {liveProfit >= 0 ? `+${liveProfit.toLocaleString()}` : liveProfit.toLocaleString()} STRK
                               </span>
-                            </div>
+                            )}
                           </div>
                         </motion.div>
                       );
@@ -585,33 +689,47 @@ export function Trading() {
                 ) : history.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">No completed trades yet</div>
                 ) : (
-                  <div className="flex flex-col gap-2">
-                    {history.slice(0, 20).map((p) => (
-                      <div key={p.id} className="bg-card border border-border rounded-xl px-3 py-2.5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {p.outcome === "win"
-                            ? <CheckCircle size={14} className="text-green-400 shrink-0" />
-                            : p.outcome === "cancelled"
-                            ? <MinusCircle size={14} className="text-yellow-400 shrink-0" />
-                            : <XCircle size={14} className="text-red-400 shrink-0" />}
-                          <div>
-                            <p className="text-xs font-bold">{p.assetSymbol} <span className={p.direction === "UP" ? "text-green-400" : "text-red-400"}>{p.direction}</span></p>
-                            <p className="text-[9px] text-muted-foreground font-mono">{new Date(p.createdAt).toLocaleTimeString()}</p>
+                  <div className="flex flex-col gap-1.5">
+                    {history.slice(0, 20).map((p) => {
+                      const netPnl = p.outcome === "win"
+                        ? Math.round(p.winAmount - p.stakeStriker)
+                        : p.outcome === "cancelled"
+                        ? 0
+                        : -Math.round(p.stakeStriker);
+
+                      return (
+                        <div key={p.id} className="bg-card border border-border rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {p.outcome === "win"
+                              ? <CheckCircle size={13} className="text-green-400 shrink-0" />
+                              : p.outcome === "cancelled"
+                              ? <MinusCircle size={13} className="text-yellow-400 shrink-0" />
+                              : <XCircle size={13} className="text-red-400 shrink-0" />}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">
+                                {p.assetSymbol}{" "}
+                                <span className={p.direction === "UP" ? "text-green-400" : "text-red-400"}>
+                                  {p.direction === "UP" ? "↑" : "↓"}
+                                </span>
+                                <span className="text-muted-foreground font-normal ml-1">{Math.round(p.stakeStriker).toLocaleString()} staked</span>
+                              </p>
+                              <p className="text-[9px] text-muted-foreground font-mono">
+                                {formatPrice(p.assetSymbol, p.entryPrice)} → {formatPrice(p.assetSymbol, p.exitPrice ?? p.entryPrice)}
+                                <span className="ml-1.5">{new Date(p.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-black tabular-nums ${
+                              netPnl > 0 ? "text-green-400" : netPnl < 0 ? "text-red-400" : "text-yellow-400"
+                            }`}>
+                              {netPnl > 0 ? `+${netPnl.toLocaleString()}` : netPnl === 0 ? "±0" : netPnl.toLocaleString()}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground">STRK</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className={`text-xs font-bold tabular-nums ${p.outcome === "win" ? "text-green-400" : p.outcome === "cancelled" ? "text-yellow-400" : "text-red-400"}`}>
-                            {p.outcome === "win"
-                              ? `+${Math.round(p.winAmount).toLocaleString()}`
-                              : p.outcome === "cancelled"
-                              ? `±0`
-                              : `-${Math.round(p.stakeStriker).toLocaleString()}`}
-                            {" STRK"}
-                          </p>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(p.stakeStriker).toLocaleString()} staked</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </motion.div>
