@@ -20,10 +20,10 @@ interface WsClient {
 const WS_RATE_LIMIT = 30;
 const WS_RATE_WINDOW_MS = 10_000;
 
-// Unauthenticated connections are closed after this many ms.
-// 60 s gives mobile clients on slow connections time to complete Telegram auth
-// before the WS connection is dropped.
-const WS_AUTH_TIMEOUT_MS = 60_000;
+// NOTE: We intentionally do NOT impose an authentication timeout.
+// The heartbeat (25 s ping / 10 s latency window) terminates dead connections.
+// An auth timeout caused authenticated Trading-page clients to be kicked
+// every 60 s whenever their Telegram initData auth completed after WS open.
 
 function isRateLimited(client: WsClient): boolean {
   const now = Date.now();
@@ -108,15 +108,6 @@ export function initWebSocketServer(server: HttpServer) {
     // Send current round state immediately
     sendToClient(ws, "round_state", crashEngine.getPublicState());
 
-    // Disconnect unauthenticated clients after 30 seconds — prevents connection exhaustion
-    const authTimeout = setTimeout(() => {
-      if (!client.playerId) {
-        logger.warn({ clients: clients.size }, "WS client failed to authenticate — closing");
-        sendToClient(ws, "error", { message: "Authentication timeout. Please reconnect and authenticate." });
-        ws.close();
-      }
-    }, WS_AUTH_TIMEOUT_MS);
-
     ws.on("message", async (raw) => {
       if (isRateLimited(client)) {
         sendToClient(ws, "error", { message: "Rate limit exceeded. Slow down." });
@@ -140,7 +131,6 @@ export function initWebSocketServer(server: HttpServer) {
         if (!player) { sendToClient(ws, "error", { message: "Player not found" }); return; }
         client.playerId = player.id;
         client.username = player.username;
-        clearTimeout(authTimeout);
         sendToClient(ws, "auth_ok", { playerId: player.id, username: player.username, strikerBalance: player.strikerBalance });
         return;
       }
@@ -187,13 +177,11 @@ export function initWebSocketServer(server: HttpServer) {
     });
 
     ws.on("close", () => {
-      clearTimeout(authTimeout);
       clients.delete(ws);
       logger.info({ clients: clients.size }, "WebSocket client disconnected");
     });
 
     ws.on("error", (err) => {
-      clearTimeout(authTimeout);
       logger.error({ err }, "WebSocket error");
       clients.delete(ws);
     });
