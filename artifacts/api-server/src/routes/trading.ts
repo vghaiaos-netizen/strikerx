@@ -57,7 +57,7 @@ router.post("/trading/positions", requireAuth, async (req, res): Promise<void> =
 
   try {
     const normalizedSymbol = assetSymbol.toUpperCase();
-    const playerId = (req as any).user.playerId as number;
+    const playerId = req.player!.playerId;
 
     const result = await openPosition({ playerId, assetSymbol: normalizedSymbol, direction, stakeStriker, contractDurationSecs });
 
@@ -83,7 +83,7 @@ router.post("/trading/positions", requireAuth, async (req, res): Promise<void> =
 // NOTE: must be declared BEFORE /trading/positions/:id so Express doesn't match "active" as an id
 router.get("/trading/positions/active", requireAuth, async (req, res): Promise<void> => {
   try {
-    const playerId = (req as any).user.playerId as number;
+    const playerId = req.player!.playerId;
     const positions = await db
       .select()
       .from(tradingPositionsTable)
@@ -116,7 +116,7 @@ router.get("/trading/positions/active", requireAuth, async (req, res): Promise<v
 // Player's recent positions (last 50, all outcomes)
 router.get("/trading/positions", requireAuth, async (req, res): Promise<void> => {
   try {
-    const playerId = (req as any).user.playerId as number;
+    const playerId = req.player!.playerId;
     const positions = await db
       .select()
       .from(tradingPositionsTable)
@@ -153,7 +153,7 @@ router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void
   if (isNaN(positionId)) { res.status(400).json({ error: "Invalid position ID" }); return; }
 
   try {
-    const playerId = (req as any).user.playerId as number;
+    const playerId = req.player!.playerId;
     const [position] = await db
       .select()
       .from(tradingPositionsTable)
