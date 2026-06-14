@@ -11,11 +11,14 @@ export interface WsNotification {
   read: boolean;
 }
 
+type WsEventCallback = (data: Record<string, unknown>) => void;
+
 interface NotificationsContextValue {
   notifications: WsNotification[];
   unreadCount: number;
   markAllRead: () => void;
   clearAll: () => void;
+  subscribeWsEvent: (event: string, cb: WsEventCallback) => () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue>({
@@ -23,6 +26,7 @@ const NotificationsContext = createContext<NotificationsContextValue>({
   unreadCount: 0,
   markAllRead: () => {},
   clearAll: () => {},
+  subscribeWsEvent: () => () => {},
 });
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
@@ -35,6 +39,17 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const reconnectAttempts = useRef(0);
   const mounted = useRef(true);
   const myPlayerIdRef = useRef<number | null>(null);
+  const eventListeners = useRef(new Map<string, Set<WsEventCallback>>());
+
+  const subscribeWsEvent = useCallback((event: string, cb: WsEventCallback) => {
+    if (!eventListeners.current.has(event)) {
+      eventListeners.current.set(event, new Set());
+    }
+    eventListeners.current.get(event)!.add(cb);
+    return () => {
+      eventListeners.current.get(event)?.delete(cb);
+    };
+  }, []);
 
   const connect = useCallback(() => {
     if (!mounted.current) return;
@@ -47,16 +62,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       reconnectAttempts.current = 0;
       if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
 
-      // Keepalive ping every 20 s (keeps mobile proxies from killing idle sockets).
       if (pingInterval.current) clearInterval(pingInterval.current);
       pingInterval.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
       }, 20_000);
 
-      // Auth with polling: home.tsx fires Telegram re-auth on every open, which
-      // writes a fresh JWT to localStorage ~200-500 ms after this WS connects.
-      // Poll every 500 ms for up to 30 s so we catch the token even if it isn't
-      // in localStorage at the instant onopen fires.
       let pollCount = 0;
       const tryAuth = () => {
         if (ws.readyState !== WebSocket.OPEN) return;
@@ -75,6 +85,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       try {
         const { event, data } = JSON.parse(e.data) as { event: string; data: Record<string, unknown> };
 
+        // Fire all registered subscribers for this event first
+        eventListeners.current.get(event)?.forEach((cb) => {
+          try { cb(data); } catch { /* ignore subscriber errors */ }
+        });
+
         if (event === "auth_ok") {
           authRetries.current = 0;
           if (authRetryTimer.current) { clearTimeout(authRetryTimer.current); authRetryTimer.current = null; }
@@ -82,9 +97,6 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // If server rejects our token, wait for a FRESH token to land in
-        // localStorage (home.tsx re-auths with Telegram on every open, writing a
-        // new JWT within ~200-500 ms). Poll until the value changes, then retry.
         if (event === "error") {
           const msg = String(data.message ?? "");
           if (msg === "Invalid token" || msg.includes("Authentication timeout")) {
@@ -92,17 +104,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
             const failedToken = localStorage.getItem("strikerx_token");
             let pollCount = 0;
             const waitForFreshToken = () => {
-              if (ws.readyState !== WebSocket.OPEN) return; // onclose will reconnect
+              if (ws.readyState !== WebSocket.OPEN) return;
               const current = localStorage.getItem("strikerx_token");
               if (current && current !== failedToken) {
-                // A new token arrived — retry auth
                 ws.send(JSON.stringify({ type: "auth", token: current }));
               } else if (pollCount < 60) {
-                // Keep polling every 500 ms for up to 30 s
                 pollCount++;
                 authRetryTimer.current = setTimeout(waitForFreshToken, 500);
               } else {
-                // Gave up — close so onclose reconnects cleanly
                 ws.close();
               }
             };
@@ -141,7 +150,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
         if (event === "achievement_unlocked") {
           const pid = Number(data.playerId ?? 0);
-          if (pid !== myPlayerIdRef.current) return; // only show own achievements
+          if (pid !== myPlayerIdRef.current) return;
           const keys = (data.keys as string[] | undefined) ?? [];
           for (const key of keys) {
             const def = ACHIEVEMENT_MAP[key];
@@ -212,7 +221,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <NotificationsContext.Provider value={{ notifications, unreadCount, markAllRead, clearAll }}>
+    <NotificationsContext.Provider value={{ notifications, unreadCount, markAllRead, clearAll, subscribeWsEvent }}>
       {children}
     </NotificationsContext.Provider>
   );

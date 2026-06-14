@@ -378,14 +378,39 @@ export function Home() {
           </div>
         )}
 
-        {/* ── Game Grid ── */}
+        {/* ── Trading Hero CTA ── */}
+        <Link href="/games/trading">
+          <motion.div
+            whileTap={{ scale: 0.97 }}
+            className="relative overflow-hidden rounded-2xl border border-[#00ff88]/30 bg-gradient-to-br from-[#00ff88]/10 via-[#0d1117] to-[#0d1117]/80 p-4 cursor-pointer"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,#00ff8818,transparent_60%)]" />
+            <div className="relative flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#00ff88]/15 border border-[#00ff88]/25 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-5 h-5 text-[#00ff88]" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-display font-black text-base text-white tracking-tight">Binary Trading</span>
+                  <span className="text-[9px] font-mono font-bold bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/30 rounded-full px-2 py-0.5 tracking-widest">LIVE</span>
+                </div>
+                <div className="text-[11px] font-mono text-white/40 mt-0.5">Predict BTC · ETH · SOL · BNB · TON</div>
+                <div className="text-[10px] font-mono text-[#00ff88]/70 mt-1 font-bold">1.82× payout · Fixed odds · Settle in 30s–15m</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-[#00ff88]/50 flex-shrink-0" />
+            </div>
+          </motion.div>
+        </Link>
+
+        {/* ── Mini Games (side entertainment) ── */}
         <div>
           <div className="flex items-center gap-2 mb-2.5">
             <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30">
-              {wcTheme?.active ? t('home.wcOriginals') : t('home.originals')}
+              Mini Games
             </div>
+            <div className="text-[9px] font-mono text-white/15">· for fun</div>
             {wcTheme?.active && (
-              <span className="text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">2026</span>
+              <span className="ml-auto text-[8px] font-mono font-bold bg-[#e63946]/15 text-[#e63946] border border-[#e63946]/20 rounded-full px-1.5 py-0.5 tracking-widest">WC 2026</span>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
