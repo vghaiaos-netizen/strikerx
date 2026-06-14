@@ -46,13 +46,15 @@ import { AdminJackpot } from "./pages/admin/jackpot";
 import { AdminInbox } from "./pages/admin/inbox";
 import { AdminOutreach } from "./pages/admin/outreach";
 import { AdminTrading } from "./pages/admin/trading";
+import { AdminTradingAssets } from "./pages/admin/trading-assets";
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={Trading} />
+      <Route path="/games" component={Home} />
 
       {/* Player Pages */}
       <Route path="/games/trading"   component={Trading} />
@@ -87,6 +89,7 @@ function Router() {
       <Route path="/admin/jackpot"        component={AdminJackpot} />
       <Route path="/admin/inbox"          component={AdminInbox} />
       <Route path="/admin/outreach"       component={AdminOutreach} />
+      <Route path="/admin/trading/assets"  component={AdminTradingAssets} />
       <Route path="/admin/trading"        component={AdminTrading} />
 
       <Route component={NotFound} />
