@@ -4,8 +4,6 @@ import { openPosition, getEnabledAssets } from "../lib/tradingEngine";
 import { getPrice, getAllPrices } from "../lib/binanceFeed";
 import { db, tradingPositionsTable } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
-import { z } from "zod";
-
 const router = Router();
 
 // ── GET /api/trading/assets ─────────────────────────────────────────────────
@@ -35,24 +33,26 @@ router.get("/trading/prices", (_req, res) => {
 
 // ── POST /api/trading/positions ─────────────────────────────────────────────
 // Open a new binary trading position
-const openPositionSchema = z.object({
-  assetSymbol: z.string().min(2).max(10).transform((v) => v.toUpperCase()),
-  direction: z.enum(["UP", "DOWN"]),
-  stakeStriker: z.number().positive(),
-  contractDurationSecs: z.number().int().positive(),
-});
-
 router.post("/trading/positions", requireAuth, async (req, res) => {
-  const parsed = openPositionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
-    return;
+  const { assetSymbol, direction, stakeStriker, contractDurationSecs } = req.body ?? {};
+
+  if (typeof assetSymbol !== "string" || assetSymbol.length < 2 || assetSymbol.length > 10) {
+    res.status(400).json({ error: "Invalid assetSymbol" }); return;
+  }
+  if (direction !== "UP" && direction !== "DOWN") {
+    res.status(400).json({ error: "direction must be UP or DOWN" }); return;
+  }
+  if (typeof stakeStriker !== "number" || stakeStriker <= 0) {
+    res.status(400).json({ error: "stakeStriker must be a positive number" }); return;
+  }
+  if (typeof contractDurationSecs !== "number" || !Number.isInteger(contractDurationSecs) || contractDurationSecs <= 0) {
+    res.status(400).json({ error: "contractDurationSecs must be a positive integer" }); return;
   }
 
-  const { assetSymbol, direction, stakeStriker, contractDurationSecs } = parsed.data;
+  const normalizedSymbol = assetSymbol.toUpperCase();
   const playerId = (req as any).user.playerId as number;
 
-  const result = await openPosition({ playerId, assetSymbol, direction, stakeStriker, contractDurationSecs });
+  const result = await openPosition({ playerId, assetSymbol: normalizedSymbol, direction, stakeStriker, contractDurationSecs });
 
   if (!result.success) {
     res.status(400).json({ error: result.error });
