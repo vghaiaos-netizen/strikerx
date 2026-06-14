@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../lib/auth";
 import { openPosition, getEnabledAssets } from "../lib/tradingEngine";
-import { getPrice, getAllPrices } from "../lib/binanceFeed";
+import { getPrice, getAllPrices, get24hChanges } from "../lib/binanceFeed";
 import { db, tradingPositionsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -35,7 +35,7 @@ router.get("/trading/assets", async (_req, res): Promise<void> => {
 // ── GET /api/trading/prices ──────────────────────────────────────────────────
 // Current Binance prices for all subscribed symbols
 router.get("/trading/prices", (_req, res): void => {
-  res.json({ prices: getAllPrices(), at: Date.now() });
+  res.json({ prices: getAllPrices(), changes24h: get24hChanges(), at: Date.now() });
 });
 
 // ── POST /api/trading/positions ──────────────────────────────────────────────
@@ -246,11 +246,12 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw = await r.json() as any[];
       const candles = raw.map((c) => ({
-        time:  Math.floor(Number(c[0]) / 1000),
-        open:  parseFloat(c[1]),
-        high:  parseFloat(c[2]),
-        low:   parseFloat(c[3]),
-        close: parseFloat(c[4]),
+        time:   Math.floor(Number(c[0]) / 1000),
+        open:   parseFloat(c[1]),
+        high:   parseFloat(c[2]),
+        low:    parseFloat(c[3]),
+        close:  parseFloat(c[4]),
+        volume: parseFloat(c[5]) || 0,
       }));
       res.json({ candles });
     } catch {
@@ -286,18 +287,20 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
 
     const timestamps: number[] = result.timestamp ?? [];
     const q = result.indicators?.quote?.[0] ?? {};
-    const opens: number[]  = q.open  ?? [];
-    const highs: number[]  = q.high  ?? [];
-    const lows: number[]   = q.low   ?? [];
-    const closes: number[] = q.close ?? [];
+    const opens:   number[] = q.open   ?? [];
+    const highs:   number[] = q.high   ?? [];
+    const lows:    number[] = q.low    ?? [];
+    const closes:  number[] = q.close  ?? [];
+    const volumes: number[] = q.volume ?? [];
 
     const candles = timestamps
       .map((t: number, i: number) => ({
-        time:  t,
-        open:  opens[i],
-        high:  highs[i],
-        low:   lows[i],
-        close: closes[i],
+        time:   t,
+        open:   opens[i],
+        high:   highs[i],
+        low:    lows[i],
+        close:  closes[i],
+        volume: volumes[i] ?? 0,
       }))
       .filter((c) => c.open != null && c.close != null && !isNaN(c.open) && !isNaN(c.close))
       .slice(-limit);

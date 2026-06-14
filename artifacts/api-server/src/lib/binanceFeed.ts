@@ -18,7 +18,8 @@ const BINANCE_STREAM_URL =
     .map((s) => `${s}@ticker`)
     .join("/");
 
-const priceCache = new Map<string, number>();
+const priceCache  = new Map<string, number>();
+const changeCache = new Map<string, number>(); // 24h % change
 
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
@@ -39,7 +40,7 @@ function connect() {
 
   ws.on("message", (raw: Buffer) => {
     try {
-      const msg = JSON.parse(raw.toString()) as { data?: { s?: string; c?: string } };
+      const msg = JSON.parse(raw.toString()) as { data?: { s?: string; c?: string; P?: string } };
       const ticker = msg.data;
       if (!ticker?.s || !ticker?.c) return;
       const price = parseFloat(ticker.c);
@@ -47,6 +48,9 @@ function connect() {
       // ticker.s is e.g. "BTCUSDT" → strip USDT to get "BTC"
       const symbol = ticker.s.replace(/USDT$/, "").toUpperCase();
       priceCache.set(symbol, price);
+      // P = price change percent over 24h (included in the @ticker stream)
+      const pct = parseFloat(ticker.P ?? "");
+      if (!isNaN(pct)) changeCache.set(symbol, pct);
       broadcastFn?.(symbol, price);
     } catch { /* malformed frame — ignore */ }
   });
@@ -87,10 +91,22 @@ export function getAllPrices(): Record<string, number> {
   return Object.fromEntries(priceCache);
 }
 
+/** Snapshot of all 24h % changes keyed by base symbol. */
+export function get24hChanges(): Record<string, number> {
+  return Object.fromEntries(changeCache);
+}
+
 /**
  * Write an external price (e.g. from the forex feed) into the shared cache.
  * This makes getPrice() / getAllPrices() work for any asset class.
  */
 export function setExternalPrice(symbol: string, price: number) {
   priceCache.set(symbol.toUpperCase(), price);
+}
+
+/**
+ * Write an external 24h % change (e.g. from the forex feed) into the shared cache.
+ */
+export function setExternalChange(symbol: string, changePct: number) {
+  changeCache.set(symbol.toUpperCase(), changePct);
 }

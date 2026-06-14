@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { setExternalChange } from "./binanceFeed";
 
 /**
  * Forex / Commodities price feed.
@@ -31,7 +32,9 @@ let pollTimer: NodeJS.Timeout | null = null;
 let broadcastFn: ((symbol: string, price: number) => void) | null = null;
 let staleCounters = new Map<string, number>();
 
-async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
+interface YahooData { price: number; changePct?: number }
+
+async function fetchYahooPrice(yahooSymbol: string): Promise<YahooData | null> {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=2m`;
     const res = await fetch(url, {
@@ -41,8 +44,11 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
     if (!res.ok) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json = await res.json() as any;
-    const price: unknown = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    return typeof price === "number" && price > 0 ? price : null;
+    const meta = json?.chart?.result?.[0]?.meta;
+    const price: unknown = meta?.regularMarketPrice;
+    if (typeof price !== "number" || price <= 0) return null;
+    const pct: unknown = meta?.regularMarketChangePercent;
+    return { price, changePct: typeof pct === "number" ? pct : undefined };
   } catch {
     return null;
   }
@@ -51,10 +57,11 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
 async function pollAll() {
   await Promise.allSettled(
     FEED_SYMBOLS.map(async ({ symbol, yahooSymbol }) => {
-      const price = await fetchYahooPrice(yahooSymbol);
-      if (price !== null) {
+      const data = await fetchYahooPrice(yahooSymbol);
+      if (data !== null) {
         staleCounters.set(symbol, 0);
-        broadcastFn?.(symbol, price);
+        broadcastFn?.(symbol, data.price);
+        if (data.changePct !== undefined) setExternalChange(symbol, data.changePct);
       } else {
         const count = (staleCounters.get(symbol) ?? 0) + 1;
         staleCounters.set(symbol, count);
