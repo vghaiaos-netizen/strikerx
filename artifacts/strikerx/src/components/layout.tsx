@@ -74,8 +74,15 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
-            <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
-              {Math.round(player?.strikerBalance ?? 0).toLocaleString()} STRK
+            <div className="flex items-center gap-1.5">
+              {(player?.tonBalance ?? 0) > 0 ? (
+                <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold text-[#0098ea]">
+                  {parseFloat(String(player?.tonBalance ?? 0)).toFixed(2)} TON
+                </div>
+              ) : null}
+              <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
+                {Math.round(parseFloat(String(player?.strikerBalance ?? 0))).toLocaleString()} STRK
+              </div>
             </div>
             <NotificationBell />
           </div>
