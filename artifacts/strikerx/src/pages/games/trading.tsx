@@ -19,33 +19,59 @@ import {
   getGetTradingPositionsQueryKey,
 } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, MinusCircle, Zap } from "lucide-react";
-import { AreaChart, Area, ResponsiveContainer, YAxis, ReferenceLine, Tooltip } from "recharts";
+import {
+  TrendingUp, TrendingDown, Clock, CheckCircle, XCircle,
+  MinusCircle, Zap, Flame, CandlestickChart, LineChart,
+} from "lucide-react";
+import { TradingChart } from "@/components/trading-chart";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const DURATIONS = [
-  { label: "30s", secs: 30 },
-  { label: "1m",  secs: 60 },
-  { label: "5m",  secs: 300 },
-  { label: "15m", secs: 900 },
+  { label: "30s",  secs: 30  },
+  { label: "1m",   secs: 60  },
+  { label: "5m",   secs: 300 },
+  { label: "15m",  secs: 900 },
 ];
 
 const QUICK_STAKES = [50, 100, 500, 1000];
 
-const ASSET_COLORS: Record<string, string> = {
-  BTC: "#f7931a",
-  ETH: "#627eea",
-  SOL: "#9945ff",
-  BNB: "#f0b90b",
-  TON: "#0098ea",
+const ASSET_CATEGORIES: Record<string, string[]> = {
+  Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON"],
+  Forex:       ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF"],
+  Commodities: ["XAUUSD", "XAGUSD", "USOIL", "NATGAS", "COPPER"],
 };
 
-const ASSET_ICONS: Record<string, string> = {
-  BTC: "₿",
-  ETH: "Ξ",
-  SOL: "◎",
-  BNB: "⬡",
-  TON: "💎",
+interface AssetMeta { color: string; icon: string; label: string; digits: number; prefix: string }
+
+const ASSET_META: Record<string, AssetMeta> = {
+  BTC:    { color: "#f7931a", icon: "₿",   label: "Bitcoin",     digits: 2, prefix: "$" },
+  ETH:    { color: "#627eea", icon: "Ξ",   label: "Ethereum",    digits: 2, prefix: "$" },
+  SOL:    { color: "#9945ff", icon: "◎",   label: "Solana",      digits: 3, prefix: "$" },
+  BNB:    { color: "#f0b90b", icon: "⬡",   label: "BNB",         digits: 2, prefix: "$" },
+  TON:    { color: "#0098ea", icon: "◆",   label: "Toncoin",     digits: 4, prefix: "$" },
+  EURUSD: { color: "#0ea5e9", icon: "€$",  label: "EUR/USD",     digits: 5, prefix: "" },
+  GBPUSD: { color: "#8b5cf6", icon: "£$",  label: "GBP/USD",     digits: 5, prefix: "" },
+  USDJPY: { color: "#f59e0b", icon: "$¥",  label: "USD/JPY",     digits: 3, prefix: "" },
+  AUDUSD: { color: "#22d3ee", icon: "A$",  label: "AUD/USD",     digits: 5, prefix: "" },
+  USDCHF: { color: "#ef4444", icon: "$₣",  label: "USD/CHF",     digits: 5, prefix: "" },
+  XAUUSD: { color: "#f59e0b", icon: "Au",  label: "Gold",        digits: 2, prefix: "$" },
+  XAGUSD: { color: "#94a3b8", icon: "Ag",  label: "Silver",      digits: 3, prefix: "$" },
+  USOIL:  { color: "#b45309", icon: "WTI", label: "Crude Oil",   digits: 2, prefix: "$" },
+  NATGAS: { color: "#059669", icon: "NG",  label: "Nat Gas",     digits: 3, prefix: "$" },
+  COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",      digits: 4, prefix: "$" },
 };
+
+function formatPrice(symbol: string, price: number): string {
+  const meta = ASSET_META[symbol];
+  if (!meta) return `$${price.toFixed(2)}`;
+  const formatted = price >= 1000
+    ? price.toLocaleString("en-US", { minimumFractionDigits: meta.digits > 2 ? 2 : meta.digits, maximumFractionDigits: meta.digits > 2 ? 2 : meta.digits })
+    : price.toFixed(meta.digits);
+  return `${meta.prefix}${formatted}`;
+}
+
+// ─── Countdown timer ─────────────────────────────────────────────────────────
 
 function Countdown({ expiresAt }: { expiresAt: string }) {
   const [remaining, setRemaining] = useState(0);
@@ -64,81 +90,94 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
   );
 }
 
-interface PricePoint { t: number; v: number; }
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export function Trading() {
-  const { player } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { player, token } = useAuth();
+  const { toast }         = useToast();
+  const queryClient       = useQueryClient();
   const { subscribeWsEvent } = useNotifications();
 
-  const [selectedAsset, setSelectedAsset] = useState("BTC");
-  const [duration, setDuration] = useState(60);
-  const [stake, setStake] = useState("100");
-  const [tab, setTab] = useState<"active" | "history">("active");
-
-  const selectedAssetRef = useRef(selectedAsset);
-  useEffect(() => { selectedAssetRef.current = selectedAsset; }, [selectedAsset]);
-
-  // Price chart buffer — keyed by symbol, last 80 points
-  const priceBufferRef = useRef<Record<string, PricePoint[]>>({});
-  const [chartVersion, setChartVersion] = useState(0);
-
-  const prevPriceRef = useRef<Record<string, number>>({});
+  const [category, setCategory]     = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
+  const [selectedAsset, setSelected] = useState("BTC");
+  const [interval, setInterval]     = useState<"1m" | "5m" | "15m">("1m");
+  const [chartMode, setChartMode]   = useState<"candle" | "line">("candle");
+  const [duration, setDuration]     = useState(60);
+  const [stake, setStake]           = useState("100");
+  const [streak, setStreak]         = useState(0);
+  const [tab, setTab]               = useState<"active" | "history">("active");
   const [priceFlash, setPriceFlash] = useState<"up" | "down" | "flat">("flat");
+
+  const currentPriceRef = useRef<Record<string, number>>({});
+  const prevPriceRef    = useRef<Record<string, number>>({});
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
   const isAuthed = !!player;
 
-  const { data: pricesData } = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 2000 } });
-  const { data: assetsData } = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
-  const { data: activeData } = useGetTradingPositionsActive({
+  const { data: pricesData }  = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
+  const { data: assetsData }  = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
+  const { data: activeData }  = useGetTradingPositionsActive({
     query: { queryKey: getGetTradingPositionsActiveQueryKey(), refetchInterval: isAuthed ? 3000 : false, enabled: isAuthed },
   });
   const { data: historyData } = useGetTradingPositions({
     query: { queryKey: getGetTradingPositionsQueryKey(), refetchInterval: isAuthed ? 10_000 : false, enabled: isAuthed },
   });
 
-  // Push a price point into the buffer for a given symbol
-  const pushPrice = useCallback((symbol: string, price: number) => {
-    const buf = priceBufferRef.current[symbol] ?? [];
-    const last = buf[buf.length - 1];
-    if (last && Math.abs(last.v - price) < 0.000001) return; // dedupe exact same value
-    priceBufferRef.current[symbol] = [...buf, { t: Date.now(), v: price }].slice(-80);
-    if (symbol === selectedAssetRef.current) {
-      setChartVersion((c) => c + 1);
-    }
-  }, []);
-
-  // Subscribe to WS price_update for instant chart updates (no polling delay)
-  useEffect(() => {
-    return subscribeWsEvent("price_update", (data) => {
-      const sym = String(data.symbol ?? "");
-      const price = Number(data.price ?? 0);
-      if (sym && price > 0) pushPrice(sym, price);
-    });
-  }, [subscribeWsEvent, pushPrice]);
-
-  // Fallback: also seed from REST poll (catches up if WS hasn't connected yet)
+  // Seed current prices from REST poll
   useEffect(() => {
     if (!pricesData?.prices) return;
-    Object.entries(pricesData.prices).forEach(([sym, price]) => {
-      if (typeof price === "number" && price > 0) pushPrice(sym, price);
+    const next: Record<string, number> = { ...currentPriceRef.current };
+    Object.entries(pricesData.prices).forEach(([sym, p]) => {
+      if (typeof p === "number" && p > 0) next[sym] = p;
     });
-  }, [pricesData, pushPrice]);
+    currentPriceRef.current = next;
+    setCurrentPrices({ ...next });
+  }, [pricesData]);
 
-  // Subscribe to trade_settled for instant win/loss toast (no waiting for next poll)
+  // WS price_update → instant chart updates
+  useEffect(() => {
+    return subscribeWsEvent("price_update", (data) => {
+      const sym   = String(data.symbol ?? "");
+      const price = Number(data.price  ?? 0);
+      if (!sym || price <= 0) return;
+      currentPriceRef.current[sym] = price;
+      setCurrentPrices((prev) => ({ ...prev, [sym]: price }));
+    });
+  }, [subscribeWsEvent]);
+
+  // Price flash animation
+  const selectedPrice = currentPrices[selectedAsset];
+  useEffect(() => {
+    if (selectedPrice === undefined) return;
+    const prev = prevPriceRef.current[selectedAsset];
+    if (prev !== undefined && selectedPrice !== prev) {
+      setPriceFlash(selectedPrice > prev ? "up" : "down");
+      const t = setTimeout(() => setPriceFlash("flat"), 700);
+      return () => clearTimeout(t);
+    }
+    prevPriceRef.current[selectedAsset] = selectedPrice;
+  }, [selectedPrice, selectedAsset]);
+
+  // WS trade_settled → toast + refresh + streak update
   useEffect(() => {
     return subscribeWsEvent("trade_settled", (data) => {
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetTradingPositionsActiveQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetTradingPositionsQueryKey() });
+
+      const newStreak = Number(data.streak ?? 0);
+      setStreak(newStreak);
+
       const outcome = String(data.outcome ?? "");
-      const credit = Number(data.creditAmount ?? 0);
-      const sym = String(data.assetSymbol ?? "");
+      const credit  = Number(data.creditAmount ?? 0);
+      const sym     = String(data.assetSymbol ?? "");
+
       if (outcome === "win") {
         toast({
           title: `WIN! +${Math.round(credit).toLocaleString()} STRK`,
-          description: `${sym} ${data.direction} settled — you called it right`,
+          description: newStreak >= 2
+            ? `${sym} ${data.direction} — ${newStreak} in a row!`
+            : `${sym} ${data.direction} — you called it right`,
         });
       } else if (outcome === "loss") {
         toast({
@@ -147,7 +186,7 @@ export function Trading() {
           variant: "destructive",
         });
       } else {
-        toast({ title: "Trade refunded", description: `${sym} settled at the same price` });
+        toast({ title: "Trade refunded", description: `${sym} settled at entry price` });
       }
     });
   }, [subscribeWsEvent, queryClient, toast]);
@@ -167,44 +206,38 @@ export function Trading() {
     },
   });
 
-  const prices = pricesData?.prices ?? {};
-  const assets = assetsData?.assets ?? [];
+  const apiAssets      = assetsData?.assets ?? [];
   const activePositions = activeData?.positions ?? [];
-  const history = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
+  const history        = (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
 
-  const currentPrice = prices[selectedAsset];
-  const prevPrice = prevPriceRef.current[selectedAsset];
+  // Derive payout for selected asset (with possible streak boost)
+  const selectedAssetData = apiAssets.find((a) => a.symbol === selectedAsset);
+  const basePayoutRatio   = selectedAssetData?.payoutRatio ?? 1.82;
+  const streakBoostPct    = streak >= 5 ? 7 : streak >= 4 ? 5 : streak >= 3 ? 3 : streak >= 2 ? 2 : 0;
+  const effectivePayout   = streakBoostPct > 0 ? Math.min(1.95, basePayoutRatio + basePayoutRatio * streakBoostPct / 100) : basePayoutRatio;
+  const payoutPct         = Math.round((effectivePayout - 1) * 100);
+  const stakeNum          = parseFloat(stake) || 0;
+  const potentialWin      = (stakeNum * effectivePayout).toFixed(0);
 
-  // Price direction flash + prev tracking
-  useEffect(() => {
-    if (currentPrice === undefined) return undefined;
-    if (prevPrice !== undefined && currentPrice !== prevPrice) {
-      setPriceFlash(currentPrice > prevPrice ? "up" : "down");
-    }
-    const t1 = setTimeout(() => setPriceFlash("flat"), 800);
-    const t2 = setTimeout(() => { prevPriceRef.current[selectedAsset] = currentPrice; }, 800);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [currentPrice, selectedAsset, prevPrice]);
+  // Assets available per current category that exist in the API
+  const categorySymbols = ASSET_CATEGORIES[category] ?? [];
+  const displayAssets   = categorySymbols
+    .map((sym) => apiAssets.find((a) => a.symbol === sym) ?? { symbol: sym, displayName: ASSET_META[sym]?.label ?? sym, payoutRatio: 1.82, minStakeStriker: 10, maxStakeStriker: 10000 })
+    .filter(Boolean);
 
-  const selectedAssetData = assets.find((a) => a.symbol === selectedAsset);
-  const payoutRatio = selectedAssetData?.payoutRatio ?? 1.82;
-  const stakeNum = parseFloat(stake) || 0;
-  const potentialWin = (stakeNum * payoutRatio).toFixed(0);
-  const accentColor = ASSET_COLORS[selectedAsset] ?? "#00ff88";
+  // Auto-select first asset when switching category
+  const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities") => {
+    setCategory(cat);
+    const first = ASSET_CATEGORIES[cat]?.[0];
+    if (first) setSelected(first);
+  }, []);
 
-  // Chart data for selected asset
-  const chartData = priceBufferRef.current[selectedAsset] ?? [];
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _chartVersion = chartVersion; // read to trigger re-render
-  const chartTrend = chartData.length >= 2
-    ? chartData[chartData.length - 1].v >= chartData[0].v ? "up" : "down"
-    : "flat";
-  const chartColor = chartTrend === "up" ? "#22c55e" : chartTrend === "down" ? "#ef4444" : accentColor;
-  const chartMin = chartData.length > 0 ? Math.min(...chartData.map((d) => d.v)) * 0.9999 : 0;
-  const chartMax = chartData.length > 0 ? Math.max(...chartData.map((d) => d.v)) * 1.0001 : 1;
-
-  // Active positions for this asset (for entry price reference line)
+  // Active position for selected asset (for entry price line on chart)
   const activeForAsset = activePositions.filter((p) => p.assetSymbol === selectedAsset);
+  const entryPrice     = activeForAsset[0]?.entryPrice ?? null;
+
+  const meta         = ASSET_META[selectedAsset];
+  const accentColor  = meta?.color ?? "#00ff88";
 
   function handleTrade(direction: "UP" | "DOWN") {
     if (!player) { toast({ title: "Not logged in", variant: "destructive" }); return; }
@@ -214,52 +247,54 @@ export function Trading() {
     });
   }
 
-  const formatPrice = (p: number) =>
-    p > 1000
-      ? `$${p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : `$${p.toFixed(4)}`;
-
-  const fallbackAssets = ["BTC", "ETH", "SOL", "BNB", "TON"].map((s) => ({ symbol: s, displayName: s, payoutRatio: 1.82, binanceSymbol: "", minStakeStriker: 10, maxStakeStriker: 10000, currentPrice: null }));
-  const displayAssets = assets.length > 0 ? assets : fallbackAssets;
-
   return (
     <Layout>
       <div className="flex flex-col min-h-full pb-4">
 
-        {/* ── Asset selector ───────────────────────────────── */}
-        <div className="px-3 pt-3 pb-2">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+        {/* ── Category tabs ─────────────────────────────────── */}
+        <div className="px-3 pt-3 pb-1 flex gap-1">
+          {(["Crypto", "Forex", "Commodities"] as const).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => handleCategoryChange(cat)}
+              className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                category === cat ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Asset selector ────────────────────────────────── */}
+        <div className="px-3 pb-2">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             {displayAssets.map((a) => {
-              const sym = a.symbol;
-              const aPrice = prices[sym];
-              const aBuf = priceBufferRef.current[sym] ?? [];
-              const aTrend = aBuf.length >= 2
-                ? aBuf[aBuf.length - 1].v > aBuf[0].v ? "up" : aBuf[aBuf.length - 1].v < aBuf[0].v ? "down" : "flat"
-                : "flat";
+              const sym    = a.symbol;
+              const aPrice = currentPrices[sym];
+              const aMeta  = ASSET_META[sym];
               const isActive = sym === selectedAsset;
               return (
                 <button
                   key={sym}
-                  onClick={() => setSelectedAsset(sym)}
-                  style={isActive ? { borderColor: ASSET_COLORS[sym] ?? "#00ff88" } : {}}
-                  className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl border text-xs font-bold transition-all min-w-[68px] ${
+                  onClick={() => setSelected(sym)}
+                  style={isActive ? { borderColor: aMeta?.color ?? "#00ff88" } : {}}
+                  className={`flex-shrink-0 flex flex-col items-center px-2.5 py-2 rounded-xl border text-xs font-bold transition-all min-w-[64px] ${
                     isActive ? "bg-white/5" : "border-border text-muted-foreground hover:border-white/20"
                   }`}
                 >
-                  <span style={{ color: isActive ? (ASSET_COLORS[sym] ?? "#00ff88") : undefined }}
-                    className="text-sm font-black">{ASSET_ICONS[sym] ?? sym[0]}</span>
-                  <span style={{ color: isActive ? (ASSET_COLORS[sym] ?? "#00ff88") : undefined }}
-                    className="font-black">{sym}</span>
+                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="text-sm font-black">
+                    {aMeta?.icon ?? sym[0]}
+                  </span>
+                  <span style={{ color: isActive ? aMeta?.color : undefined }} className="font-black text-[10px]">
+                    {sym.length > 6 ? sym.slice(0, 6) : sym}
+                  </span>
                   {aPrice ? (
-                    <span className={`text-[9px] font-mono mt-0.5 ${
-                      aTrend === "up" ? "text-green-400" : aTrend === "down" ? "text-red-400" : "text-muted-foreground"
-                    }`}>
-                      {aPrice > 1000
-                        ? `$${Math.round(aPrice).toLocaleString()}`
-                        : `$${aPrice.toFixed(2)}`}
+                    <span className="text-[8px] font-mono mt-0.5 text-muted-foreground tabular-nums">
+                      {aPrice >= 1000 ? `$${Math.round(aPrice).toLocaleString()}` : aPrice.toFixed(meta?.digits ?? 2 > 3 ? 3 : meta?.digits ?? 2)}
                     </span>
                   ) : (
-                    <span className="text-[9px] text-muted-foreground mt-0.5">—</span>
+                    <span className="text-[8px] text-muted-foreground/50 mt-0.5">—</span>
                   )}
                 </button>
               );
@@ -267,113 +302,104 @@ export function Trading() {
           </div>
         </div>
 
-        {/* ── Price chart ──────────────────────────────────── */}
-        <div className="px-3 mb-1">
-          <div className="relative rounded-xl overflow-hidden border border-border bg-card">
-            {/* Price header */}
-            <div className="px-4 pt-3 pb-1 flex items-start justify-between">
-              <div>
-                <p className="text-[10px] text-muted-foreground font-mono tracking-widest uppercase">{selectedAsset}/USDT · Binance live</p>
+        {/* ── Chart panel ───────────────────────────────────── */}
+        <div className="px-3 mb-2">
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+
+            {/* Chart header */}
+            <div className="px-4 pt-3 pb-1.5 flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] text-muted-foreground font-mono tracking-widest uppercase mb-0.5">
+                  {meta?.label ?? selectedAsset} · {
+                    ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF"].includes(selectedAsset) ? "Forex"
+                    : ["XAUUSD","XAGUSD","USOIL","NATGAS","COPPER"].includes(selectedAsset) ? "Commodities"
+                    : "Crypto"
+                  }
+                </p>
                 <AnimatePresence mode="wait">
                   <motion.p
-                    key={`${selectedAsset}-${currentPrice?.toFixed(2)}`}
-                    initial={{ opacity: 0.6, y: -3 }}
+                    key={`${selectedAsset}-${(selectedPrice ?? 0).toFixed(2)}`}
+                    initial={{ opacity: 0.5, y: -2 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className={`text-3xl font-mono font-black tabular-nums tracking-tight mt-0.5 transition-colors duration-300 ${
+                    transition={{ duration: 0.12 }}
+                    className={`text-2xl font-mono font-black tabular-nums tracking-tight transition-colors duration-300 ${
                       priceFlash === "up" ? "text-green-400"
                       : priceFlash === "down" ? "text-red-400"
                       : "text-white"
                     }`}
                   >
-                    {currentPrice ? formatPrice(currentPrice) : (
-                      <span className="text-muted-foreground text-xl animate-pulse">Connecting…</span>
-                    )}
+                    {selectedPrice
+                      ? formatPrice(selectedAsset, selectedPrice)
+                      : <span className="text-muted-foreground text-base animate-pulse">Connecting…</span>
+                    }
                   </motion.p>
                 </AnimatePresence>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                  chartTrend === "up"
-                    ? "bg-green-500/15 border-green-500/30 text-green-400"
-                    : chartTrend === "down"
-                    ? "bg-red-500/15 border-red-500/30 text-red-400"
-                    : "bg-white/5 border-white/10 text-muted-foreground"
-                }`}>
-                  {chartTrend === "up" ? <TrendingUp size={10} /> : chartTrend === "down" ? <TrendingDown size={10} /> : null}
-                  {chartTrend === "up" ? "UP" : chartTrend === "down" ? "DOWN" : "FLAT"}
+
+              <div className="flex flex-col items-end gap-1.5 ml-2 shrink-0">
+                {/* Payout badge */}
+                <div
+                  className="px-2.5 py-1 rounded-lg text-xs font-black tabular-nums"
+                  style={{ background: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}44` }}
+                >
+                  {payoutPct}% payout
+                  {streakBoostPct > 0 && <span className="text-orange-300 ml-1">+{streakBoostPct}%</span>}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Payout <span className="text-white font-bold">{payoutRatio}×</span>
-                </p>
+
+                {/* Controls */}
+                <div className="flex gap-1">
+                  {/* Interval */}
+                  {(["1m", "5m", "15m"] as const).map((iv) => (
+                    <button
+                      key={iv}
+                      onClick={() => setInterval(iv)}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                        interval === iv ? "bg-white/15 text-white" : "text-muted-foreground hover:text-white"
+                      }`}
+                    >
+                      {iv}
+                    </button>
+                  ))}
+                  {/* Chart mode */}
+                  <button
+                    onClick={() => setChartMode((m) => m === "candle" ? "line" : "candle")}
+                    className="p-1 rounded text-muted-foreground hover:text-white transition-colors"
+                    title={chartMode === "candle" ? "Switch to line" : "Switch to candles"}
+                  >
+                    {chartMode === "candle" ? <LineChart size={11} /> : <CandlestickChart size={11} />}
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Recharts area chart */}
-            <div className="h-[130px] w-full px-0">
-              {chartData.length > 1 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id={`grad-${selectedAsset}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.35} />
-                        <stop offset="95%" stopColor={chartColor} stopOpacity={0.03} />
-                      </linearGradient>
-                    </defs>
-                    <YAxis domain={[chartMin, chartMax]} hide />
-                    <Tooltip
-                      content={({ payload }) => {
-                        if (!payload?.length) return null;
-                        const val = Number(payload[0]?.value ?? 0);
-                        return (
-                          <div className="bg-card border border-border rounded px-2 py-1 text-[10px] font-mono text-white shadow-lg">
-                            {formatPrice(val)}
-                          </div>
-                        );
-                      }}
-                    />
-                    {/* Entry price reference lines for active positions */}
-                    {activeForAsset.map((p) => (
-                      <ReferenceLine
-                        key={p.id}
-                        y={p.entryPrice}
-                        stroke={p.direction === "UP" ? "#22c55e" : "#ef4444"}
-                        strokeDasharray="3 3"
-                        strokeWidth={1}
-                        opacity={0.6}
-                      />
-                    ))}
-                    <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke={chartColor}
-                      strokeWidth={2}
-                      fill={`url(#grad-${selectedAsset})`}
-                      dot={false}
-                      isAnimationActive={false}
-                      activeDot={{ r: 3, fill: chartColor, strokeWidth: 0 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-[11px] text-muted-foreground animate-pulse">Loading price data…</p>
-                </div>
-              )}
+            {/* lightweight-charts chart */}
+            <div className="h-[190px] w-full">
+              <TradingChart
+                symbol={selectedAsset}
+                interval={interval}
+                currentPrice={selectedPrice ?? null}
+                entryPrice={entryPrice}
+                chartMode={chartMode}
+                token={token}
+              />
             </div>
-
-            {/* Chart time label */}
-            {chartData.length > 1 && (
-              <p className="text-[9px] text-muted-foreground text-right px-4 pb-2 font-mono">
-                {chartData.length} ticks · live
-              </p>
-            )}
           </div>
         </div>
 
-        {/* ── Duration selector ────────────────────────────── */}
-        <div className="px-3 mt-2">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Duration</p>
+        {/* ── Streak badge ───────────────────────────────────── */}
+        {streak >= 2 && (
+          <div className="px-3 mb-1">
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/25">
+              <Flame size={14} className="text-orange-400 shrink-0" />
+              <span className="text-xs font-bold text-orange-300">{streak}× win streak</span>
+              <span className="text-[10px] text-orange-400/70 ml-1">— +{streakBoostPct}% payout boost active</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Duration ──────────────────────────────────────── */}
+        <div className="px-3 mt-1">
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Duration</p>
           <div className="grid grid-cols-4 gap-1.5">
             {DURATIONS.map((d) => (
               <button
@@ -390,10 +416,10 @@ export function Trading() {
           </div>
         </div>
 
-        {/* ── Stake input ───────────────────────────────────── */}
+        {/* ── Stake ─────────────────────────────────────────── */}
         <div className="px-3 mt-3">
           <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Stake (STRK)</p>
+            <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Stake (STRK)</p>
             {player && (
               <p className="text-[10px] text-muted-foreground">
                 Bal: <span className="text-white font-bold">{Math.round(player.strikerBalance ?? 0).toLocaleString()}</span>
@@ -435,7 +461,7 @@ export function Trading() {
           )}
         </div>
 
-        {/* ── UP / DOWN buttons ─────────────────────────────── */}
+        {/* ── Trade buttons ─────────────────────────────────── */}
         <div className="px-3 mt-3 grid grid-cols-2 gap-3">
           <Button
             className="h-16 text-xl font-black bg-green-600 hover:bg-green-500 active:scale-95 text-white flex flex-col gap-0.5 disabled:opacity-40 transition-transform"
@@ -443,7 +469,7 @@ export function Trading() {
             disabled={openPositionMutation.isPending || !stakeNum}
           >
             <TrendingUp size={22} />
-            <span className="text-xs font-bold">UP · {payoutRatio}×</span>
+            <span className="text-xs font-bold">UP · {payoutPct}%</span>
           </Button>
           <Button
             className="h-16 text-xl font-black bg-red-600 hover:bg-red-500 active:scale-95 text-white flex flex-col gap-0.5 disabled:opacity-40 transition-transform"
@@ -451,7 +477,7 @@ export function Trading() {
             disabled={openPositionMutation.isPending || !stakeNum}
           >
             <TrendingDown size={22} />
-            <span className="text-xs font-bold">DOWN · {payoutRatio}×</span>
+            <span className="text-xs font-bold">DOWN · {payoutPct}%</span>
           </Button>
         </div>
 
@@ -484,17 +510,13 @@ export function Trading() {
             {tab === "active" ? (
               <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {!isAuthed ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Log in via Telegram to trade
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground text-sm">Log in via Telegram to trade</div>
                 ) : activePositions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    No active positions — place a trade above
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground text-sm">No active positions — place a trade above</div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {activePositions.map((p) => {
-                      const livePrice = prices[p.assetSymbol];
+                      const livePrice = currentPrices[p.assetSymbol];
                       const priceDiff = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
                       const isWinning = priceDiff !== null
                         ? (p.direction === "UP" ? priceDiff > 0 : priceDiff < 0)
@@ -505,42 +527,34 @@ export function Trading() {
                           initial={{ opacity: 0, y: -4 }}
                           animate={{ opacity: 1, y: 0 }}
                           className={`bg-card border rounded-xl px-3 py-3 ${
-                            isWinning === true ? "border-green-500/40" : isWinning === false ? "border-red-500/40" : "border-border"
+                            isWinning === true ? "border-green-500/30"
+                            : isWinning === false ? "border-red-500/30"
+                            : "border-border"
                           }`}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-start justify-between mb-1.5">
                             <div className="flex items-center gap-2">
-                              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black ${
-                                p.direction === "UP" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                              }`}>
-                                {p.direction === "UP" ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                              {p.direction === "UP"
+                                ? <TrendingUp size={14} className="text-green-400 shrink-0" />
+                                : <TrendingDown size={14} className="text-red-400 shrink-0" />}
+                              <span className="font-bold text-sm">{p.assetSymbol}</span>
+                              <span className={`text-xs font-bold ${p.direction === "UP" ? "text-green-400" : "text-red-400"}`}>
                                 {p.direction}
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold">
-                                  {p.assetSymbol}
-                                  <span className="text-muted-foreground font-normal"> @ {formatPrice(p.entryPrice)}</span>
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">{p.stakeStriker.toLocaleString()} STRK stake</p>
-                              </div>
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <div className="flex items-center gap-1 justify-end text-muted-foreground">
-                                <Clock size={11} />
-                                <Countdown expiresAt={p.expiresAt} />
-                              </div>
-                              {livePrice && (
-                                <p className={`text-[10px] font-mono font-bold mt-0.5 ${
-                                  isWinning ? "text-green-400" : "text-red-400"
-                                }`}>
-                                  {formatPrice(livePrice)}
-                                  {priceDiff !== null && (
-                                    <span className="ml-1">
-                                      ({priceDiff > 0 ? "+" : ""}{priceDiff.toFixed(2)})
-                                    </span>
-                                  )}
-                                </p>
-                              )}
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={11} className="text-muted-foreground" />
+                              <Countdown expiresAt={p.expiresAt} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+                            <div>Stake <span className="text-white font-bold">{p.stakeStriker.toLocaleString()}</span></div>
+                            <div>Entry <span className="text-white font-mono">{formatPrice(p.assetSymbol, p.entryPrice)}</span></div>
+                            <div>
+                              Now{" "}
+                              <span className={`font-mono font-bold ${isWinning === true ? "text-green-400" : isWinning === false ? "text-red-400" : "text-muted-foreground"}`}>
+                                {livePrice ? formatPrice(p.assetSymbol, livePrice) : "…"}
+                              </span>
                             </div>
                           </div>
                         </motion.div>
@@ -552,55 +566,34 @@ export function Trading() {
             ) : (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {!isAuthed ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Log in via Telegram to see history
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground text-sm">Log in via Telegram to see history</div>
                 ) : history.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    No settled trades yet
-                  </div>
+                  <div className="text-center py-8 text-muted-foreground text-sm">No completed trades yet</div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {history.slice(0, 20).map((p) => (
-                      <div
-                        key={p.id}
-                        className={`bg-card border rounded-xl px-3 py-2.5 flex items-center justify-between ${
-                          p.outcome === "win" ? "border-green-500/30" : p.outcome === "loss" ? "border-red-500/30" : "border-border"
-                        }`}
-                      >
+                      <div key={p.id} className="bg-card border border-border rounded-xl px-3 py-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {p.outcome === "win" ? (
-                            <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
-                          ) : p.outcome === "loss" ? (
-                            <XCircle size={16} className="text-red-400 flex-shrink-0" />
-                          ) : (
-                            <MinusCircle size={16} className="text-muted-foreground flex-shrink-0" />
-                          )}
+                          {p.outcome === "win"
+                            ? <CheckCircle size={14} className="text-green-400 shrink-0" />
+                            : p.outcome === "cancelled"
+                            ? <MinusCircle size={14} className="text-yellow-400 shrink-0" />
+                            : <XCircle size={14} className="text-red-400 shrink-0" />}
                           <div>
-                            <p className="text-xs font-bold">
-                              {p.assetSymbol}{" "}
-                              <span className={p.direction === "UP" ? "text-green-400" : "text-red-400"}>
-                                {p.direction}
-                              </span>
-                              <span className="text-muted-foreground font-normal">
-                                {" "}· {DURATIONS.find((d) => d.secs === p.contractDurationSecs)?.label ?? `${p.contractDurationSecs}s`}
-                              </span>
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                              {formatPrice(p.entryPrice)}
-                              {p.exitPrice ? ` → ${formatPrice(p.exitPrice)}` : ""}
-                            </p>
+                            <p className="text-xs font-bold">{p.assetSymbol} <span className={p.direction === "UP" ? "text-green-400" : "text-red-400"}>{p.direction}</span></p>
+                            <p className="text-[9px] text-muted-foreground font-mono">{new Date(p.createdAt).toLocaleTimeString()}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          {p.outcome === "win" ? (
-                            <p className="text-green-400 font-bold text-sm">+{p.winAmount.toLocaleString()}</p>
-                          ) : p.outcome === "loss" ? (
-                            <p className="text-red-400 font-bold text-sm">−{p.stakeStriker.toLocaleString()}</p>
-                          ) : (
-                            <p className="text-muted-foreground font-bold text-sm">Refunded</p>
-                          )}
-                          <p className="text-[9px] text-muted-foreground">STRK</p>
+                          <p className={`text-xs font-bold tabular-nums ${p.outcome === "win" ? "text-green-400" : p.outcome === "cancelled" ? "text-yellow-400" : "text-red-400"}`}>
+                            {p.outcome === "win"
+                              ? `+${Math.round(p.winAmount).toLocaleString()}`
+                              : p.outcome === "cancelled"
+                              ? `±0`
+                              : `-${Math.round(p.stakeStriker).toLocaleString()}`}
+                            {" STRK"}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(p.stakeStriker).toLocaleString()} staked</p>
                         </div>
                       </div>
                     ))}
@@ -610,7 +603,6 @@ export function Trading() {
             )}
           </AnimatePresence>
         </div>
-
       </div>
     </Layout>
   );
