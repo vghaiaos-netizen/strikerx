@@ -22,6 +22,7 @@ import { TheShot } from "./pages/games/shot";
 import { Penalty } from "./pages/games/penalty";
 import { Minefield } from "./pages/games/minefield";
 import { FreeKick } from "./pages/games/freekick";
+import { Trading } from "./pages/games/trading";
 
 import { Verify } from "./pages/verify";
 import { Achievements } from "./pages/achievements";
@@ -44,6 +45,7 @@ import { AdminAffiliates } from "./pages/admin/affiliates";
 import { AdminJackpot } from "./pages/admin/jackpot";
 import { AdminInbox } from "./pages/admin/inbox";
 import { AdminOutreach } from "./pages/admin/outreach";
+import { AdminTrading } from "./pages/admin/trading";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +55,7 @@ function Router() {
       <Route path="/" component={Home} />
 
       {/* Player Pages */}
+      <Route path="/games/trading"   component={Trading} />
       <Route path="/games/shot"      component={TheShot} />
       <Route path="/games/penalty"   component={Penalty} />
       <Route path="/games/minefield" component={Minefield} />
@@ -84,6 +87,7 @@ function Router() {
       <Route path="/admin/jackpot"        component={AdminJackpot} />
       <Route path="/admin/inbox"          component={AdminInbox} />
       <Route path="/admin/outreach"       component={AdminOutreach} />
+      <Route path="/admin/trading"        component={AdminTrading} />
 
       <Route component={NotFound} />
     </Switch>

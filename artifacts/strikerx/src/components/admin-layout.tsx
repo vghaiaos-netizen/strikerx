@@ -3,12 +3,13 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Settings, BarChart,
   ScrollText, Radio, Trophy, LogOut, ChevronRight, Zap, Flag,
-  UserCheck, Link2, Calendar, MessageSquare, Send, Star
+  UserCheck, Link2, Calendar, MessageSquare, Send, Star, TrendingUp
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const LINKS = [
   { href: "/admin/dashboard",    label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/admin/trading",      label: "Trading",     icon: TrendingUp },
   { href: "/admin/players",      label: "Players",     icon: Users },
   { href: "/admin/withdrawals",  label: "Withdrawals", icon: ArrowLeftRight },
   { href: "/admin/analytics",    label: "Analytics",   icon: BarChart },
