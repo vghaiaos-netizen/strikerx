@@ -182,4 +182,89 @@ router.get("/trading/positions/:id", requireAuth, async (req, res): Promise<void
   }
 });
 
+// ── GET /api/trading/klines ──────────────────────────────────────────────────
+// Historical OHLC candles for the chart.
+// Crypto: proxies Binance REST. Forex/Commodities: Yahoo Finance chart API.
+router.get("/trading/klines", async (req, res): Promise<void> => {
+  const symbol   = String(req.query.symbol ?? "").toUpperCase().trim();
+  const interval = String(req.query.interval ?? "1m");
+  const limit    = Math.min(200, parseInt(String(req.query.limit ?? "100"), 10) || 100);
+
+  if (!symbol) { res.status(400).json({ error: "symbol required" }); return; }
+
+  const VALID_INTERVALS = ["1m", "5m", "15m", "30m", "1h"];
+  if (!VALID_INTERVALS.includes(interval)) { res.status(400).json({ error: "invalid interval" }); return; }
+
+  // ── Crypto assets: proxy Binance REST ──────────────────────────────────────
+  const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON"];
+  if (CRYPTO.includes(symbol)) {
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      if (!r.ok) throw new Error(`Binance HTTP ${r.status}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = await r.json() as any[];
+      const candles = raw.map((c) => ({
+        time:  Math.floor(Number(c[0]) / 1000),
+        open:  parseFloat(c[1]),
+        high:  parseFloat(c[2]),
+        low:   parseFloat(c[3]),
+        close: parseFloat(c[4]),
+      }));
+      res.json({ candles });
+    } catch {
+      // Binance geo-blocked on Replit dev (HTTP 451) — return empty, chart uses live ticks
+      res.json({ candles: [] });
+    }
+    return;
+  }
+
+  // ── Forex / Commodity assets: Yahoo Finance chart API ─────────────────────
+  const YAHOO_MAP: Record<string, string> = {
+    EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "USDJPY=X",
+    AUDUSD: "AUDUSD=X", USDCHF: "USDCHF=X",
+    XAUUSD: "GC=F",  XAGUSD: "SI=F",  USOIL: "CL=F", NATGAS: "NG=F", COPPER: "HG=F",
+  };
+  const yahooSymbol = YAHOO_MAP[symbol];
+  if (!yahooSymbol) { res.json({ candles: [] }); return; }
+
+  const RANGE_MAP: Record<string, string> = { "1m": "1d", "5m": "5d", "15m": "1mo", "30m": "1mo", "1h": "3mo" };
+  const range = RANGE_MAP[interval] ?? "1d";
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}`;
+
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json = await r.json() as any;
+    const result = json?.chart?.result?.[0];
+    if (!result) { res.json({ candles: [] }); return; }
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const q = result.indicators?.quote?.[0] ?? {};
+    const opens: number[]  = q.open  ?? [];
+    const highs: number[]  = q.high  ?? [];
+    const lows: number[]   = q.low   ?? [];
+    const closes: number[] = q.close ?? [];
+
+    const candles = timestamps
+      .map((t: number, i: number) => ({
+        time:  t,
+        open:  opens[i],
+        high:  highs[i],
+        low:   lows[i],
+        close: closes[i],
+      }))
+      .filter((c) => c.open != null && c.close != null && !isNaN(c.open) && !isNaN(c.close))
+      .slice(-limit);
+
+    res.json({ candles });
+  } catch {
+    res.json({ candles: [] });
+  }
+});
+
 export default router;

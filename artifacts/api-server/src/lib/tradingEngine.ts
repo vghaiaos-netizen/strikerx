@@ -1,4 +1,4 @@
-import { db, tradingPositionsTable, tradingAssetsTable, playersTable, transactionsTable, gamesTable } from "@workspace/db";
+import { db, tradingPositionsTable, tradingAssetsTable, playersTable, transactionsTable, gamesTable, pool } from "@workspace/db";
 import { eq, and, lte } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getPrice } from "./binanceFeed";
@@ -6,6 +6,16 @@ import { broadcastToAll, broadcastToPlayer } from "./wsServer";
 import { logger } from "./logger";
 import { creditAffiliateCommission } from "./affiliateCommission";
 import { getConfigFloat, getConfig } from "./configService";
+
+// ─── Win-streak payout boost ───────────────────────────────────────────────────
+// Consecutive wins earn a small payout ratio boost, capped at 1.95×.
+function streakBoost(streak: number): number {
+  if (streak >= 5) return 0.07;
+  if (streak >= 4) return 0.05;
+  if (streak >= 3) return 0.03;
+  if (streak >= 2) return 0.02;
+  return 0;
+}
 
 // ─── Settlement scheduler ──────────────────────────────────────────────────────
 
@@ -105,6 +115,23 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
     });
   });
 
+  // Update win streak (best-effort — column added via migration, may not exist on very first deploy)
+  let newStreak = 0;
+  try {
+    if (outcome === "win") {
+      const r = await pool.query<{ trading_win_streak: number }>(
+        `UPDATE players SET trading_win_streak = COALESCE(trading_win_streak, 0) + 1 WHERE id = $1 RETURNING trading_win_streak`,
+        [position.playerId],
+      );
+      newStreak = Number(r.rows[0]?.trading_win_streak ?? 1);
+    } else {
+      await pool.query(`UPDATE players SET trading_win_streak = 0 WHERE id = $1`, [position.playerId]);
+      newStreak = 0;
+    }
+  } catch {
+    // Non-fatal — column may not exist yet on first deploy
+  }
+
   // Notify the specific player
   broadcastToPlayer(position.playerId, "trade_settled", {
     positionId: position.id,
@@ -116,6 +143,7 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
     winAmount,
     stakeStriker,
     creditAmount,
+    streak: newStreak,
   });
 
   // Announce big wins to the group channel (uses same threshold as casino)
@@ -194,7 +222,21 @@ export async function openPosition(params: {
     return { success: false, error: `Insufficient STRIKER balance (you have ${balance.toFixed(0)})` };
   }
 
-  const payoutRatio = parseFloat(String(asset.payoutRatio));
+  // Read player's current win streak to apply payout boost
+  let currentStreak = 0;
+  try {
+    const r = await pool.query<{ trading_win_streak: number }>(
+      `SELECT COALESCE(trading_win_streak, 0) AS trading_win_streak FROM players WHERE id = $1`,
+      [playerId],
+    );
+    currentStreak = Number(r.rows[0]?.trading_win_streak ?? 0);
+  } catch {
+    // Non-fatal
+  }
+
+  const baseRatio = parseFloat(String(asset.payoutRatio));
+  const boost = streakBoost(currentStreak);
+  const payoutRatio = boost > 0 ? parseFloat(Math.min(1.95, baseRatio + baseRatio * boost).toFixed(4)) : baseRatio;
   const expiresAt = new Date(Date.now() + contractDurationSecs * 1_000);
 
   const [position] = await db.transaction(async (tx) => {

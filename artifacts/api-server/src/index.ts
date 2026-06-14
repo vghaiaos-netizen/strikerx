@@ -4,7 +4,8 @@ import { logger } from "./lib/logger";
 import { initWebSocketServer, broadcastToAll } from "./lib/wsServer";
 import { startCrashEngine } from "./lib/crashEngine";
 import { startScheduler } from "./lib/scheduler";
-import { initBinanceFeed } from "./lib/binanceFeed";
+import { initBinanceFeed, setExternalPrice } from "./lib/binanceFeed";
+import { initForexFeed } from "./lib/forexFeed";
 import { startTradingSettlementScheduler } from "./lib/tradingEngine";
 import { pool } from "@workspace/db";
 
@@ -201,6 +202,25 @@ server.listen(port, async () => {
       END $$`,
     },
     {
+      name: "players.trading_win_streak",
+      sql: `ALTER TABLE players ADD COLUMN IF NOT EXISTS trading_win_streak INTEGER NOT NULL DEFAULT 0`,
+    },
+    {
+      name: "trading_assets.forex_commodity_seed",
+      sql: `INSERT INTO trading_assets (symbol, display_name, binance_symbol, enabled, payout_ratio, min_stake_striker, max_stake_striker, sort_order) VALUES
+        ('EURUSD', 'EUR/USD',     'EURUSD=X', true, 1.82, 10, 10000,  6),
+        ('GBPUSD', 'GBP/USD',     'GBPUSD=X', true, 1.82, 10, 10000,  7),
+        ('USDJPY', 'USD/JPY',     'USDJPY=X', true, 1.82, 10, 10000,  8),
+        ('AUDUSD', 'AUD/USD',     'AUDUSD=X', true, 1.82, 10, 10000,  9),
+        ('USDCHF', 'USD/CHF',     'USDCHF=X', true, 1.82, 10, 10000, 10),
+        ('XAUUSD', 'Gold',        'GC=F',     true, 1.82, 10, 10000, 11),
+        ('XAGUSD', 'Silver',      'SI=F',     true, 1.82, 10, 10000, 12),
+        ('USOIL',  'Crude Oil',   'CL=F',     true, 1.82, 10, 10000, 13),
+        ('NATGAS', 'Natural Gas', 'NG=F',     true, 1.82, 10, 10000, 14),
+        ('COPPER', 'Copper',      'HG=F',     true, 1.82, 10, 10000, 15)
+        ON CONFLICT (symbol) DO NOTHING`,
+    },
+    {
       name: "app_config.trading_keys",
       sql: `INSERT INTO app_config (key, value, category, label, description) VALUES
         ('trading_enabled',              'true',       'trading', 'Trading Enabled',              'Enable/disable binary trading'),
@@ -232,6 +252,13 @@ server.listen(port, async () => {
   // Binance price feed — streams real-time prices for all trading assets.
   // broadcastToAll pushes price_update events to every connected WS client.
   initBinanceFeed((symbol, price) => {
+    broadcastToAll("price_update", { symbol, price, at: Date.now() });
+  });
+
+  // Forex / Commodities feed — polls Yahoo Finance every 6 s (no API key required server-side).
+  // Prices are written into the shared Binance cache via setExternalPrice so getPrice() works for all symbols.
+  initForexFeed((symbol, price) => {
+    setExternalPrice(symbol, price);
     broadcastToAll("price_update", { symbol, price, at: Date.now() });
   });
 

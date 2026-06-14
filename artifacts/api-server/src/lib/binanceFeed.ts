@@ -86,3 +86,11 @@ export function getPrice(symbol: string): number | null {
 export function getAllPrices(): Record<string, number> {
   return Object.fromEntries(priceCache);
 }
+
+/**
+ * Write an external price (e.g. from the forex feed) into the shared cache.
+ * This makes getPrice() / getAllPrices() work for any asset class.
+ */
+export function setExternalPrice(symbol: string, price: number) {
+  priceCache.set(symbol.toUpperCase(), price);
+}
