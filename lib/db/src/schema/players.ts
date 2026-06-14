@@ -13,6 +13,9 @@ export const playersTable = pgTable("players", {
   captainBalance: real("captain_balance").notNull().default(0),
   tonBalance: real("ton_balance").notNull().default(0),
   usdtBalance: real("usdt_balance").notNull().default(0),
+  demoUsdtBalance: real("demo_usdt_balance").notNull().default(10000),
+  demoResetCount: integer("demo_reset_count").notNull().default(0),
+  demoLastReset: timestamp("demo_last_reset", { withTimezone: true }),
   tonWageredLifetime: real("ton_wagered_lifetime").notNull().default(0),
   strikerWageredSinceBonus: real("striker_wagered_since_bonus").notNull().default(0),
   vipTier: text("vip_tier").notNull().default("sunday_league"),
@@ -34,7 +37,6 @@ export const playersTable = pgTable("players", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
-  // Leaderboard & referral lookups — frequently queried fields
   index("players_referred_by_idx").on(table.referredBy),
   index("players_affiliate_code_idx").on(table.affiliateCode),
   index("players_ton_wagered_idx").on(table.tonWageredLifetime),
