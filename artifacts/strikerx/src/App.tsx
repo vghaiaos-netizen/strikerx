@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component, ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -54,6 +54,41 @@ import { AdminTrading } from "./pages/admin/trading";
 import { AdminTradingAssets } from "./pages/admin/trading-assets";
 
 const queryClient = new QueryClient();
+
+// ── Global error boundary — prevents entire app going blank on a render error ──
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: string | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(err: Error) {
+    return { hasError: true, error: err?.message ?? "Unknown error" };
+  }
+  componentDidCatch(err: Error, info: { componentStack: string }) {
+    // Log for debugging without crashing
+    console.error("[StrikerX] Render error:", err, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-background px-6 text-center gap-4">
+          <div className="text-2xl font-black text-red-400">Something went wrong</div>
+          <p className="text-sm text-muted-foreground max-w-xs">{this.state.error}</p>
+          <button
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+            className="mt-2 px-6 py-2 rounded-xl bg-primary/20 border border-primary/30 text-primary text-sm font-bold hover:bg-primary/30 transition-colors"
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function Router() {
   // Handles initial Telegram auth AND the strikerx:reauth listener.
@@ -144,9 +179,11 @@ function AppShell() {
         <AuthProvider>
           <NotificationsProvider>
             <LangSyncer />
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
+            <AppErrorBoundary>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+            </AppErrorBoundary>
             <Toaster />
             <GlobalWinOverlay />
           </NotificationsProvider>
