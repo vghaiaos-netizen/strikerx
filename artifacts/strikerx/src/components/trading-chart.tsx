@@ -13,20 +13,22 @@ import {
 } from "lightweight-charts";
 
 interface TradingChartProps {
-  symbol:       string;
-  interval:     "1m" | "5m" | "15m" | "30m" | "1h";
-  currentPrice: number | null;
-  entryPrice:   number | null;
-  chartMode:    "candle" | "line";
-  expiresAt?:   string | null;
-  token?:       string | null;
+  symbol:          string;
+  interval:        "1m" | "5m" | "15m" | "30m" | "1h";
+  currentPrice:    number | null;
+  entryPrice:      number | null;
+  chartMode:       "candle" | "line";
+  expiresAt?:      string | null;
+  token?:          string | null;
+  activeDirection?: "UP" | "DOWN" | null;
+  isWinning?:      boolean | null;
 }
 
 type KlineBar = CandlestickData<UTCTimestamp> & { volume?: number };
 
 const INTERVAL_SECS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600 };
 
-export function TradingChart({ symbol, interval, currentPrice, entryPrice, chartMode, expiresAt, token }: TradingChartProps) {
+export function TradingChart({ symbol, interval, currentPrice, entryPrice, chartMode, expiresAt, token, activeDirection, isWinning }: TradingChartProps) {
   const wrapRef        = useRef<HTMLDivElement>(null);   // outer wrapper for overlays
   const containerRef   = useRef<HTMLDivElement>(null);   // chart canvas target
   const chartRef       = useRef<IChartApi | null>(null);
@@ -43,15 +45,17 @@ export function TradingChart({ symbol, interval, currentPrice, entryPrice, chart
   const [hasData,   setHasData]   = useState(false);
 
   // ── Expiry countdown overlay ──────────────────────────────────────────────
-  const [expiryLabel, setExpiryLabel] = useState<string | null>(null);
+  const [expiryLabel,   setExpiryLabel]   = useState<string | null>(null);
+  const [expirySeconds, setExpirySeconds] = useState<number | null>(null);
   useEffect(() => {
-    if (!expiresAt) { setExpiryLabel(null); return; }
+    if (!expiresAt) { setExpiryLabel(null); setExpirySeconds(null); return; }
     const update = () => {
       const ms = new Date(expiresAt).getTime() - Date.now();
-      if (ms <= 0) { setExpiryLabel(null); return; }
+      if (ms <= 0) { setExpiryLabel(null); setExpirySeconds(null); return; }
       const m = Math.floor(ms / 60000);
       const s = Math.floor((ms % 60000) / 1000);
       setExpiryLabel(m > 0 ? `${m}m ${s}s` : `${s}s`);
+      setExpirySeconds(m * 60 + s);
     };
     update();
     const id = setInterval(update, 500);
@@ -237,8 +241,8 @@ export function TradingChart({ symbol, interval, currentPrice, entryPrice, chart
     if (entryPrice !== null && entryPrice > 0) {
       entryLineRef.current = series.createPriceLine({
         price:            entryPrice,
-        color:            "#a78bfa",
-        lineWidth:        1,
+        color:            "#c084fc",
+        lineWidth:        2,
         lineStyle:        LineStyle.Dashed,
         axisLabelVisible: true,
         title:            "Entry",
@@ -287,30 +291,76 @@ export function TradingChart({ symbol, interval, currentPrice, entryPrice, chart
     }
   }, [currentPrice, interval]);
 
+  // Derived direction colors
+  const zoneColor = activeDirection === "UP" ? "0,255,136" : activeDirection === "DOWN" ? "239,68,68" : null;
+  const zoneAlpha = isWinning === true ? 0.10 : isWinning === false ? 0.04 : 0.06;
+
   return (
     <div ref={wrapRef} className="w-full h-full relative">
       {/* The actual chart canvas */}
       <div ref={containerRef} className="w-full h-full" />
 
+      {/* Active direction zone overlay */}
+      {zoneColor && activeDirection && (
+        <div
+          className="absolute inset-0 pointer-events-none z-[1] transition-opacity duration-700"
+          style={{
+            background: activeDirection === "UP"
+              ? `linear-gradient(to top, transparent 35%, rgba(${zoneColor},${zoneAlpha}) 100%)`
+              : `linear-gradient(to bottom, transparent 35%, rgba(${zoneColor},${zoneAlpha}) 100%)`,
+          }}
+        />
+      )}
+
+      {/* Winning/losing edge glow */}
+      {isWinning !== null && isWinning !== undefined && activeDirection && (
+        <div
+          className="absolute inset-0 pointer-events-none z-[1] rounded-b-sm transition-opacity duration-500"
+          style={{
+            boxShadow: isWinning
+              ? "inset 0 -3px 0 rgba(0,255,136,0.5)"
+              : "inset 0 -3px 0 rgba(239,68,68,0.5)",
+          }}
+        />
+      )}
+
       {/* Klines loading indicator */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[2]">
           <span className="text-[10px] text-muted-foreground/50 animate-pulse tracking-widest">LOADING</span>
         </div>
       )}
 
       {/* Shown when Binance is geo-blocked (Replit dev) — chart builds from live ticks */}
       {!isLoading && !hasData && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[2]">
           <span className="text-[10px] text-muted-foreground/30 tracking-wider">Building from live feed…</span>
         </div>
       )}
 
       {/* Active position expiry badge */}
-      {expiryLabel && (
-        <div className="absolute top-1.5 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/50 border border-violet-500/30 pointer-events-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-          <span className="text-[9px] font-mono text-violet-300 tabular-nums">{expiryLabel}</span>
+      {expiryLabel && expirySeconds !== null && (
+        <div
+          className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-lg pointer-events-none transition-all duration-300 ${
+            expirySeconds <= 10
+              ? "px-2.5 py-1.5 bg-red-500/25 border border-red-500/60"
+              : expirySeconds <= 30
+              ? "px-2 py-1 bg-orange-500/20 border border-orange-500/45"
+              : "px-1.5 py-0.5 bg-black/50 border border-violet-500/30"
+          }`}
+        >
+          <span
+            className={`rounded-full animate-pulse ${
+              expirySeconds <= 10 ? "w-2 h-2 bg-red-400" : expirySeconds <= 30 ? "w-1.5 h-1.5 bg-orange-400" : "w-1.5 h-1.5 bg-violet-400"
+            }`}
+          />
+          <span
+            className={`font-mono font-bold tabular-nums ${
+              expirySeconds <= 10 ? "text-sm text-red-200" : expirySeconds <= 30 ? "text-[11px] text-orange-300" : "text-[9px] text-violet-300"
+            }`}
+          >
+            {expiryLabel}
+          </span>
         </div>
       )}
     </div>

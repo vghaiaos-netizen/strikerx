@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { BarChart2, PieChart, User, Gamepad2, TrendingUp, Globe, Volume2, VolumeX, ChevronLeft } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
-import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { soundManager } from "@/lib/sound";
@@ -53,10 +52,6 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   };
 
-  const { data: jackpot } = useGetJackpot({
-    query: { queryKey: getGetJackpotQueryKey(), refetchInterval: 30000 },
-  });
-
   const { data: wcTheme } = useQuery<WcTheme>({
     queryKey: ["wc-theme"],
     queryFn: async () => {
@@ -67,8 +62,6 @@ export function Layout({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
 
-  const pct     = jackpot?.percentFull ?? 0;
-  const isReady = jackpot?.status === "ready";
   const wcActive = wcTheme?.active ?? false;
 
   return (
@@ -124,21 +117,6 @@ export function Layout({ children }: { children: ReactNode }) {
             <NotificationBell />
           </div>
         </div>
-
-        {/* Jackpot progress bar */}
-        {jackpot && (
-          <div
-            className={`h-[3px] w-full relative overflow-hidden ${isReady ? "bg-[#f59e0b]/20" : "bg-white/5"}`}
-            title={`Golden Boot Jackpot: ${Number(jackpot.currentAmountTon).toFixed(2)} TON`}
-          >
-            <motion.div
-              className={`h-full ${isReady ? "bg-[#f59e0b]" : "bg-gradient-to-r from-[#f59e0b] to-[#00ff88]"}`}
-              style={{ width: `${Math.min(pct, 100)}%` }}
-              animate={isReady ? { opacity: [1, 0.4, 1] } : { width: `${Math.min(pct, 100)}%` }}
-              transition={isReady ? { duration: 0.9, repeat: Infinity } : { duration: 0.5 }}
-            />
-          </div>
-        )}
 
         {/* World Cup accent line */}
         {wcActive && (
