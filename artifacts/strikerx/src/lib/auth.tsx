@@ -9,6 +9,9 @@ interface AuthContextType {
   setAdminToken: (token: string | null) => void;
   player: any | null;
   isLoading: boolean;
+  /** True while the initial Telegram auth handshake is in flight (up to ~2s on first open). */
+  isBootstrapping: boolean;
+  setBootstrapping: (v: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +19,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(localStorage.getItem("strikerx_token"));
   const [adminToken, setAdminTokenState] = useState<string | null>(localStorage.getItem("strikerx_admin_token"));
+  // Bootstrapping = true while we're waiting for the first Telegram auth handshake.
+  // If there's already a stored token this is false immediately (returning user).
+  const [isBootstrapping, setBootstrapping] = useState<boolean>(!localStorage.getItem("strikerx_token"));
   const queryClient = useQueryClient();
 
   const setToken = (newToken: string | null) => {
@@ -58,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [error, token]);
 
   return (
-    <AuthContext.Provider value={{ token, adminToken, setToken, setAdminToken, player: player || null, isLoading }}>
+    <AuthContext.Provider value={{ token, adminToken, setToken, setAdminToken, player: player || null, isLoading, isBootstrapping, setBootstrapping }}>
       {children}
     </AuthContext.Provider>
   );
