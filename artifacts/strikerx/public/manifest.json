@@ -1,7 +1,7 @@
 {
-  "name": "StrikerX",
+  "name": "StrikerX — Binary Trading Terminal",
   "short_name": "StrikerX",
-  "description": "Football casino — 4 games, instant crypto payouts",
+  "description": "Trade crypto, forex & commodities with fixed-odds UP/DOWN contracts. 1.82× payout. Instant settlement inside Telegram.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -15,5 +15,5 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["games", "entertainment"]
+  "categories": ["finance", "utilities"]
 }

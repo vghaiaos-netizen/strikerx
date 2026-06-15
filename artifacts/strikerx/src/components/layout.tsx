@@ -1,6 +1,6 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { BarChart2, PieChart, User, Gamepad2, TrendingUp, Globe, Volume2, VolumeX } from "lucide-react";
+import { BarChart2, PieChart, User, Gamepad2, TrendingUp, Globe, Volume2, VolumeX, ChevronLeft } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import { useGetJackpot, getGetJackpotQueryKey } from "@workspace/api-client-react";
@@ -11,11 +11,37 @@ import { useTranslation } from "react-i18next";
 
 interface WcTheme { active: boolean; live: boolean; countdown: boolean; kickOff: string | null; endsAt: string | null; }
 
+// Pages that are main-tab roots — no back button on these
+const MAIN_TABS = new Set(["/", "/games", "/markets", "/portfolio", "/account", "/games/trading"]);
+
+function useBackButton(location: string) {
+  const isInner = !MAIN_TABS.has(location);
+
+  useEffect(() => {
+    const tg = (window as unknown as Record<string, unknown>).Telegram as {
+      WebApp?: { BackButton?: { show: () => void; hide: () => void; onClick: (fn: () => void) => void; offClick: (fn: () => void) => void } };
+    } | undefined;
+    const bb = tg?.WebApp?.BackButton;
+    if (!bb) return;
+    if (isInner) {
+      bb.show();
+      const handler = () => window.history.back();
+      bb.onClick(handler);
+      return () => { bb.hide(); bb.offClick(handler); };
+    } else {
+      bb.hide();
+    }
+  }, [isInner]);
+
+  return isInner;
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { player } = useAuth();
   const { t } = useTranslation();
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+  const showBackButton = useBackButton(location);
 
   const toggleSound = () => {
     if (soundManager.isEnabled()) {
@@ -49,6 +75,16 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-[100dvh] w-full max-w-[430px] mx-auto bg-background flex flex-col relative overflow-hidden text-foreground">
       <header className="sticky top-0 z-50 bg-card border-b border-border flex flex-col">
         <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {showBackButton && (
+              <button
+                onClick={() => window.history.back()}
+                className="p-1 -ml-1 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+                aria-label="Back"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
               <span className="font-mono font-bold text-xl text-primary tracking-tighter">
@@ -66,6 +102,7 @@ export function Layout({ children }: { children: ReactNode }) {
               )}
             </div>
           </Link>
+          </div>
           <div className="flex gap-2 items-center">
             <button
               onClick={toggleSound}
