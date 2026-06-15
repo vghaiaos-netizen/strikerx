@@ -73,17 +73,26 @@ const ASSET_META: Record<string, AssetMeta> = {
   COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",    digits: 4, prefix: "$" },
 };
 
-function formatPrice(symbol: string, price: number): string {
+// Defensively converts any API-returned value (Drizzle numeric returns strings)
+function asNum(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function formatPrice(symbol: string, price: number | null | undefined): string {
+  const n = asNum(price);
+  if (!Number.isFinite(n)) return "—";
   const meta = ASSET_META[symbol];
-  if (!meta) return `$${price.toFixed(2)}`;
-  const formatted = price >= 1000
-    ? price.toLocaleString("en-US", { minimumFractionDigits: meta.digits > 2 ? 2 : meta.digits, maximumFractionDigits: meta.digits > 2 ? 2 : meta.digits })
-    : price.toFixed(meta.digits);
+  if (!meta) return `$${n.toFixed(2)}`;
+  const formatted = n >= 1000
+    ? n.toLocaleString("en-US", { minimumFractionDigits: meta.digits > 2 ? 2 : meta.digits, maximumFractionDigits: meta.digits > 2 ? 2 : meta.digits })
+    : n.toFixed(meta.digits);
   return `${meta.prefix}${formatted}`;
 }
 
-function fmtChange(pct: number): string {
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+function fmtChange(pct: number | null | undefined): string {
+  const n = asNum(pct);
+  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
 // Asset decimal precision — must mirror server-side ASSET_DECIMAL_PLACES
@@ -191,9 +200,11 @@ export function Trading() {
   const [contractType, setContractType]   = useState<ContractType>("UP_DOWN");
   const [currency, setCurrency]           = useState<TradingCurrency>("TON");
 
-  const currentPriceRef = useRef<Record<string, number>>({});
-  const prevPriceRef    = useRef<Record<string, number>>({});
+  const currentPriceRef  = useRef<Record<string, number>>({});
+  const prevPriceRef     = useRef<Record<string, number>>({});
+  const priceHistoryRef  = useRef<Record<string, number[]>>({});
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
+  const [aiSignal, setAiSignal] = useState<{ direction: "UP" | "DOWN" | "NEUTRAL"; confidence: number; reason: string } | null>(null);
 
   const isAuthed = !!player;
 
@@ -275,7 +286,7 @@ export function Trading() {
     setCurrentPrices({ ...next });
   }, [pricesData]);
 
-  // WS price_update → instant chart updates
+  // WS price_update → instant chart updates + AI signal history
   useEffect(() => {
     return subscribeWsEvent("price_update", (data) => {
       const sym   = String(data.symbol ?? "");
@@ -283,6 +294,9 @@ export function Trading() {
       if (!sym || price <= 0) return;
       currentPriceRef.current[sym] = price;
       setCurrentPrices((prev) => ({ ...prev, [sym]: price }));
+      // Keep rolling 30-tick history per asset for AI signal
+      const hist = priceHistoryRef.current[sym] ?? [];
+      priceHistoryRef.current[sym] = [...hist.slice(-29), price];
     });
   }, [subscribeWsEvent]);
 
@@ -299,6 +313,37 @@ export function Trading() {
     prevPriceRef.current[selectedAsset] = selectedPrice;
     return undefined;
   }, [selectedPrice, selectedAsset]);
+
+  // AI signal — recompute whenever the selected asset's price updates
+  useEffect(() => {
+    const hist = priceHistoryRef.current[selectedAsset] ?? [];
+    const change24h = asNum(changes24h[selectedAsset]);
+
+    if (hist.length < 6) {
+      setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Gathering data…" });
+      return;
+    }
+    // Count up/down ticks in recent history
+    let upTicks = 0, downTicks = 0;
+    for (let i = 1; i < hist.length; i++) {
+      if (hist[i] > hist[i - 1]) upTicks++;
+      else if (hist[i] < hist[i - 1]) downTicks++;
+    }
+    const totalTicks = upTicks + downTicks;
+    const momentumScore = totalTicks > 0 ? (upTicks - downTicks) / totalTicks : 0; // -1 to +1
+    // Weight recent momentum (60%) + 24h trend direction (40%)
+    const trendScore = Math.max(-1, Math.min(1, change24h / 5)); // ±5% → ±1
+    const combined   = momentumScore * 0.6 + trendScore * 0.4;
+    const confidence = Math.round(50 + Math.abs(combined) * 40);
+
+    if (Math.abs(combined) < 0.08) {
+      setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Mixed signals — price consolidating" });
+    } else if (combined > 0) {
+      setAiSignal({ direction: "UP", confidence, reason: `${upTicks}/${totalTicks} ticks bullish · 24h ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%` });
+    } else {
+      setAiSignal({ direction: "DOWN", confidence, reason: `${downTicks}/${totalTicks} ticks bearish · 24h ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%` });
+    }
+  }, [selectedAsset, currentPrices[selectedAsset]]);
 
   // WS trade_settled → overlay + toast + refresh + streak update
   useEffect(() => {
@@ -697,6 +742,50 @@ export function Trading() {
           </div>
         )}
 
+        {/* ── AI Signal ─────────────────────────────────────── */}
+        {aiSignal && (
+          <div className="px-3 mt-2 mb-1">
+            <div className={`rounded-xl border px-3 py-2 flex items-center justify-between gap-3 ${
+              aiSignal.direction === "UP"
+                ? "border-green-500/25 bg-green-500/5"
+                : aiSignal.direction === "DOWN"
+                ? "border-red-500/25 bg-red-500/5"
+                : "border-border bg-card"
+            }`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded shrink-0 ${
+                  aiSignal.direction === "UP"   ? "bg-green-500/20 text-green-400"
+                  : aiSignal.direction === "DOWN" ? "bg-red-500/20 text-red-400"
+                  : "bg-white/10 text-muted-foreground"
+                }`}>
+                  AI
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-xs font-black leading-none ${
+                    aiSignal.direction === "UP" ? "text-green-400" : aiSignal.direction === "DOWN" ? "text-red-400" : "text-muted-foreground"
+                  }`}>
+                    {aiSignal.direction === "NEUTRAL" ? "NEUTRAL" : `${aiSignal.direction} SIGNAL`}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground/60 font-mono mt-0.5 truncate">{aiSignal.reason}</p>
+                </div>
+              </div>
+              <div className="flex flex-col items-end shrink-0 gap-0.5">
+                <span className={`text-xs font-black tabular-nums ${
+                  aiSignal.direction === "UP" ? "text-green-400" : aiSignal.direction === "DOWN" ? "text-red-400" : "text-muted-foreground"
+                }`}>{aiSignal.confidence}%</span>
+                <div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      aiSignal.direction === "UP" ? "bg-green-400" : aiSignal.direction === "DOWN" ? "bg-red-400" : "bg-white/30"
+                    }`}
+                    style={{ width: `${aiSignal.confidence}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Contract type selector ─────────────────────────── */}
         <div className="px-3 mt-1">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1.5 px-0.5">Contract Type</p>
@@ -959,11 +1048,12 @@ export function Trading() {
                         }
                       }
 
-                      const assetPayout = apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio ?? 1.82;
+                      const assetPayout = asNum(apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio, 1.82);
+                      const stake       = asNum(p.stakeStriker);
                       const liveProfit  = isWinning === true
-                        ? parseFloat((p.stakeStriker * (assetPayout - 1)).toFixed(pCurrency === "STRIKER" ? 0 : 4))
+                        ? parseFloat((stake * (assetPayout - 1)).toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : isWinning === false
-                        ? -parseFloat(p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4))
+                        ? -parseFloat(stake.toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : null;
 
                       const dirColor = ["UP","EVEN","OVER","IN"].includes(p.direction) ? "text-green-400 bg-green-500/15" : "text-red-400 bg-red-500/15";
@@ -987,7 +1077,7 @@ export function Trading() {
                               <span className="font-bold text-sm">{p.assetSymbol}</span>
                               <span className="text-[9px] text-muted-foreground/50 font-mono">{pCType.replace("_", "/")}</span>
                               <span className="text-[10px] text-muted-foreground font-mono">
-                                {p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4)} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
+                                {stake.toFixed(pCurrency === "STRIKER" ? 0 : 4)} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1035,11 +1125,13 @@ export function Trading() {
                   <div className="flex flex-col gap-1.5">
                     {history.slice(0, 20).map((p) => {
                       const pCurrency = p.currency ?? "TON";
+                      const hStake    = asNum(p.stakeStriker);
+                      const hWinAmt   = asNum(p.winAmount);
                       const netPnl    = p.outcome === "win"
-                        ? parseFloat((p.winAmount - p.stakeStriker).toFixed(pCurrency === "STRIKER" ? 0 : 4))
+                        ? parseFloat((hWinAmt - hStake).toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : p.outcome === "cancelled"
                         ? 0
-                        : -parseFloat(p.stakeStriker.toFixed(pCurrency === "STRIKER" ? 0 : 4));
+                        : -parseFloat(hStake.toFixed(pCurrency === "STRIKER" ? 0 : 4));
                       const ccyLabel = pCurrency === "STRIKER" ? "STRK" : pCurrency;
 
                       return (
