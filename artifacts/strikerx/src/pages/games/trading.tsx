@@ -29,9 +29,10 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, Clock, CheckCircle, XCircle,
-  MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins, FlaskConical,
+  MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins, FlaskConical, Trophy,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
+import { soundManager } from "@/lib/sound";
 
 // ─── Local types ────────────────────────────────────────────────────────────
 type ContractType    = "UP_DOWN" | "EVEN_ODD" | "OVER_UNDER" | "IN_OUT";
@@ -226,6 +227,11 @@ export function Trading() {
     setIsDemoMode(v);
   };
 
+  const [screenShake,   setScreenShake]   = useState(false);
+  const [tradeLockedIn, setTradeLockedIn] = useState(false);
+  const prevStreakRef     = useRef(0);
+  const soundThrottleRef = useRef<Record<string, number>>({});
+
   const { data: configData } = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
   const { data: pricesData } = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
   const { data: assetsData } = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
@@ -314,6 +320,16 @@ export function Trading() {
     return undefined;
   }, [selectedPrice, selectedAsset]);
 
+  // Price tick sounds — throttled, selected asset only
+  useEffect(() => {
+    if (priceFlash === "flat") return;
+    const now = Date.now();
+    const last = soundThrottleRef.current[selectedAsset] ?? 0;
+    if (now - last < 1200) return;
+    soundThrottleRef.current[selectedAsset] = now;
+    soundManager.play(priceFlash === "up" ? "price_up" : "price_down");
+  }, [priceFlash, selectedAsset]);
+
   // AI signal — recompute whenever the selected asset's price updates
   useEffect(() => {
     const hist = priceHistoryRef.current[selectedAsset] ?? [];
@@ -364,13 +380,26 @@ export function Trading() {
       const dir       = String(data.direction ?? "");
       const creditFmt = ccy === "STRIKER" ? `${Math.round(credit).toLocaleString()} STRK` : `${credit.toFixed(4)} ${ccy}`;
 
+      // Sounds + haptic feedback
+      if (outcome === "win") {
+        soundManager.play('trade_win_epic');
+        if (newStreak >= 2 && newStreak > prevStreakRef.current) {
+          setTimeout(() => soundManager.play('streak_up'), 900);
+        }
+      } else if (outcome === "loss") {
+        soundManager.play('trade_loss');
+        setScreenShake(true);
+        setTimeout(() => setScreenShake(false), 500);
+      }
+      prevStreakRef.current = newStreak;
+
       // Show overlay on real (non-demo) trades
       if (!data.isDemo) {
         setSettlementResult({
           outcome: outcome as "win" | "loss" | "cancelled",
           symbol: sym, direction: dir, credit, currency: ccy, streak: newStreak,
         });
-        setTimeout(() => setSettlementResult(null), 2800);
+        setTimeout(() => setSettlementResult(null), outcome === "win" ? 4000 : 1800);
       }
 
       if (outcome === "win") {
@@ -443,6 +472,9 @@ export function Trading() {
         queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetTradingPositionsActiveQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetTradingPositionsQueryKey() });
+        soundManager.play('lock_in');
+        setTradeLockedIn(true);
+        setTimeout(() => setTradeLockedIn(false), 600);
         setTab("active");
       },
       onError: (err: unknown) => {
@@ -458,6 +490,9 @@ export function Trading() {
         queryClient.invalidateQueries({ queryKey: getGetDemoPositionsActiveQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDemoPositionsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        soundManager.play('lock_in');
+        setTradeLockedIn(true);
+        setTimeout(() => setTradeLockedIn(false), 600);
         setTab("active");
       },
       onError: (err: unknown) => {
@@ -474,6 +509,20 @@ export function Trading() {
   const history = isDemoMode
     ? (demoHistoryData?.positions ?? []).filter((p: { outcome: string }) => p.outcome !== "pending")
     : (historyData?.positions ?? []).filter((p) => p.outcome !== "pending");
+
+  // Countdown tick sounds for active positions in final 10s
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isAuthed || activePositions.length === 0) return;
+    const id = setInterval(() => {
+      const hasUrgent = activePositions.some((p) => {
+        const secs = Math.ceil((new Date(p.expiresAt).getTime() - Date.now()) / 1000);
+        return secs > 0 && secs <= 10;
+      });
+      if (hasUrgent) soundManager.play('countdown_tick');
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isAuthed, activePositions.length]);
 
   const selectedAssetData = apiAssets.find((a) => a.symbol === selectedAsset);
   const basePayoutRatio   = selectedAssetData?.payoutRatio ?? 1.82;
@@ -520,6 +569,17 @@ export function Trading() {
   const activeForAsset = activePositions.filter((p) => p.assetSymbol === selectedAsset);
   const entryPrice     = activeForAsset[0]?.entryPrice ?? null;
   const expiresAt      = activeForAsset[0]?.expiresAt ?? null;
+
+  // Active direction + live winning status for chart zone highlighting
+  const activeDirectionForChart = (activeForAsset[0]?.direction ?? null) as "UP" | "DOWN" | null;
+  const firstActivePos = activeForAsset[0];
+  let chartIsWinning: boolean | null = null;
+  if (firstActivePos && selectedPrice !== undefined) {
+    const diff = selectedPrice - (firstActivePos.entryPrice ?? 0);
+    if (!firstActivePos.contractType || firstActivePos.contractType === "UP_DOWN") {
+      chartIsWinning = firstActivePos.direction === "UP" ? diff > 0 : diff < 0;
+    }
+  }
 
   const meta        = ASSET_META[selectedAsset];
   const accentColor = meta?.color ?? "#00ff88";
@@ -726,21 +786,68 @@ export function Trading() {
                 expiresAt={expiresAt}
                 chartMode={chartMode}
                 token={token}
+                activeDirection={activeDirectionForChart}
+                isWinning={chartIsWinning}
               />
             </div>
           </div>
         </div>
 
         {/* ── Streak badge ───────────────────────────────────── */}
-        {streak >= 2 && (
-          <div className="px-3 mb-2">
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/25">
-              <Flame size={14} className="text-orange-400 shrink-0" />
-              <span className="text-xs font-bold text-orange-300">{streak}× win streak</span>
-              <span className="text-[10px] text-orange-400/70 ml-1">+{streakBoostPct}% payout boost</span>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {streak >= 2 && (
+            <motion.div
+              key={streak}
+              initial={{ opacity: 0, scale: 0.85, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              className="px-3 mb-2"
+            >
+              <motion.div
+                className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+                style={{
+                  background: "linear-gradient(135deg, rgba(249,115,22,0.18) 0%, rgba(234,88,12,0.07) 100%)",
+                  borderColor: streak >= 5 ? "#f59e0b" : "#f97316",
+                  boxShadow: streak >= 5 ? "0 0 24px rgba(245,158,11,0.18)" : "0 0 14px rgba(249,115,22,0.12)",
+                }}
+                animate={{ borderColor: streak >= 5 ? ["#f59e0b", "#fcd34d", "#f59e0b"] : ["#f97316", "#fb923c", "#f97316"] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              >
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {[...Array(Math.min(streak, 5))].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ scale: [1, 1.25, 1], opacity: [0.65, 1, 0.65] }}
+                      transition={{ duration: 0.9, delay: i * 0.14, repeat: Infinity }}
+                    >
+                      <Flame
+                        size={i === Math.min(streak, 5) - 1 ? 20 : 15}
+                        className={i === Math.min(streak, 5) - 1 ? "text-orange-300" : "text-orange-500/60"}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-black text-orange-200 leading-none">{streak}×</span>
+                    <span className="text-sm font-black text-orange-300/80 uppercase tracking-wider">Win Streak</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-orange-400/55 mt-0.5">+{streakBoostPct}% payout boost active</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div
+                    className="text-xl font-black tabular-nums"
+                    style={{ color: streak >= 5 ? "#fcd34d" : "#fb923c" }}
+                  >
+                    +{streakBoostPct}%
+                  </div>
+                  <div className="text-[8px] font-mono text-orange-400/40 uppercase tracking-widest">boost</div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── AI Signal ─────────────────────────────────────── */}
         {aiSignal && (
@@ -1184,58 +1291,158 @@ export function Trading() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+            className={`fixed inset-0 z-50 flex items-center justify-center ${
+              settlementResult.outcome === "win" ? "pointer-events-auto" : "pointer-events-none"
+            }`}
+            onClick={() => { if (settlementResult.outcome === "win") setSettlementResult(null); }}
           >
+            {/* Dark backdrop for wins */}
+            {settlementResult.outcome === "win" && (
+              <motion.div
+                className="absolute inset-0 bg-black/75"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              />
+            )}
+
+            {/* Radial glow */}
+            {settlementResult.outcome === "win" && (
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.5, 0.2] }}
+                transition={{ duration: 0.9 }}
+                style={{ background: "radial-gradient(ellipse at center, rgba(0,255,136,0.22) 0%, transparent 65%)" }}
+              />
+            )}
+
+            {/* Burst particles for wins */}
+            {settlementResult.outcome === "win" && (
+              <>
+                {[...Array(14)].map((_, i) => {
+                  const angle = (i * (360 / 14)) * (Math.PI / 180);
+                  const dist  = 90 + (i % 3) * 30;
+                  return (
+                    <motion.div
+                      key={i}
+                      className="absolute w-2.5 h-2.5 rounded-full pointer-events-none"
+                      style={{
+                        background: i % 3 === 0 ? "#00ff88" : i % 3 === 1 ? "#f59e0b" : "#ffffff",
+                        top: "50%", left: "50%",
+                        marginTop: -5, marginLeft: -5,
+                      }}
+                      initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                      animate={{ x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, opacity: 0, scale: 0.3 }}
+                      transition={{ duration: 0.9, delay: 0.08 + i * 0.025, ease: "easeOut" }}
+                    />
+                  );
+                })}
+              </>
+            )}
+
             <motion.div
-              initial={{ scale: 0.85, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              className={`mx-8 rounded-2xl border px-8 py-7 text-center shadow-2xl ${
+              initial={{ scale: 0.55, opacity: 0, y: 32 }}
+              animate={screenShake
+                ? { scale: 1, opacity: 1, y: 0, x: [0, -10, 10, -7, 7, -3, 3, 0] }
+                : { scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: -12 }}
+              transition={{ type: "spring", stiffness: 360, damping: 24 }}
+              className={`relative mx-6 rounded-2xl border px-8 py-7 text-center shadow-2xl ${
                 settlementResult.outcome === "win"
-                  ? "bg-[#00150a]/95 border-green-500/40 shadow-green-500/20"
+                  ? "bg-[#001508]/98 border-green-500/55 shadow-green-500/25"
                   : settlementResult.outcome === "loss"
-                  ? "bg-[#150000]/95 border-red-500/30 shadow-red-500/10"
+                  ? "bg-[#150000]/90 border-red-500/25 shadow-red-500/10"
                   : "bg-card border-border"
               }`}
             >
               {settlementResult.outcome === "win" ? (
                 <>
+                  {/* Trophy icon */}
                   <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: [0, 1.3, 1] }}
-                    transition={{ delay: 0.05, duration: 0.4 }}
-                    className="text-4xl mb-2 font-black text-green-400"
+                    initial={{ scale: 0, rotate: -20 }}
+                    animate={{ scale: [0, 1.4, 1], rotate: [0, 8, 0] }}
+                    transition={{ delay: 0.05, duration: 0.55, type: "spring", stiffness: 280 }}
+                    className="flex justify-center mb-3"
+                  >
+                    <div className="p-4 rounded-full" style={{ background: "rgba(0,255,136,0.14)", boxShadow: "0 0 32px rgba(0,255,136,0.3)" }}>
+                      <Trophy size={44} className="text-green-400" />
+                    </div>
+                  </motion.div>
+
+                  {/* WIN text */}
+                  <motion.div
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.18, type: "spring", stiffness: 320, damping: 20 }}
+                    className="text-5xl font-black mb-1 tracking-widest"
+                    style={{ color: "#00ff88", textShadow: "0 0 28px rgba(0,255,136,0.55)" }}
                   >
                     WIN
                   </motion.div>
-                  <div className="text-2xl font-black text-white tabular-nums">
+
+                  {/* Credit amount */}
+                  <motion.div
+                    initial={{ y: 12, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.32 }}
+                    className="text-3xl font-black text-white tabular-nums mb-1"
+                  >
                     +{settlementResult.currency === "STRIKER"
                       ? `${Math.round(settlementResult.credit).toLocaleString()} STRK`
                       : `${settlementResult.credit.toFixed(4)} ${settlementResult.currency}`}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  </motion.div>
+
+                  <div className="text-xs text-green-400/55 font-mono mb-2">
                     {settlementResult.symbol} · {settlementResult.direction}
                   </div>
+
+                  {/* Streak info */}
                   {settlementResult.streak >= 2 && (
-                    <div className="mt-2 text-[11px] font-bold text-orange-300">
-                      {settlementResult.streak}× streak  +{
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.85 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.45 }}
+                      className="mt-1 flex items-center justify-center gap-1.5 text-[11px] font-bold text-orange-300 bg-orange-500/10 rounded-lg px-3 py-1.5"
+                    >
+                      {[...Array(Math.min(settlementResult.streak, 4))].map((_, i) => (
+                        <Flame key={i} size={11} className="text-orange-400" />
+                      ))}
+                      {settlementResult.streak}× streak · +{
                         settlementResult.streak >= 5 ? 7 : settlementResult.streak >= 4 ? 5 : settlementResult.streak >= 3 ? 3 : 2
-                      }% boost active
-                    </div>
+                      }% boost
+                    </motion.div>
                   )}
+
+                  {/* Tap to dismiss */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.9 }}
+                    className="mt-5 text-[10px] text-white/25 font-mono uppercase tracking-widest"
+                  >
+                    Tap anywhere to continue
+                  </motion.div>
                 </>
               ) : settlementResult.outcome === "loss" ? (
                 <>
-                  <div className="text-2xl font-black text-red-400 mb-1">CLOSED</div>
-                  <div className="text-sm text-muted-foreground">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 1.2 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex justify-center mb-3"
+                  >
+                    <div className="p-3 rounded-full bg-red-500/10">
+                      <TrendingDown size={36} className="text-red-400" />
+                    </div>
+                  </motion.div>
+                  <div className="text-3xl font-black text-red-400 mb-1 tracking-widest">CLOSED</div>
+                  <div className="text-sm text-muted-foreground mb-0.5">
                     {settlementResult.symbol} · {settlementResult.direction}
                   </div>
-                  <div className="text-xs text-muted-foreground/60 mt-1.5">Better luck next trade</div>
+                  <div className="text-xs text-muted-foreground/45 font-mono">Better luck next trade</div>
                 </>
               ) : (
                 <>
-                  <div className="text-xl font-black text-yellow-400 mb-1">REFUNDED</div>
+                  <div className="text-2xl font-black text-yellow-400 mb-1">REFUNDED</div>
                   <div className="text-sm text-muted-foreground">Price settled at entry</div>
                 </>
               )}

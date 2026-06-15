@@ -221,64 +221,26 @@ export function Home() {
           )}
         </AnimatePresence>
 
-        {/* ── Quick Trade Panel ── */}
-        <div className="bg-white/3 border border-white/6 rounded-xl overflow-hidden">
-          <div className="px-4 pt-3 pb-2 flex items-center gap-2">
-            <BarChart3 className="w-3.5 h-3.5 text-[#00ff88]" />
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/50">Quick Trade</span>
-            <span className="ml-auto text-[9px] font-mono text-white/20">1m · 82% payout</span>
-          </div>
-          <div className="flex flex-col divide-y divide-white/4 pb-1">
-            {QUICK_ASSETS.map(({ symbol, label, color, fmt }) => {
-              const price   = pricesData?.prices[symbol];
-              const change  = pricesData?.changes24h[symbol];
-              return (
-                <div key={symbol} className="flex items-center gap-3 px-4 py-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black" style={{ color }}>{symbol}</span>
-                      <span className="text-[9px] text-white/25 font-mono">{label}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-[11px] font-bold text-white/80 tabular-nums">
-                        {price ? fmt(price) : "—"}
-                      </span>
-                      {change !== undefined && (
-                        <span className={`text-[9px] font-mono font-bold tabular-nums ${change >= 0 ? "text-[#00ff88]" : "text-red-400"}`}>
-                          {change >= 0 ? "+" : ""}{change.toFixed(2)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => {
-                        sessionStorage.setItem("strikerx_quick_symbol", symbol);
-                        sessionStorage.setItem("strikerx_quick_dir", "UP");
-                        navigate("/");
-                      }}
-                      className="flex items-center gap-0.5 px-2.5 py-1 rounded-lg bg-green-600/20 border border-green-500/30 text-[10px] font-black text-green-400 hover:bg-green-600/30 transition-colors"
-                    >
-                      <TrendingUp className="w-2.5 h-2.5" />
-                      UP
-                    </button>
-                    <button
-                      onClick={() => {
-                        sessionStorage.setItem("strikerx_quick_symbol", symbol);
-                        sessionStorage.setItem("strikerx_quick_dir", "DOWN");
-                        navigate("/");
-                      }}
-                      className="flex items-center gap-0.5 px-2.5 py-1 rounded-lg bg-red-600/20 border border-red-500/30 text-[10px] font-black text-red-400 hover:bg-red-600/30 transition-colors"
-                    >
-                      <TrendingDown className="w-2.5 h-2.5" />
-                      DOWN
-                    </button>
-                  </div>
+        {/* ── Trade CTA ── */}
+        <Link href="/">
+          <motion.div
+            whileTap={{ scale: 0.97 }}
+            className="relative overflow-hidden rounded-2xl border border-[#00ff88]/25 bg-gradient-to-br from-[#00ff88]/10 via-[#0d1117] to-[#0d1117] p-4 cursor-pointer"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,#00ff8812,transparent_55%)]" />
+            <div className="relative flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-[#00ff88]" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#00ff88]/70">Binary Trading</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div className="font-black text-xl text-white">Open Terminal</div>
+                <div className="text-[10px] font-mono text-white/30 mt-0.5">Crypto · Forex · Commodities · 82% payout</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#00ff88]/50 shrink-0" />
+            </div>
+          </motion.div>
+        </Link>
 
         {/* ── Game Cards ── */}
         <div className="grid grid-cols-2 gap-3">
