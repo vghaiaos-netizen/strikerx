@@ -174,7 +174,7 @@ function BarrierBand({ symbol, lowerBarrier, upperBarrier, currentPrice }: {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function Trading() {
-  const { player, token } = useAuth();
+  const { player, token, isBootstrapping } = useAuth();
   const { toast }         = useToast();
   const queryClient       = useQueryClient();
   const { subscribeWsEvent } = useNotifications();
@@ -927,7 +927,9 @@ export function Trading() {
             {tab === "active" ? (
               <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {!isAuthed ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">Log in via Telegram to trade</div>
+                  <div className="text-center py-8 text-muted-foreground/50 text-sm">
+                    {isBootstrapping ? "Connecting…" : "Open in Telegram to trade"}
+                  </div>
                 ) : activePositions.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">No active positions — place a trade above</div>
                 ) : (
@@ -1024,7 +1026,9 @@ export function Trading() {
             ) : (
               <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 {!isAuthed ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">Log in via Telegram to see history</div>
+                  <div className="text-center py-8 text-muted-foreground/50 text-sm">
+                    {isBootstrapping ? "Connecting…" : "Open in Telegram to see history"}
+                  </div>
                 ) : history.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">No completed trades yet</div>
                 ) : (
