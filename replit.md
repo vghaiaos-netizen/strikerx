@@ -13,7 +13,20 @@ A **binary prediction trading terminal** inside Telegram, styled around football
 
 ---
 
-## FOR AGENTS — READ THIS FIRST
+## FOR AGENTS — QUICK START (do this first, in order, takes ~30s)
+
+```bash
+# 1. Install dependencies (pnpm is pre-installed on Replit)
+pnpm install
+
+# 2. Regenerate the API client from the OpenAPI spec (REQUIRED — generated files are not committed)
+pnpm --filter @workspace/api-spec run codegen
+
+# 3. Restart both workflows — the DB schema already exists on the Replit postgres (helium)
+#    Workflows: "API Server" and "Start application"
+```
+
+That's it. Both workflows will start cleanly. No DB push needed — all tables already exist.
 
 > Full Replit dev guide: `docs/for-replit-agents.md`
 > Full Railway setup guide: `docs/railway.md`
