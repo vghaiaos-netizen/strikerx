@@ -30,14 +30,17 @@ interface AssetEdit {
 
 const ASSET_CATEGORY: Record<string, string> = {
   BTC: "Crypto", ETH: "Crypto", SOL: "Crypto", BNB: "Crypto", TON: "Crypto",
+  XRP: "Crypto", DOGE: "Crypto", AVAX: "Crypto", MATIC: "Crypto",
   EURUSD: "Forex", GBPUSD: "Forex", USDJPY: "Forex", AUDUSD: "Forex", USDCHF: "Forex",
   XAUUSD: "Commodities", XAGUSD: "Commodities", USOIL: "Commodities", NATGAS: "Commodities", COPPER: "Commodities",
+  SPX: "Indices", NDX: "Indices", DJI: "Indices", DAX: "Indices", FTSE: "Indices", NKY: "Indices",
 };
 
 const CATEGORY_COLOR: Record<string, string> = {
   Crypto: "bg-blue-500/15 text-blue-400 border-blue-500/25",
   Forex: "bg-purple-500/15 text-purple-400 border-purple-500/25",
   Commodities: "bg-yellow-500/15 text-yellow-500 border-yellow-500/25",
+  Indices: "bg-green-500/15 text-green-400 border-green-500/25",
 };
 
 export function AdminTradingAssets() {
