@@ -163,6 +163,14 @@ export function Minefield() {
     }
   };
 
+  const handleRandomPick = async () => {
+    if (!session || !isActive || picking) return;
+    const hidden = Array.from({ length: totalCells }, (_, i) => i).filter(i => (cellStates[i] ?? "hidden") === "hidden");
+    if (hidden.length === 0) return;
+    const randIdx = Math.floor(Math.random() * hidden.length);
+    await handlePick(hidden[randIdx]);
+  };
+
   const handleCashout = async () => {
     if (!session || cashingOut) return;
     setCashingOut(true);
@@ -532,21 +540,26 @@ export function Minefield() {
               </Button>
             </>
           ) : isActive ? (
-            <div className="grid grid-cols-2 gap-2.5 items-center">
-              <div>
-                <div className="text-[8px] font-mono text-white/22 uppercase tracking-wider">Your bet</div>
-                <div className="font-mono font-bold text-white">{session.betStriker.toFixed(0)} STRIKER</div>
-                {autoCashoutAt && parseFloat(autoCashoutAt) > 1 && (
-                  <div className="text-[9px] font-mono text-yellow-400/55 mt-0.5">
-                    <Zap className="w-2.5 h-2.5 inline mr-0.5" />
-                    Auto at {parseFloat(autoCashoutAt).toFixed(2)}×
-                  </div>
-                )}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[8px] font-mono text-white/22 uppercase tracking-wider">Your bet</div>
+                  <div className="font-mono font-bold text-white">{session.betStriker.toFixed(0)} STRIKER</div>
+                  {autoCashoutAt && parseFloat(autoCashoutAt) > 1 && (
+                    <div className="text-[9px] font-mono text-yellow-400/55 mt-0.5">
+                      <Zap className="w-2.5 h-2.5 inline mr-0.5" />
+                      Auto at {parseFloat(autoCashoutAt).toFixed(2)}×
+                    </div>
+                  )}
+                </div>
+                <Button onClick={handleRandomPick} disabled={picking || cashingOut}
+                  variant="outline" size="sm"
+                  className="h-9 px-3 font-display font-bold text-[10px] tracking-wider border-white/12 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white hover:border-white/25 disabled:opacity-30">
+                  Pick Random
+                </Button>
               </div>
               <motion.div
-                animate={safeCount > 0
-                  ? { scale: [1, 1.04, 1] }
-                  : {}}
+                animate={safeCount > 0 ? { scale: [1, 1.04, 1] } : {}}
                 transition={{ repeat: Infinity, duration: mult >= 5 ? 0.5 : mult >= 2 ? 0.75 : 1.1 }}
               >
                 <Button onClick={handleCashout} disabled={safeCount === 0 || cashingOut}

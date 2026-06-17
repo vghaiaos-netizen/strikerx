@@ -161,14 +161,41 @@ export function Penalty() {
     <Layout>
       <AnimatePresence>
         {flashWin && (
-          <motion.div key="fw" className="fixed inset-0 z-50 pointer-events-none"
-            initial={{ opacity: 0.7 }} animate={{ opacity: 0 }} transition={{ duration: 0.85 }}
-            style={{ background: "radial-gradient(ellipse at 50% 35%, #00ff8842 0%, transparent 68%)" }} />
+          <>
+            <motion.div key="fw-bg" className="fixed inset-0 z-50 pointer-events-none"
+              initial={{ opacity: 0.85 }} animate={{ opacity: 0 }} transition={{ duration: 1.1 }}
+              style={{ background: "radial-gradient(ellipse at 50% 35%, #00ff8845 0%, transparent 70%)" }} />
+            <motion.div key="fw-text" className="fixed inset-0 z-[55] flex items-center justify-center pointer-events-none"
+              initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.15, 1.05, 0.95] }}
+              transition={{ duration: 1.0, times: [0, 0.2, 0.75, 1] }}>
+              <div className="flex flex-col items-center gap-2">
+                <span className="font-display font-black uppercase tracking-tight leading-none"
+                  style={{ fontSize: "clamp(60px,25vw,140px)", color: "#00ff88", textShadow: "0 0 60px #00ff88cc, 0 0 120px #00ff8833" }}>
+                  GOAL!
+                </span>
+                {result && (
+                  <span className="font-display font-bold text-white text-2xl" style={{ textShadow: "0 0 20px white" }}>
+                    +{result.winAmount.toFixed(0)} SKR &nbsp;<span style={{ color: "#00ff88" }}>{result.multiplier}×</span>
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
         {flashLose && (
-          <motion.div key="fl" className="fixed inset-0 z-50 pointer-events-none"
-            initial={{ opacity: 0.65 }} animate={{ opacity: 0 }} transition={{ duration: 0.7 }}
-            style={{ background: "radial-gradient(ellipse at 50% 35%, #ef444438 0%, transparent 65%)" }} />
+          <>
+            <motion.div key="fl-bg" className="fixed inset-0 z-50 pointer-events-none"
+              initial={{ opacity: 0.65 }} animate={{ opacity: 0 }} transition={{ duration: 0.85 }}
+              style={{ background: "radial-gradient(ellipse at 50% 35%, #ef444438 0%, transparent 65%)" }} />
+            <motion.div key="fl-text" className="fixed inset-0 z-[55] flex items-center justify-center pointer-events-none"
+              initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: [0, 1, 1, 0], scale: [0.5, 1.1, 1, 0.9] }}
+              transition={{ duration: 0.85, times: [0, 0.2, 0.65, 1] }}>
+              <span className="font-display font-black uppercase tracking-tight leading-none"
+                style={{ fontSize: "clamp(50px,22vw,120px)", color: "#ef4444", textShadow: "0 0 50px #ef4444bb, 0 0 100px #ef444422" }}>
+                SAVED!
+              </span>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

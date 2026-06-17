@@ -92,6 +92,32 @@ function PnlSparkline({ points }: { points: { date: string; pnl: number }[] }) {
   );
 }
 
+function WinLossDonut({ wins, losses }: { wins: number; losses: number }) {
+  const total = wins + losses;
+  if (total === 0) return (
+    <div className="w-16 h-16 rounded-full border-4 border-white/8 flex items-center justify-center">
+      <span className="text-[9px] text-muted-foreground">—</span>
+    </div>
+  );
+  const winPct = wins / total;
+  const r = 22; const circ = 2 * Math.PI * r;
+  const winArc = winPct * circ;
+  return (
+    <div className="relative w-16 h-16 shrink-0">
+      <svg viewBox="0 0 48 48" className="w-16 h-16 -rotate-90">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(239,68,68,0.25)" strokeWidth="5" />
+        <circle cx="24" cy="24" r={r} fill="none" stroke="#22c55e" strokeWidth="5"
+          strokeDasharray={`${winArc} ${circ}`} strokeLinecap="round"
+          style={{ transition: "stroke-dasharray 0.8s ease" }} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[11px] font-black text-white">{Math.round(winPct * 100)}%</span>
+        <span className="text-[7px] text-muted-foreground leading-none">WR</span>
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab() {
   const { data: portfolio } = useGetMyPortfolio();
   const { data: chart }     = useGetMyPortfolioChart({ query: { staleTime: 60_000 } });
@@ -100,38 +126,86 @@ function OverviewTab() {
   const td = portfolio?.today;
   const tw = portfolio?.thisWeek;
 
+  const periodData = [
+    { label: "Today",     netPnl: td?.netPnl ?? 0,  trades: td?.totalTrades ?? 0, wins: td?.wins ?? 0, losses: (td?.totalTrades ?? 0) - (td?.wins ?? 0) },
+    { label: "This Week", netPnl: tw?.netPnl ?? 0,  trades: tw?.totalTrades ?? 0, wins: tw?.wins ?? 0, losses: (tw?.totalTrades ?? 0) - (tw?.wins ?? 0) },
+    { label: "All Time",  netPnl: at?.netPnl ?? 0,  trades: at?.totalTrades ?? 0, wins: at?.wins ?? 0, losses: at?.losses ?? 0 },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Win/loss donut + key stats hero row */}
+      <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
+        <WinLossDonut wins={at?.wins ?? 0} losses={at?.losses ?? 0} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-2">All-Time Performance</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div>
+              <div className="text-[8px] text-muted-foreground">Total Trades</div>
+              <div className="font-black text-sm">{at?.totalTrades ?? 0}</div>
+            </div>
+            <div>
+              <div className="text-[8px] text-muted-foreground">Net P&L</div>
+              <div className={`font-black text-sm tabular-nums ${(at?.netPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {(at?.netPnl ?? 0) >= 0 ? "+" : ""}{(at?.netPnl ?? 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[8px] text-muted-foreground">Best Win</div>
+              <div className="font-black text-sm text-green-400">+{(at?.biggestWin ?? 0).toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-[8px] text-muted-foreground">Win Streak</div>
+              <div className="font-black text-sm text-orange-400">{at?.currentStreak ?? 0}×</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Period P&L cards */}
       <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: "Today",     netPnl: td?.netPnl ?? 0,  trades: td?.totalTrades ?? 0 },
-          { label: "This Week", netPnl: tw?.netPnl ?? 0,  trades: tw?.totalTrades ?? 0 },
-          { label: "All Time",  netPnl: at?.netPnl ?? 0,  trades: at?.totalTrades ?? 0 },
-        ].map(({ label, netPnl, trades }) => (
-          <div key={label} className="bg-card border border-border rounded-xl px-3 py-2.5">
-            <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1">{label}</p>
-            <PnlBadge value={netPnl} small />
-            <p className="text-[9px] text-muted-foreground mt-0.5">{trades} trades</p>
-          </div>
-        ))}
+        {periodData.map(({ label, netPnl, trades, wins, losses }) => {
+          const isPos = netPnl >= 0;
+          const total = wins + losses;
+          const wr = total > 0 ? Math.round((wins / total) * 100) : null;
+          return (
+            <motion.div key={label}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className={`bg-card border rounded-xl px-3 py-2.5 relative overflow-hidden ${
+                netPnl > 0 ? "border-green-500/25" : netPnl < 0 ? "border-red-500/20" : "border-border"
+              }`}>
+              {netPnl !== 0 && (
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{ background: `radial-gradient(ellipse at bottom left, ${isPos ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.05)"} 0%, transparent 70%)` }} />
+              )}
+              <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold mb-1 relative z-10">{label}</p>
+              <div className={`font-black text-base tabular-nums relative z-10 flex items-center gap-1 ${isPos ? "text-green-400" : netPnl < 0 ? "text-red-400" : "text-white"}`}>
+                {isPos && netPnl > 0 ? <TrendingUp size={10} /> : netPnl < 0 ? <TrendingDown size={10} /> : null}
+                {isPos && netPnl > 0 ? "+" : ""}{netPnl.toFixed(2)}
+              </div>
+              <div className="relative z-10 mt-0.5 space-y-0.5">
+                <p className="text-[8px] text-muted-foreground">{trades} trades</p>
+                {wr !== null && <p className="text-[8px] font-bold text-green-400/70">{wr}% WR</p>}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* P&L chart */}
       <div className="bg-card border border-border rounded-xl p-3">
-        <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-2">Cumulative P&L (30d)</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Cumulative P&L</p>
+          <p className="text-[8px] text-muted-foreground/50 font-mono">30 days</p>
+        </div>
         <PnlSparkline points={chart?.points ?? []} />
       </div>
 
-      {/* Stats row */}
+      {/* Volume stat */}
       <div className="flex gap-2">
-        <StatCard label="Win Rate" value={`${at?.winRate ?? 0}%`} sub={`${at?.wins ?? 0}/${at?.totalTrades ?? 0} trades`} />
-        <StatCard label="Volume"   value={(at?.volume ?? 0).toFixed(2)} sub="total staked" />
-        <StatCard label="Streak"   value={`${at?.currentStreak ?? 0}x`} sub="current wins" />
-      </div>
-      <div className="flex gap-2">
-        <StatCard label="Best Win"   value={(at?.biggestWin ?? 0).toFixed(2)} />
-        <StatCard label="Total Loss" value={(at?.losses ?? 0).toString()} sub="positions lost" />
+        <StatCard label="Volume" value={(at?.volume ?? 0).toFixed(2)} sub="total staked" />
+        <StatCard label="Wins"   value={at?.wins ?? 0}   sub={`${at?.winRate ?? 0}% rate`} />
+        <StatCard label="Losses" value={at?.losses ?? 0} sub="positions" />
       </div>
 
       {at?.totalTrades === 0 && (

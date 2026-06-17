@@ -852,41 +852,62 @@ export function Trading() {
         {/* ── AI Signal ─────────────────────────────────────── */}
         {aiSignal && (
           <div className="px-3 mt-2 mb-1">
-            <div className={`rounded-xl border px-3 py-2 flex items-center justify-between gap-3 ${
+            <div className={`rounded-xl border px-3 py-2.5 ${
               aiSignal.direction === "UP"
-                ? "border-green-500/25 bg-green-500/5"
+                ? "border-green-500/30 bg-gradient-to-r from-green-500/8 to-green-500/3"
                 : aiSignal.direction === "DOWN"
-                ? "border-red-500/25 bg-red-500/5"
+                ? "border-red-500/30 bg-gradient-to-r from-red-500/8 to-red-500/3"
                 : "border-border bg-card"
             }`}>
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded shrink-0 ${
-                  aiSignal.direction === "UP"   ? "bg-green-500/20 text-green-400"
-                  : aiSignal.direction === "DOWN" ? "bg-red-500/20 text-red-400"
-                  : "bg-white/10 text-muted-foreground"
-                }`}>
-                  AI
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Confidence ring */}
+                  <div className="relative w-9 h-9 shrink-0">
+                    <svg viewBox="0 0 36 36" className="w-9 h-9 -rotate-90">
+                      <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                      <circle cx="18" cy="18" r="14" fill="none"
+                        stroke={aiSignal.direction === "UP" ? "#22c55e" : aiSignal.direction === "DOWN" ? "#ef4444" : "#6b7280"}
+                        strokeWidth="3"
+                        strokeDasharray={`${(aiSignal.confidence / 100) * 87.96} 87.96`}
+                        strokeLinecap="round"
+                        style={{ transition: "stroke-dasharray 0.6s ease" }}
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black tabular-nums"
+                      style={{ color: aiSignal.direction === "UP" ? "#22c55e" : aiSignal.direction === "DOWN" ? "#ef4444" : "#6b7280" }}>
+                      {aiSignal.confidence}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`text-[8px] font-black tracking-widest px-1 py-0.5 rounded ${
+                        aiSignal.direction === "UP"   ? "bg-green-500/20 text-green-400"
+                        : aiSignal.direction === "DOWN" ? "bg-red-500/20 text-red-400"
+                        : "bg-white/10 text-muted-foreground"
+                      }`}>AI</span>
+                      <span className={`text-xs font-black leading-none ${
+                        aiSignal.direction === "UP" ? "text-green-400" : aiSignal.direction === "DOWN" ? "text-red-400" : "text-muted-foreground"
+                      }`}>
+                        {aiSignal.direction === "NEUTRAL" ? "CONSOLIDATING" : `${aiSignal.direction} SIGNAL`}
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-muted-foreground/55 font-mono truncate">{aiSignal.reason}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className={`text-xs font-black leading-none ${
-                    aiSignal.direction === "UP" ? "text-green-400" : aiSignal.direction === "DOWN" ? "text-red-400" : "text-muted-foreground"
-                  }`}>
-                    {aiSignal.direction === "NEUTRAL" ? "NEUTRAL" : `${aiSignal.direction} SIGNAL`}
-                  </p>
-                  <p className="text-[9px] text-muted-foreground/60 font-mono mt-0.5 truncate">{aiSignal.reason}</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end shrink-0 gap-0.5">
-                <span className={`text-xs font-black tabular-nums ${
-                  aiSignal.direction === "UP" ? "text-green-400" : aiSignal.direction === "DOWN" ? "text-red-400" : "text-muted-foreground"
-                }`}>{aiSignal.confidence}%</span>
-                <div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      aiSignal.direction === "UP" ? "bg-green-400" : aiSignal.direction === "DOWN" ? "bg-red-400" : "bg-white/30"
-                    }`}
-                    style={{ width: `${aiSignal.confidence}%` }}
-                  />
+                {/* Momentum bars */}
+                <div className="flex items-end gap-0.5 h-6 shrink-0">
+                  {[0.3, 0.5, 0.65, 0.8, 1].map((h, i) => {
+                    const lit = i < Math.ceil((aiSignal.confidence - 50) / 10);
+                    return (
+                      <div key={i} className="w-1.5 rounded-sm transition-all duration-300"
+                        style={{
+                          height: `${h * 100}%`,
+                          background: lit
+                            ? (aiSignal.direction === "UP" ? "#22c55e" : aiSignal.direction === "DOWN" ? "#ef4444" : "#6b7280")
+                            : "rgba(255,255,255,0.08)",
+                        }} />
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1040,17 +1061,25 @@ export function Trading() {
         {/* ── Market sentiment bar ──────────────────────────── */}
         {contractType === "UP_DOWN" && sentiment && sentiment.total >= 3 && (
           <div className="px-3 mt-2">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-1.5">
               <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">Market Sentiment</span>
-              <span className="text-[9px] text-muted-foreground/40">{sentiment.total} trades</span>
+              <span className="text-[9px] text-muted-foreground/40 font-mono">{sentiment.total} active traders</span>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden flex bg-white/5">
-              <div className="bg-green-500/60 h-full transition-all duration-500 rounded-l-full" style={{ width: `${sentiment.upPct}%` }} />
-              <div className="bg-red-500/60 h-full transition-all duration-500 rounded-r-full" style={{ width: `${sentiment.downPct}%` }} />
+            <div className="h-2 rounded-full overflow-hidden flex bg-white/5">
+              <motion.div className="bg-gradient-to-r from-green-600 to-green-400 h-full rounded-l-full"
+                animate={{ width: `${sentiment.upPct}%` }} transition={{ duration: 0.5 }} />
+              <motion.div className="bg-gradient-to-r from-red-400 to-red-600 h-full rounded-r-full"
+                animate={{ width: `${sentiment.downPct}%` }} transition={{ duration: 0.5 }} />
             </div>
-            <div className="flex justify-between mt-0.5">
-              <span className="text-[8px] font-bold text-green-400">UP {sentiment.upPct}%</span>
-              <span className="text-[8px] font-bold text-red-400">{sentiment.downPct}% DOWN</span>
+            <div className="flex justify-between mt-1">
+              <div className="flex items-center gap-1">
+                <TrendingUp size={8} className="text-green-400" />
+                <span className="text-[9px] font-black text-green-400">UP {sentiment.upPct}%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-black text-red-400">{sentiment.downPct}% DOWN</span>
+                <TrendingDown size={8} className="text-red-400" />
+              </div>
             </div>
           </div>
         )}
@@ -1058,41 +1087,79 @@ export function Trading() {
         {/* ── Trade buttons ─────────────────────────────────── */}
         <div className="px-3 mt-3 grid grid-cols-2 gap-3">
           {/* Button A */}
-          <Button
-            className={`h-16 font-black active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform ${
+          <motion.button
+            whileTap={{ scale: 0.93 }}
+            whileHover={!isStakeDisabled ? { scale: 1.02 } : {}}
+            animate={tradeLockedIn ? { scale: [1, 1.06, 1] } : {}}
+            transition={{ duration: 0.25 }}
+            onClick={() => handleTrade(cMeta.dirA)}
+            disabled={isStakeDisabled}
+            className={`h-16 font-black text-white flex flex-col items-center justify-center gap-0.5 disabled:opacity-40 rounded-xl relative overflow-hidden ${
               contractType === "UP_DOWN" ? "bg-green-600 hover:bg-green-500"
               : contractType === "EVEN_ODD" ? "bg-blue-600 hover:bg-blue-500"
               : contractType === "OVER_UNDER" ? "bg-violet-600 hover:bg-violet-500"
               : "bg-teal-600 hover:bg-teal-500"
             }`}
-            onClick={() => handleTrade(cMeta.dirA)}
-            disabled={isStakeDisabled}
+            style={{
+              boxShadow: isStakeDisabled ? "none" : contractType === "UP_DOWN"
+                ? "0 4px 20px rgba(34,197,94,0.3)" : contractType === "EVEN_ODD"
+                ? "0 4px 20px rgba(59,130,246,0.3)" : "0 4px 20px rgba(139,92,246,0.3)",
+            }}
           >
+            <div className="absolute inset-0 bg-white/8 opacity-0 hover:opacity-100 transition-opacity" />
             {contractType === "UP_DOWN" ? <TrendingUp size={20} /> : <span className="text-lg font-black">{cMeta.btnA[0]}</span>}
             <span className="text-sm font-black">{cMeta.btnA}</span>
             <span className="text-[10px] font-bold opacity-80">
               {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
             </span>
-          </Button>
+          </motion.button>
 
           {/* Button B */}
-          <Button
-            className={`h-16 font-black active:scale-95 text-white flex flex-col items-center gap-0.5 disabled:opacity-40 transition-transform ${
+          <motion.button
+            whileTap={{ scale: 0.93 }}
+            whileHover={!isStakeDisabled ? { scale: 1.02 } : {}}
+            animate={tradeLockedIn ? { scale: [1, 1.06, 1] } : {}}
+            transition={{ duration: 0.25 }}
+            onClick={() => handleTrade(cMeta.dirB)}
+            disabled={isStakeDisabled}
+            className={`h-16 font-black text-white flex flex-col items-center justify-center gap-0.5 disabled:opacity-40 rounded-xl relative overflow-hidden ${
               contractType === "UP_DOWN" ? "bg-red-600 hover:bg-red-500"
               : contractType === "EVEN_ODD" ? "bg-orange-600 hover:bg-orange-500"
               : contractType === "OVER_UNDER" ? "bg-pink-600 hover:bg-pink-500"
               : "bg-amber-600 hover:bg-amber-500"
             }`}
-            onClick={() => handleTrade(cMeta.dirB)}
-            disabled={isStakeDisabled}
+            style={{
+              boxShadow: isStakeDisabled ? "none" : contractType === "UP_DOWN"
+                ? "0 4px 20px rgba(239,68,68,0.3)" : contractType === "EVEN_ODD"
+                ? "0 4px 20px rgba(249,115,22,0.3)" : "0 4px 20px rgba(236,72,153,0.3)",
+            }}
           >
+            <div className="absolute inset-0 bg-white/8 opacity-0 hover:opacity-100 transition-opacity" />
             {contractType === "UP_DOWN" ? <TrendingDown size={20} /> : <span className="text-lg font-black">{cMeta.btnB[0]}</span>}
             <span className="text-sm font-black">{cMeta.btnB}</span>
             <span className="text-[10px] font-bold opacity-80">
               {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
             </span>
-          </Button>
+          </motion.button>
         </div>
+
+        {/* ── Potential payout preview ───────────────────────── */}
+        {stakeNum > 0 && !stakeInvalid && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="px-3 mt-1.5"
+          >
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/3 border border-white/6">
+              <span className="text-[10px] font-mono text-white/40">Stake</span>
+              <span className="text-[10px] font-mono text-white/60">{stake} {currency === "STRIKER" ? "STRK" : currency}</span>
+              <span className="text-white/20">→</span>
+              <span className="text-[10px] font-mono text-white/40">Win</span>
+              <span className="text-xs font-black text-[#00ff88]">+{potentialProfit} {currency === "STRIKER" ? "STRK" : currency}</span>
+              <span className="text-[9px] font-mono text-white/25">({payoutPct}%{streakBoostPct > 0 ? ` +${streakBoostPct}%` : ""})</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Positions ─────────────────────────────────────── */}
         <div className="px-3 mt-4">
@@ -1426,19 +1493,38 @@ export function Trading() {
               ) : settlementResult.outcome === "loss" ? (
                 <>
                   <motion.div
-                    initial={{ opacity: 0, scale: 1.2 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    initial={{ opacity: 0, scale: 1.4 }}
+                    animate={{ opacity: 1, scale: [1.4, 0.9, 1] }}
+                    transition={{ duration: 0.4, type: "spring", stiffness: 300 }}
                     className="flex justify-center mb-3"
                   >
-                    <div className="p-3 rounded-full bg-red-500/10">
-                      <TrendingDown size={36} className="text-red-400" />
+                    <div className="p-3 rounded-full" style={{ background: "rgba(239,68,68,0.14)", boxShadow: "0 0 24px rgba(239,68,68,0.25)" }}>
+                      <TrendingDown size={40} className="text-red-400" />
                     </div>
                   </motion.div>
-                  <div className="text-3xl font-black text-red-400 mb-1 tracking-widest">CLOSED</div>
-                  <div className="text-sm text-muted-foreground mb-0.5">
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.12, type: "spring", stiffness: 320, damping: 20 }}
+                    className="text-5xl font-black mb-1 tracking-widest"
+                    style={{ color: "#ef4444", textShadow: "0 0 20px rgba(239,68,68,0.5)" }}
+                  >
+                    LOSS
+                  </motion.div>
+                  <motion.div
+                    initial={{ y: 8, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.25 }}
+                    className="text-2xl font-black text-white/80 tabular-nums mb-1"
+                  >
+                    -{settlementResult.currency === "STRIKER"
+                      ? `${Math.round(settlementResult.credit > 0 ? settlementResult.credit : parseFloat(stake || "0")).toLocaleString()} STRK`
+                      : `${(settlementResult.credit > 0 ? settlementResult.credit : parseFloat(stake || "0")).toFixed(4)} ${settlementResult.currency}`}
+                  </motion.div>
+                  <div className="text-xs text-red-400/45 font-mono mb-0.5">
                     {settlementResult.symbol} · {settlementResult.direction}
                   </div>
-                  <div className="text-xs text-muted-foreground/45 font-mono">Better luck next trade</div>
+                  <div className="text-[10px] text-muted-foreground/35 font-mono mt-1">Next trade could be different</div>
                 </>
               ) : (
                 <>

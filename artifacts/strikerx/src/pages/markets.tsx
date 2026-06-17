@@ -149,7 +149,7 @@ export function Markets() {
 
         {/* Asset grid */}
         <div className="px-4 grid grid-cols-2 gap-2.5">
-          {filtered.map((asset) => {
+          {filtered.map((asset, idx) => {
             const price  = prices[asset.symbol];
             const change = changes[asset.symbol] ?? 0;
             const isUp   = change >= 0;
@@ -160,16 +160,21 @@ export function Markets() {
             return (
               <motion.div
                 key={asset.symbol}
-                initial={{ opacity: 0, y: 4 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2"
+                transition={{ delay: idx * 0.04 }}
+                className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 relative overflow-hidden"
               >
+                {/* Accent glow top */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl"
+                  style={{ background: `linear-gradient(to right, ${meta?.color ?? "#fff"}60, transparent)` }} />
+
                 {/* Header row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black"
-                      style={{ background: `${meta?.color ?? "#fff"}20`, color: meta?.color ?? "#fff" }}
+                      style={{ background: `${meta?.color ?? "#fff"}18`, color: meta?.color ?? "#fff", border: `1px solid ${meta?.color ?? "#fff"}25` }}
                     >
                       {meta?.icon ?? asset.symbol[0]}
                     </span>
@@ -178,29 +183,34 @@ export function Markets() {
                       <p className="text-[9px] text-muted-foreground leading-tight">{asset.displayName}</p>
                     </div>
                   </div>
-                  <div className={`flex items-center gap-0.5 text-[9px] font-mono ${isUp ? "text-green-400" : "text-red-400"}`}>
+                  <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
+                    isUp ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"
+                  }`}>
                     {isUp ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
                     {isUp ? "+" : ""}{change.toFixed(2)}%
                   </div>
                 </div>
 
-                {/* Price */}
-                <div className="font-mono font-black text-base tabular-nums">
-                  {price ? formatPrice(asset.symbol, price) : <span className="text-muted-foreground text-xs">Loading…</span>}
+                {/* Price — large, prominent */}
+                <div className="font-mono font-black text-lg tabular-nums leading-tight">
+                  {price ? formatPrice(asset.symbol, price) : <span className="text-muted-foreground text-xs animate-pulse">Loading…</span>}
                 </div>
 
                 {/* Footer row */}
-                <div className="flex items-center justify-between mt-auto">
+                <div className="flex items-center justify-between mt-auto pt-1 border-t border-white/5">
                   <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
                     <Zap size={8} className="text-yellow-400" />
-                    {payoutPct}% payout
+                    {payoutPct}%
                   </span>
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.92 }}
+                    whileHover={{ scale: 1.05 }}
                     onClick={() => goToTrade(asset.symbol)}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-colors"
+                    className="text-[10px] font-black px-3 py-1.5 rounded-lg text-black transition-all"
+                    style={{ background: meta?.color ?? "#00ff88", boxShadow: `0 2px 12px ${meta?.color ?? "#00ff88"}40` }}
                   >
                     Trade
-                  </button>
+                  </motion.button>
                 </div>
               </motion.div>
             );

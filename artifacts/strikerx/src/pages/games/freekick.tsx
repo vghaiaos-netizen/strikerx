@@ -349,27 +349,38 @@ export function FreeKick() {
           <AnimatePresence>
             {result && !animating && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.86, y: 10 }}
+                initial={{ opacity: 0, scale: 0.75, y: 16 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", stiffness: 400, damping: 24 }}
-                className={`w-full max-w-xs text-center px-6 py-3.5 rounded-2xl border ${
-                  result.multiplier >= 1
-                    ? "border-[#00ff88]/35 bg-[#00ff88]/10"
-                    : "border-white/10 bg-white/5"
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 480, damping: 22 }}
+                className={`w-full max-w-xs text-center px-6 py-4 rounded-2xl border-2 relative overflow-hidden ${
+                  result.winAmount > 0
+                    ? "border-[#00ff88]/50 bg-gradient-to-br from-[#00ff88]/15 to-[#00ff88]/5 shadow-[0_0_32px_#00ff8820]"
+                    : "border-white/10 bg-white/4"
                 }`}
               >
-                <div className={`font-display font-black leading-none ${
-                  result.multiplier >= 1 ? "text-[#00ff88]" : "text-white/35"
-                }`} style={{ fontSize: 36 }}>
-                  {result.multiplier}×
-                </div>
+                {result.winAmount > 0 && (
+                  <div className="absolute inset-0 pointer-events-none"
+                    style={{ background: "radial-gradient(ellipse at 50% 0%, #00ff8812 0%, transparent 70%)" }} />
+                )}
+                <motion.div
+                  initial={{ scale: 0.5 }} animate={{ scale: [0.5, 1.2, 1] }} transition={{ duration: 0.4, ease: "backOut" }}
+                  className={`font-display font-black leading-none relative z-10 ${
+                    result.winAmount > 0 ? "text-[#00ff88]" : "text-white/25"
+                  }`}
+                  style={{
+                    fontSize: result.multiplier >= 2 ? "52px" : "44px",
+                    textShadow: result.winAmount > 0 ? "0 0 32px #00ff88aa" : "none",
+                  }}>
+                  {result.multiplier >= 0.1 ? `${result.multiplier}×` : "0×"}
+                </motion.div>
                 {result.winAmount > 0 ? (
-                  <div className="text-sm font-mono font-bold text-[#00ff88]/65 mt-1.5">
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                    className="text-base font-mono font-bold text-[#00ff88]/80 mt-2 relative z-10">
                     +{result.winAmount.toFixed(0)} STRIKER
-                  </div>
+                  </motion.div>
                 ) : (
-                  <div className="text-[11px] font-mono text-white/22 mt-1">No payout</div>
+                  <div className="text-[11px] font-mono text-white/22 mt-2 relative z-10">No payout this round</div>
                 )}
               </motion.div>
             )}

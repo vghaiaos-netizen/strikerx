@@ -92,6 +92,7 @@ export function TheShot() {
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [crashHistory, setCrashHistory] = useState<number[]>([]);
   const [crashFlash, setCrashFlash] = useState(false);
+  const [epicCashout, setEpicCashout] = useState<{ winAmount: number; multiplier: number } | null>(null);
 
   // Milestone tracking
   const milestonesHitRef = useRef<Set<number>>(new Set());
@@ -185,6 +186,8 @@ export function TheShot() {
       setMyBet({ placed: true, cashedOut: true, winAmount, multiplier });
       toast({ title: `Cashed out at ${multiplier.toFixed(2)}x`, description: `+${winAmount.toFixed(0)} STRIKER` });
       soundManager.play("cashout");
+      setEpicCashout({ winAmount, multiplier });
+      setTimeout(() => setEpicCashout(null), 2600);
     }
 
     if (event === "balance_update") {
@@ -446,6 +449,35 @@ export function TheShot() {
 
   return (
     <Layout>
+      {/* Epic cashout overlay */}
+      <AnimatePresence>
+        {epicCashout && (
+          <motion.div key="epic-cashout"
+            className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <div className="absolute inset-0"
+              style={{ background: "radial-gradient(ellipse at center, #00ff8814 0%, transparent 70%)" }} />
+            <div className="flex flex-col items-center gap-3 text-center px-6">
+              <motion.div
+                initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: [0.3, 1.15, 1], opacity: 1 }}
+                transition={{ duration: 0.45, ease: "backOut" }}
+                className="font-display font-black uppercase tracking-tight"
+                style={{ fontSize: "clamp(36px,18vw,80px)", color: "#00ff88", textShadow: "0 0 48px #00ff88bb, 0 0 80px #00ff8833" }}>
+                CASHED OUT!
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.3 }}
+                className="font-display font-black text-white" style={{ fontSize: "clamp(24px,10vw,48px)", textShadow: "0 0 24px white" }}>
+                +{epicCashout.winAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span style={{ color: "#00ff88" }}>SKR</span>
+              </motion.div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+                className="font-mono text-2xl font-bold" style={{ color: epicCashout.multiplier >= 5 ? "#f59e0b" : "#00ff88", opacity: 0.7 }}>
+                {epicCashout.multiplier.toFixed(2)}×
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Crash flash overlay */}
       <AnimatePresence>
         {crashFlash && (
