@@ -43,7 +43,7 @@ router.post("/trading/positions", requireAuth, async (req, res): Promise<void> =
   const {
     assetSymbol,
     direction,
-    stakeStriker,   // legacy alias kept for backwards compat
+    stakeStriker,
     stake,
     currency        = "TON",
     contractType    = "UP_DOWN",
@@ -213,6 +213,116 @@ router.get("/trading/config", async (_req, res): Promise<void> => {
   }
 });
 
+// ── POST /api/trading/ai-signal ──────────────────────────────────────────────
+// Calls Groq (Llama 3.3 70B) to generate a structured AI market signal.
+// Returns: { signal, confidence, reasoning, bias, keyLevels }
+router.post("/trading/ai-signal", async (req, res): Promise<void> => {
+  const { symbol, currentPrice, change24h, recentPrices } = req.body ?? {};
+
+  if (typeof symbol !== "string" || !symbol) {
+    res.status(400).json({ error: "symbol required" }); return;
+  }
+
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    res.status(503).json({ error: "AI signal service not configured" }); return;
+  }
+
+  const price     = typeof currentPrice === "number" ? currentPrice : getPrice(symbol.toUpperCase());
+  const chg24h    = typeof change24h    === "number" ? change24h    : 0;
+  const prices    = Array.isArray(recentPrices) ? recentPrices.slice(-20) : [];
+
+  const priceContext = prices.length > 0
+    ? `Recent price series (newest last): [${prices.map((p: number) => p.toFixed ? p.toFixed(4) : p).join(", ")}]`
+    : `Current price: ${price ?? "unknown"}`;
+
+  const systemPrompt = `You are a professional binary options market analyst for StrikerX, a crypto and financial trading platform.
+Analyze the provided market data and give a precise, actionable trading signal in JSON format.
+Be concise and professional. Base your analysis on price action, momentum, and market context.
+Always respond with valid JSON only — no markdown, no explanation outside the JSON.`;
+
+  const userPrompt = `Analyze ${symbol.toUpperCase()} for a binary UP/DOWN trade signal.
+
+Asset: ${symbol.toUpperCase()}
+${priceContext}
+24h Change: ${chg24h >= 0 ? "+" : ""}${chg24h.toFixed(2)}%
+
+Provide a JSON response with exactly these fields:
+{
+  "signal": "UP" or "DOWN",
+  "confidence": number 50-95 (integer),
+  "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
+  "reasoning": "2-3 sentence concise market analysis",
+  "momentum": "STRONG" | "MODERATE" | "WEAK",
+  "timeframe": "short-term signal for next 30-300 seconds",
+  "keyLevel": number (nearest significant support/resistance price level)
+}`;
+
+  try {
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Content-Type":  "application/json",
+      },
+      body: JSON.stringify({
+        model:       "llama-3.3-70b-versatile",
+        messages:    [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: userPrompt },
+        ],
+        temperature:  0.3,
+        max_tokens:   300,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
+      logger.warn({ status: groqRes.status, errText }, "Groq API error");
+      res.status(502).json({ error: "AI signal service error" }); return;
+    }
+
+    const groqJson = await groqRes.json() as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const content = groqJson.choices?.[0]?.message?.content ?? "{}";
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(content) as Record<string, unknown>;
+    } catch {
+      logger.warn({ content }, "Failed to parse Groq JSON response");
+      res.status(502).json({ error: "Invalid AI response format" }); return;
+    }
+
+    const signal = String(parsed.signal ?? "UP").toUpperCase() === "DOWN" ? "DOWN" : "UP";
+    const confidence = Math.min(95, Math.max(50, parseInt(String(parsed.confidence ?? 60), 10)));
+    const bias = ["BULLISH", "BEARISH", "NEUTRAL"].includes(String(parsed.bias ?? ""))
+      ? String(parsed.bias) : signal === "UP" ? "BULLISH" : "BEARISH";
+    const momentum = ["STRONG", "MODERATE", "WEAK"].includes(String(parsed.momentum ?? ""))
+      ? String(parsed.momentum) : "MODERATE";
+
+    res.json({
+      symbol:     symbol.toUpperCase(),
+      signal,
+      confidence,
+      bias,
+      momentum,
+      reasoning:  String(parsed.reasoning ?? "Market analysis in progress."),
+      keyLevel:   typeof parsed.keyLevel === "number" ? parsed.keyLevel : null,
+      timeframe:  String(parsed.timeframe ?? "short-term"),
+      generatedAt: Date.now(),
+    });
+
+    logger.info({ symbol, signal, confidence }, "AI signal generated (Groq)");
+  } catch (err) {
+    logger.error({ err }, "Groq AI signal request failed");
+    res.status(502).json({ error: "AI signal service unavailable" });
+  }
+});
+
 // ── Synthetic candle generator (fallback when live data unavailable) ─────────
 function generateSyntheticCandles(
   symbol: string,
@@ -221,16 +331,16 @@ function generateSyntheticCandles(
   limit: number,
 ): { time: number; open: number; high: number; low: number; close: number; volume: number }[] {
   const intervalSecs = ({ "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600 } as Record<string, number>)[interval] ?? 60;
-  // Per-candle absolute volatility (realistic for each asset class)
   const vol = ({
     EURUSD: 0.0004, GBPUSD: 0.0006, USDJPY: 0.08, AUDUSD: 0.0005, USDCHF: 0.0004,
     XAUUSD: 1.5, XAGUSD: 0.04, USOIL: 0.50, NATGAS: 0.008, COPPER: 0.006,
     BTC: 120, ETH: 8, SOL: 0.8, BNB: 1.2, TON: 0.02,
+    XRP: 0.002, DOGE: 0.0005, AVAX: 0.15, MATIC: 0.003,
+    SPX: 8, NDX: 15, DAX: 20, FTSE: 15, NKY: 80, DJI: 50,
   } as Record<string, number>)[symbol] ?? currentPrice * 0.001;
 
   const now = Math.floor(Date.now() / 1000 / intervalSecs) * intervalSecs;
 
-  // Walk backward from current price to build history
   const closes: number[] = [currentPrice];
   for (let i = 1; i < limit; i++) {
     const prev   = closes[closes.length - 1];
@@ -254,7 +364,7 @@ function generateSyntheticCandles(
 }
 
 // ── GET /api/trading/klines ──────────────────────────────────────────────────
-// Historical OHLC candles. Crypto → Binance REST. Forex/Commodities → Yahoo Finance.
+// Historical OHLC candles. Crypto → Binance REST. Forex/Commodities/Indices → Yahoo Finance.
 // Falls back to synthetic candles if both live sources fail.
 router.get("/trading/klines", async (req, res): Promise<void> => {
   const symbol   = String(req.query.symbol ?? "").toUpperCase().trim();
@@ -266,15 +376,16 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   const VALID_INTERVALS = ["1m", "5m", "15m", "30m", "1h"];
   if (!VALID_INTERVALS.includes(interval)) { res.status(400).json({ error: "invalid interval" }); return; }
 
-  // Realistic seed prices for synthetic fallback (used when all live sources fail)
   const SEED_PRICES: Record<string, number> = {
     BTC: 107000, ETH: 2600, SOL: 175, BNB: 640, TON: 3.2,
+    XRP: 0.62, DOGE: 0.17, AVAX: 28, MATIC: 0.55,
     EURUSD: 1.085, GBPUSD: 1.27, USDJPY: 155, AUDUSD: 0.65, USDCHF: 0.90,
     XAUUSD: 2380, XAGUSD: 29.5, USOIL: 79, NATGAS: 2.2, COPPER: 4.5,
+    SPX: 5300, NDX: 18500, DAX: 18200, FTSE: 8200, NKY: 38000, DJI: 39500,
   };
 
   // ── Crypto: Binance REST → synthetic fallback ────────────────────────────
-  const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON"];
+  const CRYPTO = ["BTC", "ETH", "SOL", "BNB", "TON", "XRP", "DOGE", "AVAX", "MATIC"];
   if (CRYPTO.includes(symbol)) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
     try {
@@ -292,7 +403,6 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
       if (candles.length > 0) { res.json({ candles }); return; }
     } catch { /* fall through to synthetic */ }
 
-    // Use live price if available, else seed price — always return synthetic candles
     const currentPrice = getPrice(symbol) ?? SEED_PRICES[symbol] ?? null;
     const fallback = currentPrice
       ? generateSyntheticCandles(symbol, currentPrice, interval, limit)
@@ -301,11 +411,12 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── Forex / Commodity: Yahoo Finance then synthetic fallback ──────────────
+  // ── Forex / Commodity / Index: Yahoo Finance → synthetic fallback ─────────
   const YAHOO_MAP: Record<string, string> = {
     EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "USDJPY=X",
     AUDUSD: "AUDUSD=X", USDCHF: "USDCHF=X",
     XAUUSD: "GC=F", XAGUSD: "SI=F", USOIL: "CL=F", NATGAS: "NG=F", COPPER: "HG=F",
+    SPX: "^GSPC", NDX: "^NDX", DAX: "^GDAXI", FTSE: "^FTSE", NKY: "^N225", DJI: "^DJI",
   };
   const yahooSymbol = YAHOO_MAP[symbol];
   if (!yahooSymbol) { res.json({ candles: [] }); return; }
@@ -353,8 +464,6 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
         .slice(-limit) as { time: number; open: number; high: number; low: number; close: number; volume: number }[];
 
       if (candles.length > 0) {
-        // Detect flat candles (e.g. forex market closed on weekends — all OHLC identical)
-        // Switch to synthetic so the chart has realistic movement
         const hasVariance = candles.some((c) => c.high > c.low || c.open !== c.close);
         if (!hasVariance) {
           const basePrice = candles[candles.length - 1]?.close ?? (getPrice(symbol) ?? SEED_PRICES[symbol] ?? null);
@@ -369,7 +478,7 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
     } catch { /* try next range */ }
   }
 
-  // Synthetic fallback for forex/commodities when Yahoo is unreachable
+  // Synthetic fallback when all live sources fail
   const currentPrice = getPrice(symbol) ?? SEED_PRICES[symbol] ?? null;
   const fallback = currentPrice
     ? generateSyntheticCandles(symbol, currentPrice, interval, limit)

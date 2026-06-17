@@ -23,8 +23,10 @@ const CONTRACT_DIRECTIONS: Record<ContractType, Direction[]> = {
 // display precision, not the integer part (which barely changes for e.g. BTC).
 const ASSET_DECIMAL_PLACES: Record<string, number> = {
   BTC: 2, ETH: 2, SOL: 3, BNB: 2, TON: 4,
+  XRP: 4, DOGE: 4, AVAX: 3, MATIC: 4,
   EURUSD: 5, GBPUSD: 5, USDJPY: 3, AUDUSD: 5, USDCHF: 5,
   XAUUSD: 2, XAGUSD: 3, USOIL: 2, NATGAS: 3, COPPER: 4,
+  SPX: 2, NDX: 2, DAX: 2, FTSE: 2, NKY: 2, DJI: 2,
 };
 
 function lastDigitAt(price: number, decimals: number): number {

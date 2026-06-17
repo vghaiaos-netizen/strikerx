@@ -12,13 +12,13 @@ import { logger } from "./logger";
  * with wsServer (wsServer imports tradingEngine; tradingEngine imports this).
  */
 
+const CRYPTO_PAIRS = ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "tonusdt", "xrpusdt", "dogeusdt", "avaxusdt", "maticusdt"];
+
 const BINANCE_STREAM_URL =
   "wss://stream.binance.com:9443/stream?streams=" +
-  ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "tonusdt"]
-    .map((s) => `${s}@ticker`)
-    .join("/");
+  CRYPTO_PAIRS.map((s) => `${s}@ticker`).join("/");
 
-const CRYPTO_REST_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "TONUSDT"];
+const CRYPTO_REST_SYMBOLS = CRYPTO_PAIRS.map((s) => s.toUpperCase());
 
 const priceCache  = new Map<string, number>();
 const changeCache = new Map<string, number>(); // 24h % change
@@ -31,7 +31,15 @@ let wsConnected = false;
 
 // CoinGecko → Binance symbol mapping
 const COINGECKO_IDS: Record<string, string> = {
-  BTC: "bitcoin", ETH: "ethereum", SOL: "solana", BNB: "binancecoin", TON: "the-open-network",
+  BTC:   "bitcoin",
+  ETH:   "ethereum",
+  SOL:   "solana",
+  BNB:   "binancecoin",
+  TON:   "the-open-network",
+  XRP:   "ripple",
+  DOGE:  "dogecoin",
+  AVAX:  "avalanche-2",
+  MATIC: "matic-network",
 };
 
 async function pollCoinGecko() {

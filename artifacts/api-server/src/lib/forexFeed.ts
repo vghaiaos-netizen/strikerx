@@ -2,17 +2,16 @@ import { logger } from "./logger";
 import { setExternalPrice, setExternalChange } from "./binanceFeed";
 
 /**
- * Forex / Commodities price feed.
+ * Forex / Commodities / Stock Indices price feed.
  *
  * Primary for forex:    open.er-api.com  (free, no API key, real bank rates)
- * Primary for commodities: Yahoo Finance chart API (GC=F, SI=F, CL=F, NG=F, HG=F)
+ * Primary for commodities + indices: Yahoo Finance chart API
  * Between real polls:  micro-tick simulator adds realistic ±volatility/second
- *                      (standard practice for retail binary option platforms)
  */
 
 interface PriceState {
   basePrice:     number;
-  volatilityAbs: number;   // absolute price change per tick (1s)
+  volatilityAbs: number;
   lastUpdated:   number;
 }
 
@@ -24,6 +23,8 @@ const TICK_VOL: Record<string, number> = {
   AUDUSD: 0.00005,  USDCHF: 0.00004,
   XAUUSD: 0.15,     XAGUSD: 0.008,    USOIL: 0.04,
   NATGAS: 0.003,    COPPER: 0.0015,
+  SPX:    0.8,      NDX:    1.2,      DAX:   2.0,
+  FTSE:   1.5,      NKY:    8.0,      DJI:   5.0,
 };
 
 // ── Forex pairs via open.er-api.com ────────────────────────────────────────
@@ -44,6 +45,16 @@ const COMMODITY_PAIRS: { symbol: string; yahooSymbol: string }[] = [
   { symbol: "COPPER", yahooSymbol: "HG=F"  },
 ];
 
+// ── Stock indices via Yahoo Finance ────────────────────────────────────────
+const INDEX_PAIRS: { symbol: string; yahooSymbol: string }[] = [
+  { symbol: "SPX",  yahooSymbol: "^GSPC"  },
+  { symbol: "NDX",  yahooSymbol: "^NDX"   },
+  { symbol: "DAX",  yahooSymbol: "^GDAXI" },
+  { symbol: "FTSE", yahooSymbol: "^FTSE"  },
+  { symbol: "NKY",  yahooSymbol: "^N225"  },
+  { symbol: "DJI",  yahooSymbol: "^DJI"   },
+];
+
 let tickTimer:   NodeJS.Timeout | null = null;
 let pollTimer:   NodeJS.Timeout | null = null;
 let broadcastFn: ((symbol: string, price: number) => void) | null = null;
@@ -52,14 +63,12 @@ let broadcastFn: ((symbol: string, price: number) => void) | null = null;
 
 function emitTick(symbol: string) {
   const state = priceState.get(symbol);
-  if (!state || Date.now() - state.lastUpdated > 120_000) return; // stale > 2 min → skip
+  if (!state || Date.now() - state.lastUpdated > 120_000) return;
 
   const vol = state.volatilityAbs;
-  // Approximate normal distribution via Box-Muller
   const u1  = Math.max(1e-10, Math.random());
   const u2  = Math.random();
   const z   = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  // Mean-revert towards base price by 2% per tick to prevent runaway drift
   const mean_revert = (state.basePrice - (priceState.get(symbol)?.basePrice ?? state.basePrice)) * 0.02;
   const newPrice = Math.max(state.basePrice * 0.85, state.basePrice + vol * z + mean_revert);
   setExternalPrice(symbol, parseFloat(newPrice.toFixed(8)));
@@ -69,7 +78,7 @@ function emitTick(symbol: string) {
 function startTickerLoop() {
   if (tickTimer) return;
   tickTimer = setInterval(() => {
-    for (const { symbol } of [...FOREX_PAIRS, ...COMMODITY_PAIRS]) {
+    for (const { symbol } of [...FOREX_PAIRS, ...COMMODITY_PAIRS, ...INDEX_PAIRS]) {
       if (priceState.has(symbol)) emitTick(symbol);
     }
   }, 1_000);
@@ -105,9 +114,9 @@ async function pollForex() {
   }
 }
 
-// ── Commodity poll ────────────────────────────────────────────────────────
+// ── Yahoo Finance helper ───────────────────────────────────────────────────
 
-async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
+async function fetchYahooPrice(yahooSymbol: string): Promise<{ price: number; changePct: number } | null> {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=2m`;
     const res = await fetch(url, {
@@ -118,15 +127,21 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<number | null> {
       signal: AbortSignal.timeout(6_000),
     });
     if (!res.ok) return null;
-    const json = await res.json() as { chart?: { result?: { meta?: { regularMarketPrice?: number } }[] } };
-    const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    return typeof price === "number" && price > 0 ? price : null;
+    const json = await res.json() as {
+      chart?: { result?: { meta?: { regularMarketPrice?: number; regularMarketChangePercent?: number } }[] }
+    };
+    const meta  = json?.chart?.result?.[0]?.meta;
+    const price = meta?.regularMarketPrice;
+    const pct   = meta?.regularMarketChangePercent;
+    if (typeof price !== "number" || price <= 0) return null;
+    return { price, changePct: typeof pct === "number" ? pct : 0 };
   } catch {
     return null;
   }
 }
 
-// Fallback commodity prices (approximate) when Yahoo is unreachable
+// ── Commodity poll ────────────────────────────────────────────────────────
+
 const COMMODITY_FALLBACK: Record<string, number> = {
   XAUUSD: 2380, XAGUSD: 29.5, USOIL: 79, NATGAS: 2.2, COPPER: 4.5,
 };
@@ -134,17 +149,47 @@ const COMMODITY_FALLBACK: Record<string, number> = {
 async function pollCommodities() {
   await Promise.allSettled(
     COMMODITY_PAIRS.map(async ({ symbol, yahooSymbol }) => {
-      const price = await fetchYahooPrice(yahooSymbol);
-      const resolved = price ?? (priceState.get(symbol)?.basePrice ?? COMMODITY_FALLBACK[symbol]);
+      const result   = await fetchYahooPrice(yahooSymbol);
+      const resolved = result?.price ?? (priceState.get(symbol)?.basePrice ?? COMMODITY_FALLBACK[symbol]);
       if (!resolved || resolved <= 0) return;
       priceState.set(symbol, {
         basePrice:     resolved,
         volatilityAbs: TICK_VOL[symbol] ?? 0.01,
-        lastUpdated:   price !== null ? Date.now() : (priceState.get(symbol)?.lastUpdated ?? 0),
+        lastUpdated:   result !== null ? Date.now() : (priceState.get(symbol)?.lastUpdated ?? 0),
       });
-      if (price !== null) {
+      if (result !== null) {
         setExternalPrice(symbol, resolved);
+        if (result.changePct !== 0) setExternalChange(symbol, result.changePct);
         broadcastFn?.(symbol, resolved);
+      }
+    }),
+  );
+}
+
+// ── Index poll ────────────────────────────────────────────────────────────
+
+const INDEX_FALLBACK: Record<string, number> = {
+  SPX: 5300, NDX: 18500, DAX: 18200, FTSE: 8200, NKY: 38000, DJI: 39500,
+};
+
+async function pollIndices() {
+  await Promise.allSettled(
+    INDEX_PAIRS.map(async ({ symbol, yahooSymbol }) => {
+      const result   = await fetchYahooPrice(yahooSymbol);
+      const resolved = result?.price ?? (priceState.get(symbol)?.basePrice ?? INDEX_FALLBACK[symbol]);
+      if (!resolved || resolved <= 0) return;
+      priceState.set(symbol, {
+        basePrice:     resolved,
+        volatilityAbs: TICK_VOL[symbol] ?? 1.0,
+        lastUpdated:   result !== null ? Date.now() : (priceState.get(symbol)?.lastUpdated ?? 0),
+      });
+      if (result !== null) {
+        setExternalPrice(symbol, resolved);
+        if (result.changePct !== 0) setExternalChange(symbol, result.changePct);
+        broadcastFn?.(symbol, resolved);
+      } else if (!priceState.get(symbol)?.lastUpdated) {
+        // seed fallback so trading is never blocked
+        setExternalPrice(symbol, resolved);
       }
     }),
   );
@@ -154,29 +199,32 @@ async function pollCommodities() {
 
 export function initForexFeed(onPriceUpdate?: (symbol: string, price: number) => void) {
   broadcastFn = onPriceUpdate ?? null;
-  logger.info("Forex/commodities feed initializing");
+  logger.info("Forex/commodities/indices feed initializing");
 
-  // Seed fallback commodity prices immediately so trading is never blocked
-  for (const { symbol } of COMMODITY_PAIRS) {
-    if (!priceState.has(symbol) && COMMODITY_FALLBACK[symbol]) {
+  // Seed fallback prices immediately so trading is never blocked
+  for (const { symbol } of [...COMMODITY_PAIRS, ...INDEX_PAIRS]) {
+    const fallback = COMMODITY_FALLBACK[symbol] ?? INDEX_FALLBACK[symbol];
+    if (!priceState.has(symbol) && fallback) {
       priceState.set(symbol, {
-        basePrice:     COMMODITY_FALLBACK[symbol],
+        basePrice:     fallback,
         volatilityAbs: TICK_VOL[symbol] ?? 0.01,
         lastUpdated:   Date.now(),
       });
-      setExternalPrice(symbol, COMMODITY_FALLBACK[symbol]);
+      setExternalPrice(symbol, fallback);
     }
   }
 
   // Initial polls
   void pollForex();
   void pollCommodities();
+  void pollIndices();
 
-  // Forex every 30s (ECB rate, good enough), commodities every 12s
+  // Forex every 30s, commodities + indices every 15s
   pollTimer = setInterval(() => {
     void pollForex();
     void pollCommodities();
-  }, 30_000);
+    void pollIndices();
+  }, 15_000);
 
   // Ticker starts 2s later so base prices are seeded first
   setTimeout(startTickerLoop, 2_000);
@@ -190,4 +238,5 @@ export function stopForexFeed() {
 export const FOREX_SYMBOLS = [
   ...FOREX_PAIRS.map((f) => f.symbol),
   ...COMMODITY_PAIRS.map((f) => f.symbol),
+  ...INDEX_PAIRS.map((f) => f.symbol),
 ];

@@ -165,6 +165,28 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.warn({ err }, "Schema migration: daily_missions — skipped (may already exist)");
   }
 
+  // Seed new trading assets (indices + extra crypto) — idempotent via ON CONFLICT DO NOTHING
+  try {
+    await db.execute(sql`
+      INSERT INTO trading_assets (symbol, display_name, binance_symbol, enabled, payout_ratio, min_stake_striker, max_stake_striker, sort_order)
+      VALUES
+        ('XRP',   'XRP',        'XRPUSDT',   true, 1.82, 10, 10000, 16),
+        ('DOGE',  'Dogecoin',   'DOGEUSDT',  true, 1.82, 10, 10000, 17),
+        ('AVAX',  'Avalanche',  'AVAXUSDT',  true, 1.82, 10, 10000, 18),
+        ('MATIC', 'Polygon',    'MATICUSDT', true, 1.82, 10, 10000, 19),
+        ('SPX',   'S&P 500',    'SPX',       true, 1.82, 10, 10000, 20),
+        ('NDX',   'NASDAQ 100', 'NDX',       true, 1.82, 10, 10000, 21),
+        ('DJI',   'Dow Jones',  'DJI',       true, 1.82, 10, 10000, 22),
+        ('DAX',   'DAX 40',     'DAX',       true, 1.82, 10, 10000, 23),
+        ('FTSE',  'FTSE 100',   'FTSE',      true, 1.82, 10, 10000, 24),
+        ('NKY',   'Nikkei 225', 'NKY',       true, 1.82, 10, 10000, 25)
+      ON CONFLICT (symbol) DO NOTHING
+    `);
+    logger.info("Trading assets seeded (new crypto + indices)");
+  } catch (err) {
+    logger.warn({ err }, "Trading asset seed skipped (may already exist)");
+  }
+
   try {
     const existing = await db.select().from(jackpotTable).limit(1);
     if (existing.length === 0) {
