@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Settings, BarChart,
   ScrollText, Radio, Trophy, LogOut, ChevronRight, Zap, Flag,
-  UserCheck, Link2, Calendar, MessageSquare, Send, Star, TrendingUp, TrendingDown
+  UserCheck, Link2, Calendar, MessageSquare, Send, Star, TrendingUp, TrendingDown, Smartphone
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -12,7 +12,8 @@ const LINKS = [
   { href: "/admin/trading",        label: "Trading",       icon: TrendingUp },
   { href: "/admin/trading/assets", label: "Trade Assets",  icon: TrendingDown },
   { href: "/admin/players",      label: "Players",     icon: Users },
-  { href: "/admin/withdrawals",  label: "Withdrawals", icon: ArrowLeftRight },
+  { href: "/admin/withdrawals",     label: "Withdrawals",   icon: ArrowLeftRight },
+  { href: "/admin/manual-deposits", label: "M-Pesa Deps",   icon: Smartphone },
   { href: "/admin/analytics",    label: "Analytics",   icon: BarChart },
   { href: "/admin/tournaments",  label: "Tournaments", icon: Trophy },
   { href: "/admin/jackpot",      label: "Jackpot",     icon: Star },

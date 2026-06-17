@@ -52,6 +52,7 @@ import { AdminInbox } from "./pages/admin/inbox";
 import { AdminOutreach } from "./pages/admin/outreach";
 import { AdminTrading } from "./pages/admin/trading";
 import { AdminTradingAssets } from "./pages/admin/trading-assets";
+import { AdminManualDeposits } from "./pages/admin/manual-deposits";
 
 const queryClient = new QueryClient();
 
@@ -122,7 +123,8 @@ function Router() {
       <Route path="/admin"                component={AdminLogin} />
       <Route path="/admin/dashboard"      component={AdminDashboard} />
       <Route path="/admin/players"        component={AdminPlayers} />
-      <Route path="/admin/withdrawals"    component={AdminWithdrawals} />
+      <Route path="/admin/withdrawals"       component={AdminWithdrawals} />
+      <Route path="/admin/manual-deposits"   component={AdminManualDeposits} />
       <Route path="/admin/config"         component={AdminConfig} />
       <Route path="/admin/analytics"      component={AdminAnalytics} />
       <Route path="/admin/audit-log"      component={AdminAuditLog} />
