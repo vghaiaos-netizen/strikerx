@@ -49,29 +49,40 @@ function secsToLabel(secs: number): string {
 const DEFAULT_DURATIONS = [30, 60, 300, 900];
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
-  Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON"],
+  Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON", "XRP", "DOGE", "AVAX", "MATIC"],
   Forex:       ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF"],
   Commodities: ["XAUUSD", "XAGUSD", "USOIL", "NATGAS", "COPPER"],
+  Indices:     ["SPX", "NDX", "DJI", "DAX", "FTSE", "NKY"],
 };
 
 interface AssetMeta { color: string; icon: string; label: string; digits: number; prefix: string }
 
 const ASSET_META: Record<string, AssetMeta> = {
-  BTC:    { color: "#f7931a", icon: "₿",   label: "Bitcoin",   digits: 2, prefix: "$" },
-  ETH:    { color: "#627eea", icon: "Ξ",   label: "Ethereum",  digits: 2, prefix: "$" },
-  SOL:    { color: "#9945ff", icon: "◎",   label: "Solana",    digits: 3, prefix: "$" },
-  BNB:    { color: "#f0b90b", icon: "⬡",   label: "BNB",       digits: 2, prefix: "$" },
-  TON:    { color: "#0098ea", icon: "◆",   label: "Toncoin",   digits: 4, prefix: "$" },
-  EURUSD: { color: "#0ea5e9", icon: "€$",  label: "EUR/USD",   digits: 5, prefix: "" },
-  GBPUSD: { color: "#8b5cf6", icon: "£$",  label: "GBP/USD",   digits: 5, prefix: "" },
-  USDJPY: { color: "#f59e0b", icon: "$¥",  label: "USD/JPY",   digits: 3, prefix: "" },
-  AUDUSD: { color: "#22d3ee", icon: "A$",  label: "AUD/USD",   digits: 5, prefix: "" },
-  USDCHF: { color: "#ef4444", icon: "$₣",  label: "USD/CHF",   digits: 5, prefix: "" },
-  XAUUSD: { color: "#f59e0b", icon: "Au",  label: "Gold",      digits: 2, prefix: "$" },
-  XAGUSD: { color: "#94a3b8", icon: "Ag",  label: "Silver",    digits: 3, prefix: "$" },
-  USOIL:  { color: "#b45309", icon: "WTI", label: "Crude Oil", digits: 2, prefix: "$" },
-  NATGAS: { color: "#059669", icon: "NG",  label: "Nat Gas",   digits: 3, prefix: "$" },
-  COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",    digits: 4, prefix: "$" },
+  BTC:    { color: "#f7931a", icon: "₿",   label: "Bitcoin",    digits: 2, prefix: "$" },
+  ETH:    { color: "#627eea", icon: "Ξ",   label: "Ethereum",   digits: 2, prefix: "$" },
+  SOL:    { color: "#9945ff", icon: "◎",   label: "Solana",     digits: 3, prefix: "$" },
+  BNB:    { color: "#f0b90b", icon: "⬡",   label: "BNB",        digits: 2, prefix: "$" },
+  TON:    { color: "#0098ea", icon: "◆",   label: "Toncoin",    digits: 4, prefix: "$" },
+  XRP:    { color: "#00aae4", icon: "✕",   label: "XRP",        digits: 4, prefix: "$" },
+  DOGE:   { color: "#c2a633", icon: "Ð",   label: "Dogecoin",   digits: 5, prefix: "$" },
+  AVAX:   { color: "#e84142", icon: "▲",   label: "Avalanche",  digits: 3, prefix: "$" },
+  MATIC:  { color: "#8247e5", icon: "M",   label: "Polygon",    digits: 4, prefix: "$" },
+  EURUSD: { color: "#0ea5e9", icon: "€$",  label: "EUR/USD",    digits: 5, prefix: "" },
+  GBPUSD: { color: "#8b5cf6", icon: "£$",  label: "GBP/USD",    digits: 5, prefix: "" },
+  USDJPY: { color: "#f59e0b", icon: "$¥",  label: "USD/JPY",    digits: 3, prefix: "" },
+  AUDUSD: { color: "#22d3ee", icon: "A$",  label: "AUD/USD",    digits: 5, prefix: "" },
+  USDCHF: { color: "#ef4444", icon: "$₣",  label: "USD/CHF",    digits: 5, prefix: "" },
+  XAUUSD: { color: "#f59e0b", icon: "Au",  label: "Gold",       digits: 2, prefix: "$" },
+  XAGUSD: { color: "#94a3b8", icon: "Ag",  label: "Silver",     digits: 3, prefix: "$" },
+  USOIL:  { color: "#b45309", icon: "WTI", label: "Crude Oil",  digits: 2, prefix: "$" },
+  NATGAS: { color: "#059669", icon: "NG",  label: "Nat Gas",    digits: 3, prefix: "$" },
+  COPPER: { color: "#d97706", icon: "Cu",  label: "Copper",     digits: 4, prefix: "$" },
+  SPX:    { color: "#22c55e", icon: "SP",  label: "S&P 500",    digits: 2, prefix: "" },
+  NDX:    { color: "#3b82f6", icon: "NQ",  label: "NASDAQ 100", digits: 2, prefix: "" },
+  DJI:    { color: "#0ea5e9", icon: "DJ",  label: "Dow Jones",  digits: 2, prefix: "" },
+  DAX:    { color: "#f59e0b", icon: "DX",  label: "DAX 40",     digits: 2, prefix: "" },
+  FTSE:   { color: "#ef4444", icon: "FT",  label: "FTSE 100",   digits: 2, prefix: "" },
+  NKY:    { color: "#ec4899", icon: "NK",  label: "Nikkei 225", digits: 0, prefix: "" },
 };
 
 // Defensively converts any API-returned value (Drizzle numeric returns strings)
@@ -100,8 +111,10 @@ function fmtChange(pct: number | null | undefined): string {
 // Used for EVEN_ODD and OVER_UNDER live P&L calculation
 const ASSET_DECIMAL_PLACES: Record<string, number> = {
   BTC: 2, ETH: 2, SOL: 3, BNB: 2, TON: 4,
+  XRP: 4, DOGE: 4, AVAX: 3, MATIC: 4,
   EURUSD: 5, GBPUSD: 5, USDJPY: 3, AUDUSD: 5, USDCHF: 5,
   XAUUSD: 2, XAGUSD: 3, USOIL: 2, NATGAS: 3, COPPER: 4,
+  SPX: 2, NDX: 2, DAX: 2, FTSE: 2, NKY: 2, DJI: 2,
 };
 
 function lastDigitAt(price: number, decimals: number): number {
@@ -189,7 +202,7 @@ export function Trading() {
   const queryClient       = useQueryClient();
   const { subscribeWsEvent } = useNotifications();
 
-  const [category, setCategory]           = useState<"Crypto" | "Forex" | "Commodities">("Crypto");
+  const [category, setCategory]           = useState<"Crypto" | "Forex" | "Commodities" | "Indices">("Crypto");
   const [selectedAsset, setSelected]      = useState("BTC");
   const [chartInterval, setChartInterval] = useState<"1m" | "5m" | "15m" | "30m" | "1h">("1m");
   const [chartMode, setChartMode]         = useState<"candle" | "line">("candle");
@@ -205,7 +218,12 @@ export function Trading() {
   const prevPriceRef     = useRef<Record<string, number>>({});
   const priceHistoryRef  = useRef<Record<string, number[]>>({});
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
-  const [aiSignal, setAiSignal] = useState<{ direction: "UP" | "DOWN" | "NEUTRAL"; confidence: number; reason: string } | null>(null);
+  const [aiSignal, setAiSignal] = useState<{
+    direction: "UP" | "DOWN" | "NEUTRAL"; confidence: number; reason: string;
+    bias?: string; momentum?: string; keyLevel?: number | null;
+  } | null>(null);
+  const aiSignalTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAiAssetRef   = useRef<string>("");
 
   const isAuthed = !!player;
 
@@ -330,36 +348,71 @@ export function Trading() {
     soundManager.play(priceFlash === "up" ? "price_up" : "price_down");
   }, [priceFlash, selectedAsset]);
 
-  // AI signal — recompute whenever the selected asset's price updates
+  // AI signal — calls Groq LLM via backend, debounced per asset switch
   useEffect(() => {
-    const hist = priceHistoryRef.current[selectedAsset] ?? [];
-    const change24h = asNum(changes24h[selectedAsset]);
+    if (aiSignalTimerRef.current) clearTimeout(aiSignalTimerRef.current);
 
-    if (hist.length < 6) {
-      setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Gathering data…" });
-      return;
+    // Show loading state immediately on asset switch
+    if (lastAiAssetRef.current !== selectedAsset) {
+      setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Analysing market data…" });
+      lastAiAssetRef.current = selectedAsset;
     }
-    // Count up/down ticks in recent history
-    let upTicks = 0, downTicks = 0;
-    for (let i = 1; i < hist.length; i++) {
-      if (hist[i] > hist[i - 1]) upTicks++;
-      else if (hist[i] < hist[i - 1]) downTicks++;
-    }
-    const totalTicks = upTicks + downTicks;
-    const momentumScore = totalTicks > 0 ? (upTicks - downTicks) / totalTicks : 0; // -1 to +1
-    // Weight recent momentum (60%) + 24h trend direction (40%)
-    const trendScore = Math.max(-1, Math.min(1, change24h / 5)); // ±5% → ±1
-    const combined   = momentumScore * 0.6 + trendScore * 0.4;
-    const confidence = Math.round(50 + Math.abs(combined) * 40);
 
-    if (Math.abs(combined) < 0.08) {
-      setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Mixed signals — price consolidating" });
-    } else if (combined > 0) {
-      setAiSignal({ direction: "UP", confidence, reason: `${upTicks}/${totalTicks} ticks bullish · 24h ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%` });
-    } else {
-      setAiSignal({ direction: "DOWN", confidence, reason: `${downTicks}/${totalTicks} ticks bearish · 24h ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%` });
-    }
-  }, [selectedAsset, currentPrices[selectedAsset]]);
+    const price   = currentPrices[selectedAsset];
+    const hist    = priceHistoryRef.current[selectedAsset] ?? [];
+    const chg24h  = asNum(changes24h[selectedAsset]);
+
+    // Wait until we have a price, then debounce 2s to avoid spam
+    if (!price) return;
+
+    aiSignalTimerRef.current = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/trading/ai-signal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol:        selectedAsset,
+            currentPrice:  price,
+            change24h:     chg24h,
+            recentPrices:  hist.slice(-20),
+          }),
+        });
+        if (!r.ok) throw new Error("Signal fetch failed");
+        const data = await r.json() as {
+          signal: "UP" | "DOWN"; confidence: number; reasoning: string;
+          bias?: string; momentum?: string; keyLevel?: number | null;
+        };
+        setAiSignal({
+          direction:  data.signal,
+          confidence: data.confidence,
+          reason:     data.reasoning,
+          bias:       data.bias,
+          momentum:   data.momentum,
+          keyLevel:   data.keyLevel,
+        });
+      } catch {
+        // Fallback: compute a basic signal from tick history
+        const tHist = priceHistoryRef.current[selectedAsset] ?? [];
+        if (tHist.length < 4) {
+          setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Awaiting price data…" });
+          return;
+        }
+        let up = 0, dn = 0;
+        for (let i = 1; i < tHist.length; i++) {
+          if (tHist[i] > tHist[i - 1]) up++; else if (tHist[i] < tHist[i - 1]) dn++;
+        }
+        const total = up + dn;
+        const score = total > 0 ? (up - dn) / total : 0;
+        const conf  = Math.round(50 + Math.abs(score) * 35);
+        if (Math.abs(score) < 0.1) setAiSignal({ direction: "NEUTRAL", confidence: 50, reason: "Market consolidating" });
+        else if (score > 0) setAiSignal({ direction: "UP",   confidence: conf, reason: `${up}/${total} ticks bullish · 24h ${chg24h >= 0 ? "+" : ""}${chg24h.toFixed(2)}%` });
+        else                setAiSignal({ direction: "DOWN", confidence: conf, reason: `${dn}/${total} ticks bearish · 24h ${chg24h >= 0 ? "+" : ""}${chg24h.toFixed(2)}%` });
+      }
+    }, 2_000);
+
+    return () => { if (aiSignalTimerRef.current) clearTimeout(aiSignalTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAsset, Math.floor(Date.now() / 60_000)]);
 
   // WS trade_settled → overlay + toast + refresh + streak update
   useEffect(() => {
@@ -545,7 +598,7 @@ export function Trading() {
     if (sym) {
       sessionStorage.removeItem("strikerx_quick_symbol");
       sessionStorage.removeItem("strikerx_quick_dir");
-      const cat = Object.entries(ASSET_CATEGORIES).find(([, syms]) => syms.includes(sym))?.[0] as "Crypto" | "Forex" | "Commodities" | undefined;
+      const cat = Object.entries(ASSET_CATEGORIES).find(([, syms]) => syms.includes(sym))?.[0] as "Crypto" | "Forex" | "Commodities" | "Indices" | undefined;
       if (cat) setCategory(cat);
       setSelected(sym);
       setContractType("UP_DOWN");
@@ -560,7 +613,7 @@ export function Trading() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities") => {
+  const handleCategoryChange = useCallback((cat: "Crypto" | "Forex" | "Commodities" | "Indices") => {
     setCategory(cat);
     const first = ASSET_CATEGORIES[cat]?.[0];
     if (first) setSelected(first);
@@ -653,7 +706,7 @@ export function Trading() {
 
         {/* ── Category tabs ─────────────────────────────────── */}
         <div className="px-3 pt-3 pb-1 flex gap-1">
-          {(["Crypto", "Forex", "Commodities"] as const).map((cat) => (
+          {(["Crypto", "Forex", "Commodities", "Indices"] as const).map((cat) => (
             <button
               key={cat}
               onClick={() => handleCategoryChange(cat)}
@@ -661,7 +714,7 @@ export function Trading() {
                 category === cat ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-white"
               }`}
             >
-              {cat}
+              {cat === "Commodities" ? "Commod." : cat}
             </button>
           ))}
         </div>
@@ -717,6 +770,7 @@ export function Trading() {
                   {meta?.label ?? selectedAsset} · {
                     ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF"].includes(selectedAsset) ? "Forex"
                     : ["XAUUSD","XAGUSD","USOIL","NATGAS","COPPER"].includes(selectedAsset) ? "Commodities"
+                    : ["SPX","NDX","DJI","DAX","FTSE","NKY"].includes(selectedAsset) ? "Index"
                     : "Crypto"
                   }
                 </p>
@@ -890,8 +944,18 @@ export function Trading() {
                       }`}>
                         {aiSignal.direction === "NEUTRAL" ? "CONSOLIDATING" : `${aiSignal.direction} SIGNAL`}
                       </span>
+                      {aiSignal.momentum && aiSignal.momentum !== "MODERATE" && (
+                        <span className={`text-[7px] font-bold px-1 py-0.5 rounded ${
+                          aiSignal.momentum === "STRONG" ? "bg-orange-500/20 text-orange-400" : "bg-white/10 text-muted-foreground"
+                        }`}>{aiSignal.momentum}</span>
+                      )}
                     </div>
-                    <p className="text-[9px] text-muted-foreground/55 font-mono truncate">{aiSignal.reason}</p>
+                    <p className="text-[9px] text-muted-foreground/55 font-mono line-clamp-2">{aiSignal.reason}</p>
+                    {aiSignal.keyLevel && (
+                      <p className="text-[8px] text-muted-foreground/40 font-mono mt-0.5">
+                        Key level: {formatPrice(selectedAsset, aiSignal.keyLevel)}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Momentum bars */}
