@@ -90,7 +90,7 @@ export function AdminTrading() {
         {/* Filters */}
         <div className="flex gap-3 flex-wrap">
           <div className="flex gap-1">
-            {["ALL","BTC","ETH","SOL","BNB","TON"].map((a) => (
+            {["ALL","BTC","ETH","SOL","BNB","TON","XRP","DOGE","AVAX","MATIC","SPX","NDX","DJI","DAX","FTSE","NKY"].map((a) => (
               <button
                 key={a}
                 onClick={() => setAssetFilter(a)}
