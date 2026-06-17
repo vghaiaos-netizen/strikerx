@@ -821,4 +821,106 @@ router.patch("/admin/trading/assets/:symbol", requireAdmin, async (req, res): Pr
   res.json({ ok: true });
 });
 
+// ── MANUAL DEPOSITS ──────────────────────────────────────────────────────────
+router.get("/admin/manual-deposits", requireAdmin, async (req, res): Promise<void> => {
+  const { manualDepositsTable } = await import("@workspace/db");
+  const status = req.query.status ? String(req.query.status) : null;
+  const limit = Math.min(parseInt(String(req.query.limit ?? 50)), 200);
+  const offset = parseInt(String(req.query.offset ?? 0));
+
+  const whereCondition = status && status !== "all"
+    ? eq(manualDepositsTable.status, status)
+    : undefined;
+
+  const [deposits, [{ count: total }]] = await Promise.all([
+    db.select().from(manualDepositsTable)
+      .where(whereCondition)
+      .orderBy(desc(manualDepositsTable.createdAt))
+      .limit(limit).offset(offset),
+    db.select({ count: sql<number>`COUNT(*)` }).from(manualDepositsTable).where(whereCondition),
+  ]);
+
+  const enriched = await Promise.all(deposits.map(async (d) => {
+    const [player] = await db.select({ username: playersTable.username, telegramId: playersTable.telegramId })
+      .from(playersTable).where(eq(playersTable.id, d.playerId)).limit(1);
+    return { ...d, username: player?.username ?? "Unknown", telegramId: player?.telegramId };
+  }));
+
+  res.json({ deposits: enriched, total: Number(total), limit, offset });
+});
+
+router.post("/admin/manual-deposits/:id/confirm", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  const { amountStriker, note } = req.body as { amountStriker: number; note?: string };
+
+  if (!amountStriker || amountStriker <= 0) {
+    res.status(400).json({ error: "Amount in STRIKER to credit is required" });
+    return;
+  }
+
+  const { manualDepositsTable } = await import("@workspace/db");
+  const [deposit] = await db.select().from(manualDepositsTable).where(eq(manualDepositsTable.id, id)).limit(1);
+  if (!deposit) { res.status(404).json({ error: "Manual deposit not found" }); return; }
+  if (deposit.status !== "pending") { res.status(409).json({ error: `Deposit is already ${deposit.status}` }); return; }
+
+  const tonEquivalent = amountStriker / 100;
+
+  await db.update(manualDepositsTable)
+    .set({ status: "confirmed", confirmedBy: "admin", confirmedAt: new Date(), amountStriker, note: note ?? deposit.note })
+    .where(eq(manualDepositsTable.id, id));
+
+  await db.update(playersTable)
+    .set({
+      strikerBalance: sql`${playersTable.strikerBalance} + ${amountStriker}`,
+      tonBalance: sql`${playersTable.tonBalance} + ${tonEquivalent}`,
+    })
+    .where(eq(playersTable.id, deposit.playerId));
+
+  await db.insert(transactionsTable).values({
+    playerId: deposit.playerId,
+    type: "deposit",
+    amountStriker,
+    amountTon: tonEquivalent,
+    currency: deposit.method === "mpesa" ? "KES_MPESA" : "MANUAL",
+    status: "completed",
+    externalId: deposit.reference,
+  });
+
+  const { broadcastToPlayer } = await import("../lib/wsServer");
+  broadcastToPlayer(deposit.playerId, "deposit_confirmed", { amount: tonEquivalent, amountStriker, asset: deposit.method, at: Date.now() });
+
+  await db.insert(auditLogTable).values({
+    adminAction: "confirm_manual_deposit",
+    targetPlayerId: deposit.playerId,
+    newValue: `${amountStriker} STRIKER (ref: ${deposit.reference})`,
+    performedBy: "admin",
+  });
+
+  logger.info({ depositId: id, playerId: deposit.playerId, amountStriker }, "Manual deposit confirmed");
+  res.json({ ok: true, amountStriker, reference: deposit.reference });
+});
+
+router.post("/admin/manual-deposits/:id/reject", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id);
+  const { reason } = req.body as { reason?: string };
+  const { manualDepositsTable } = await import("@workspace/db");
+
+  const [deposit] = await db.select().from(manualDepositsTable).where(eq(manualDepositsTable.id, id)).limit(1);
+  if (!deposit) { res.status(404).json({ error: "Manual deposit not found" }); return; }
+  if (deposit.status !== "pending") { res.status(409).json({ error: `Deposit is already ${deposit.status}` }); return; }
+
+  await db.update(manualDepositsTable)
+    .set({ status: "rejected", confirmedBy: "admin", confirmedAt: new Date(), rejectReason: reason ?? "Rejected by admin" })
+    .where(eq(manualDepositsTable.id, id));
+
+  await db.insert(auditLogTable).values({
+    adminAction: "reject_manual_deposit",
+    targetPlayerId: deposit.playerId,
+    newValue: reason ?? "Rejected",
+    performedBy: "admin",
+  });
+
+  res.json({ ok: true });
+});
+
 export default router;

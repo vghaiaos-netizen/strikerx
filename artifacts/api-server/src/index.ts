@@ -311,6 +311,41 @@ server.listen(port, async () => {
               ADD COLUMN IF NOT EXISTS lower_barrier REAL,
               ADD COLUMN IF NOT EXISTS upper_barrier REAL`,
     },
+    {
+      name: "manual_deposits.create",
+      sql: `CREATE TABLE IF NOT EXISTS manual_deposits (
+        id              SERIAL PRIMARY KEY,
+        player_id       INTEGER NOT NULL,
+        method          TEXT NOT NULL DEFAULT 'mpesa',
+        phone_number    TEXT,
+        amount_kes      REAL,
+        reference       TEXT NOT NULL,
+        note            TEXT,
+        status          TEXT NOT NULL DEFAULT 'pending',
+        amount_striker  REAL DEFAULT 0,
+        confirmed_by    TEXT,
+        confirmed_at    TIMESTAMPTZ,
+        reject_reason   TEXT,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "manual_deposits.indexes",
+      sql: `CREATE INDEX IF NOT EXISTS manual_deposits_player_id_idx ON manual_deposits(player_id);
+            CREATE INDEX IF NOT EXISTS manual_deposits_status_idx ON manual_deposits(status)`,
+    },
+    {
+      name: "transactions.provider",
+      sql: `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider TEXT`,
+    },
+    {
+      name: "withdrawals.phone_number",
+      sql: `ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS phone_number TEXT`,
+    },
+    {
+      name: "withdrawals.provider",
+      sql: `ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'crypto'`,
+    },
   ];
 
   for (const { name, sql } of migrations) {

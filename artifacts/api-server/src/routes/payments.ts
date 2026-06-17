@@ -315,4 +315,193 @@ router.post("/payments/webhook/cryptobot", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+// ── MANUAL DEPOSIT ───────────────────────────────────────────────────────────
+// Player submits a manual deposit request (M-Pesa / bank) after paying externally.
+// Admin must confirm before balance is credited.
+router.post("/payments/deposit/manual", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { method = "mpesa", phoneNumber, amountKes, reference, note } = req.body as {
+    method?: string;
+    phoneNumber?: string;
+    amountKes?: number;
+    reference?: string;
+    note?: string;
+  };
+
+  if (!reference || reference.trim().length < 4) {
+    res.status(400).json({ error: "Reference code is required (minimum 4 characters)" });
+    return;
+  }
+  if (!amountKes || amountKes <= 0) {
+    res.status(400).json({ error: "Amount in KES is required" });
+    return;
+  }
+  if (method === "mpesa" && !phoneNumber) {
+    res.status(400).json({ error: "Phone number is required for M-Pesa deposits" });
+    return;
+  }
+
+  const { manualDepositsTable } = await import("@workspace/db");
+
+  // Prevent duplicate reference codes from the same player
+  const existing = await db
+    .select({ id: manualDepositsTable.id })
+    .from(manualDepositsTable)
+    .where(and(eq(manualDepositsTable.playerId, playerId), eq(manualDepositsTable.reference, reference.trim().toUpperCase())))
+    .limit(1);
+
+  if (existing.length > 0) {
+    res.status(409).json({ error: "This reference code has already been submitted" });
+    return;
+  }
+
+  const [deposit] = await db.insert(manualDepositsTable).values({
+    playerId,
+    method: method ?? "mpesa",
+    phoneNumber: phoneNumber?.trim(),
+    amountKes: amountKes,
+    reference: reference.trim().toUpperCase(),
+    note: note?.trim() || null,
+    status: "pending",
+  }).returning();
+
+  req.log.info({ playerId, method, reference: deposit.reference, amountKes }, "Manual deposit submitted");
+
+  res.json({
+    id: deposit.id,
+    status: "pending",
+    reference: deposit.reference,
+    message: "Your deposit is under review. Balance will be credited once confirmed by our team.",
+  });
+});
+
+// ── PESAPAL STK PUSH ─────────────────────────────────────────────────────────
+router.post("/payments/deposit/mpesa", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { phoneNumber, amountKes } = req.body as { phoneNumber: string; amountKes: number };
+
+  if (!phoneNumber || !amountKes || amountKes <= 0) {
+    res.status(400).json({ error: "Phone number and amount required" });
+    return;
+  }
+
+  const { isPesapalConfigured, pesapalStkPush } = await import("../lib/pesapalService");
+  if (!isPesapalConfigured()) {
+    res.status(503).json({ error: "M-Pesa payments are not yet configured", fallback: true });
+    return;
+  }
+
+  const domain = process.env.WEBHOOK_DOMAIN
+    ?? process.env.REPLIT_DOMAINS?.split(",")[0]?.trim()
+    ?? process.env.RAILWAY_PUBLIC_DOMAIN
+    ?? process.env.REPLIT_DEV_DOMAIN
+    ?? "localhost:8000";
+
+  const reference = `SX-${playerId}-${Date.now()}`;
+  const result = await pesapalStkPush({
+    phoneNumber,
+    amountKes,
+    reference,
+    description: `StrikerX deposit — Player #${playerId}`,
+    callbackUrl: `https://${domain}/api/payments/webhook/pesapal`,
+    notificationId: process.env.PESAPAL_IPN_ID ?? "",
+  });
+
+  if (!result) {
+    res.status(502).json({ error: "M-Pesa STK push failed. Please try manual deposit." });
+    return;
+  }
+
+  const { manualDepositsTable } = await import("@workspace/db");
+  await db.insert(manualDepositsTable).values({
+    playerId,
+    method: "mpesa",
+    phoneNumber: phoneNumber.trim(),
+    amountKes,
+    reference,
+    note: `Pesapal orderTrackingId: ${result.orderTrackingId}`,
+    status: "pending",
+  });
+
+  res.json({ orderTrackingId: result.orderTrackingId, reference, message: "Check your phone for the M-Pesa STK push prompt." });
+});
+
+// ── PESAPAL IPN WEBHOOK ───────────────────────────────────────────────────────
+router.post("/payments/webhook/pesapal", async (req, res): Promise<void> => {
+  const { OrderTrackingId, OrderMerchantReference, OrderNotificationType } = req.body as {
+    OrderTrackingId?: string;
+    OrderMerchantReference?: string;
+    OrderNotificationType?: string;
+  };
+
+  if (OrderNotificationType !== "IPNCHANGE" || !OrderTrackingId) {
+    res.json({ orderNotificationType: "IPNCHANGE", orderTrackingId: OrderTrackingId, orderMerchantReference: OrderMerchantReference });
+    return;
+  }
+
+  const { pesapalGetTransactionStatus } = await import("../lib/pesapalService");
+  const status = await pesapalGetTransactionStatus(OrderTrackingId);
+  if (!status || status.status !== "COMPLETED") {
+    res.json({ orderNotificationType: "IPNCHANGE", orderTrackingId: OrderTrackingId, orderMerchantReference: OrderMerchantReference });
+    return;
+  }
+
+  const { manualDepositsTable } = await import("@workspace/db");
+  const [deposit] = await db
+    .select()
+    .from(manualDepositsTable)
+    .where(eq(manualDepositsTable.reference, OrderMerchantReference ?? ""))
+    .limit(1);
+
+  if (deposit && deposit.status === "pending") {
+    const amountKes = status.amount ?? deposit.amountKes ?? 0;
+    const KES_TO_TON = parseFloat(process.env.KES_TO_TON ?? "0.00055");
+    const tonEquivalent = amountKes * KES_TO_TON;
+    const depositRate = parseFloat(process.env.STRIKER_DEPOSIT_RATE ?? "100");
+    const strikerAmount = Math.floor(tonEquivalent * depositRate);
+
+    await db.update(manualDepositsTable)
+      .set({ status: "confirmed", confirmedBy: "pesapal-ipn", confirmedAt: new Date(), amountStriker: strikerAmount })
+      .where(eq(manualDepositsTable.id, deposit.id));
+
+    await db.update(playersTable)
+      .set({ strikerBalance: sql`${playersTable.strikerBalance} + ${strikerAmount}`, tonBalance: sql`${playersTable.tonBalance} + ${tonEquivalent}` })
+      .where(eq(playersTable.id, deposit.playerId));
+
+    await db.insert(transactionsTable).values({
+      playerId: deposit.playerId,
+      type: "deposit",
+      amountStriker: strikerAmount,
+      amountTon: tonEquivalent,
+      currency: "KES_MPESA",
+      status: "completed",
+      externalId: OrderTrackingId,
+    });
+
+    broadcastToPlayer(deposit.playerId, "deposit_confirmed", { amount: tonEquivalent, amountStriker: strikerAmount, asset: "MPESA", at: Date.now() });
+    logger.info({ playerId: deposit.playerId, strikerAmount, amountKes }, "Pesapal IPN deposit credited");
+  }
+
+  res.json({ orderNotificationType: "IPNCHANGE", orderTrackingId: OrderTrackingId, orderMerchantReference: OrderMerchantReference });
+});
+
+// ── MY DEPOSIT HISTORY ────────────────────────────────────────────────────────
+router.get("/payments/my-deposits", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { manualDepositsTable } = await import("@workspace/db");
+
+  const [cryptoDeposits, manualDeposits] = await Promise.all([
+    db.select().from(transactionsTable)
+      .where(and(eq(transactionsTable.playerId, playerId), eq(transactionsTable.type, "deposit")))
+      .orderBy(desc(transactionsTable.createdAt))
+      .limit(20),
+    db.select().from(manualDepositsTable)
+      .where(eq(manualDepositsTable.playerId, playerId))
+      .orderBy(desc(manualDepositsTable.createdAt))
+      .limit(20),
+  ]);
+
+  res.json({ cryptoDeposits, manualDeposits });
+});
+
 export default router;
