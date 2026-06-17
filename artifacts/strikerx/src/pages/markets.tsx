@@ -12,33 +12,48 @@ import { TrendingUp, TrendingDown, BarChart2, Zap } from "lucide-react";
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
   All:         [],
-  Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON"],
+  Crypto:      ["BTC", "ETH", "SOL", "BNB", "TON", "XRP", "DOGE", "AVAX", "MATIC"],
   Forex:       ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF"],
   Commodities: ["XAUUSD", "XAGUSD", "USOIL", "NATGAS", "COPPER"],
+  Indices:     ["SPX", "NDX", "DJI", "DAX", "FTSE", "NKY"],
 };
 
 const ASSET_META: Record<string, { color: string; icon: string; digits: number }> = {
-  BTC:    { color: "#f7931a", icon: "₿",  digits: 2 },
-  ETH:    { color: "#627eea", icon: "Ξ",  digits: 2 },
-  SOL:    { color: "#9945ff", icon: "◎",  digits: 3 },
-  BNB:    { color: "#f0b90b", icon: "⬡",  digits: 2 },
-  TON:    { color: "#0098ea", icon: "◆",  digits: 4 },
-  EURUSD: { color: "#0ea5e9", icon: "€",  digits: 5 },
-  GBPUSD: { color: "#8b5cf6", icon: "£",  digits: 5 },
-  USDJPY: { color: "#f59e0b", icon: "¥",  digits: 3 },
-  AUDUSD: { color: "#22c55e", icon: "A$", digits: 5 },
-  USDCHF: { color: "#ef4444", icon: "₣",  digits: 5 },
-  XAUUSD: { color: "#fbbf24", icon: "Au", digits: 2 },
-  XAGUSD: { color: "#94a3b8", icon: "Ag", digits: 4 },
-  USOIL:  { color: "#78350f", icon: "OIL",digits: 2 },
-  NATGAS: { color: "#0891b2", icon: "GAS",digits: 3 },
-  COPPER: { color: "#b45309", icon: "Cu", digits: 4 },
+  BTC:    { color: "#f7931a", icon: "₿",   digits: 2 },
+  ETH:    { color: "#627eea", icon: "Ξ",   digits: 2 },
+  SOL:    { color: "#9945ff", icon: "◎",   digits: 3 },
+  BNB:    { color: "#f0b90b", icon: "⬡",   digits: 2 },
+  TON:    { color: "#0098ea", icon: "◆",   digits: 4 },
+  XRP:    { color: "#346aa9", icon: "✕",   digits: 4 },
+  DOGE:   { color: "#c2a633", icon: "Ð",   digits: 5 },
+  AVAX:   { color: "#e84142", icon: "A",   digits: 3 },
+  MATIC:  { color: "#8247e5", icon: "M",   digits: 4 },
+  EURUSD: { color: "#0ea5e9", icon: "€",   digits: 5 },
+  GBPUSD: { color: "#8b5cf6", icon: "£",   digits: 5 },
+  USDJPY: { color: "#f59e0b", icon: "¥",   digits: 3 },
+  AUDUSD: { color: "#22c55e", icon: "A$",  digits: 5 },
+  USDCHF: { color: "#ef4444", icon: "₣",   digits: 5 },
+  XAUUSD: { color: "#fbbf24", icon: "Au",  digits: 2 },
+  XAGUSD: { color: "#94a3b8", icon: "Ag",  digits: 4 },
+  USOIL:  { color: "#78350f", icon: "OIL", digits: 2 },
+  NATGAS: { color: "#0891b2", icon: "GAS", digits: 3 },
+  COPPER: { color: "#b45309", icon: "Cu",  digits: 4 },
+  SPX:    { color: "#00ff88", icon: "S&P", digits: 2 },
+  NDX:    { color: "#00d4ff", icon: "NQ",  digits: 2 },
+  DJI:    { color: "#3b82f6", icon: "DJ",  digits: 2 },
+  DAX:    { color: "#f97316", icon: "DA",  digits: 2 },
+  FTSE:   { color: "#a855f7", icon: "FT",  digits: 2 },
+  NKY:    { color: "#f43f5e", icon: "NK",  digits: 2 },
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  All: "All", Crypto: "Crypto", Forex: "Forex", Commodities: "Commod.", Indices: "Indices",
 };
 
 function formatPrice(symbol: string, price: number): string {
   const digits = ASSET_META[symbol]?.digits ?? 2;
-  if (price >= 1000) return "$" + price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (digits <= 2) return "$" + price.toFixed(2);
+  if (price >= 1000) return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (digits <= 2) return price.toFixed(2);
   return price.toFixed(digits);
 }
 
@@ -54,9 +69,9 @@ export function Markets() {
     query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 },
   });
 
-  const assets = assetsData?.assets ?? [];
-  const prices = pricesData?.prices ?? {};
-  const changes = (pricesData as Record<string, unknown>)?.changes24h as Record<string, number> ?? {};
+  const assets  = assetsData?.assets ?? [];
+  const prices  = (pricesData?.prices ?? {}) as Record<string, number>;
+  const changes = ((pricesData as unknown as Record<string, unknown>)?.changes24h ?? {}) as Record<string, number>;
 
   const filtered = category === "All"
     ? assets
@@ -103,7 +118,6 @@ export function Markets() {
             className="overflow-hidden whitespace-nowrap border-y border-border bg-card/50 py-2 px-0 select-none"
             style={{ scrollBehavior: "auto" }}
           >
-            {/* Duplicate for seamless loop */}
             {[...assets, ...assets].map((a, i) => {
               const price  = prices[a.symbol];
               const change = changes[a.symbol] ?? 0;
@@ -142,7 +156,7 @@ export function Markets() {
                   : "bg-card border border-border text-muted-foreground hover:text-white hover:border-white/20"
               }`}
             >
-              {cat}
+              {CATEGORY_LABELS[cat] ?? cat}
             </button>
           ))}
         </div>
@@ -150,11 +164,11 @@ export function Markets() {
         {/* Asset grid */}
         <div className="px-4 grid grid-cols-2 gap-2.5">
           {filtered.map((asset, idx) => {
-            const price  = prices[asset.symbol];
-            const change = changes[asset.symbol] ?? 0;
-            const isUp   = change >= 0;
-            const meta   = ASSET_META[asset.symbol];
-            const payout = parseFloat(String(asset.payoutRatio));
+            const price     = prices[asset.symbol];
+            const change    = changes[asset.symbol] ?? 0;
+            const isUp      = change >= 0;
+            const meta      = ASSET_META[asset.symbol];
+            const payout    = parseFloat(String(asset.payoutRatio));
             const payoutPct = Math.round((payout - 1) * 100);
 
             return (
@@ -162,7 +176,7 @@ export function Markets() {
                 key={asset.symbol}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.04 }}
+                transition={{ delay: idx * 0.03 }}
                 className="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 relative overflow-hidden"
               >
                 {/* Accent glow top */}
@@ -173,7 +187,7 @@ export function Markets() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black"
                       style={{ background: `${meta?.color ?? "#fff"}18`, color: meta?.color ?? "#fff", border: `1px solid ${meta?.color ?? "#fff"}25` }}
                     >
                       {meta?.icon ?? asset.symbol[0]}
@@ -191,9 +205,11 @@ export function Markets() {
                   </div>
                 </div>
 
-                {/* Price — large, prominent */}
+                {/* Price */}
                 <div className="font-mono font-black text-lg tabular-nums leading-tight">
-                  {price ? formatPrice(asset.symbol, price) : <span className="text-muted-foreground text-xs animate-pulse">Loading…</span>}
+                  {price
+                    ? formatPrice(asset.symbol, price)
+                    : <span className="text-muted-foreground text-xs animate-pulse">Loading…</span>}
                 </div>
 
                 {/* Footer row */}
