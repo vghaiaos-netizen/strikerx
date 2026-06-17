@@ -10,3 +10,4 @@ export * from "./affiliates";
 export * from "./outreach";
 export * from "./missions";
 export * from "./trading";
+export * from "./manual_deposits";
