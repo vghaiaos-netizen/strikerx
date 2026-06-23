@@ -29,6 +29,7 @@ function useBackButton(location: string) {
       return () => { bb.hide(); bb.offClick(handler); };
     } else {
       bb.hide();
+      return;
     }
   }, [isInner]);
 
@@ -96,24 +97,26 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </Link>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-1.5 items-center">
             <button
               onClick={toggleSound}
               className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground"
               title={soundEnabled ? "Mute" : "Unmute"}
             >
-              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
             </button>
-            <div className="flex items-center gap-1.5">
-              {(player?.tonBalance ?? 0) > 0 ? (
-                <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold text-[#0098ea]">
-                  {parseFloat(String(player?.tonBalance ?? 0)).toFixed(2)} TON
+            {player && (
+              <div className="flex items-center gap-1">
+                {parseFloat(String(player.tonBalance ?? 0)) > 0 && (
+                  <div className="bg-[#0098ea]/10 border border-[#0098ea]/20 px-2 py-1 rounded-md text-[11px] font-mono font-bold text-[#0098ea]">
+                    {parseFloat(String(player.tonBalance ?? 0)).toFixed(2)} TON
+                  </div>
+                )}
+                <div className="bg-primary/10 border border-primary/20 px-2 py-1 rounded-md text-[11px] font-mono font-bold text-primary">
+                  {Math.round(parseFloat(String(player.strikerBalance ?? 0))).toLocaleString()} STRK
                 </div>
-              ) : null}
-              <div className="bg-muted px-2 py-1 rounded-md text-xs font-mono font-bold">
-                {Math.round(parseFloat(String(player?.strikerBalance ?? 0))).toLocaleString()} STRK
               </div>
-            </div>
+            )}
             <NotificationBell />
           </div>
         </div>
