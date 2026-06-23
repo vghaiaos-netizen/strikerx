@@ -794,11 +794,30 @@ export function Trading() {
                     </motion.p>
                   </AnimatePresence>
                   {selectedChange !== undefined && selectedPrice && (
-                    <span className={`text-xs font-bold tabular-nums ${selectedChange >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {fmtChange(selectedChange)}
-                    </span>
+                    <div className="flex flex-col items-start">
+                      <span className={`text-xs font-bold tabular-nums leading-none ${selectedChange >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        {fmtChange(selectedChange)}
+                      </span>
+                      <span className={`text-[9px] font-mono tabular-nums leading-none mt-0.5 ${selectedChange >= 0 ? "text-green-400/50" : "text-red-400/50"}`}>
+                        {selectedChange >= 0 ? "+" : ""}{(selectedPrice * selectedChange / 100).toFixed(Math.min(meta?.digits ?? 2, 3))}
+                      </span>
+                    </div>
                   )}
                 </div>
+                {/* 24h High / Low row */}
+                {selectedPrice && selectedChange !== undefined && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="flex items-center gap-1 text-[9px] font-mono">
+                      <span className="text-green-400/50">H</span>
+                      <span className="text-white/50 tabular-nums">{formatPrice(selectedAsset, selectedPrice * (1 + Math.abs(selectedChange) / 100))}</span>
+                    </span>
+                    <span className="text-white/10">·</span>
+                    <span className="flex items-center gap-1 text-[9px] font-mono">
+                      <span className="text-red-400/50">L</span>
+                      <span className="text-white/50 tabular-nums">{formatPrice(selectedAsset, selectedPrice * (1 - Math.abs(selectedChange) / 100))}</span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col items-end gap-1.5 ml-2 shrink-0">
@@ -1214,13 +1233,21 @@ export function Trading() {
             animate={{ opacity: 1, height: "auto" }}
             className="px-3 mt-1.5"
           >
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/3 border border-white/6">
-              <span className="text-[10px] font-mono text-white/40">Stake</span>
-              <span className="text-[10px] font-mono text-white/60">{stake} {currency === "STRIKER" ? "STRK" : currency}</span>
-              <span className="text-white/20">→</span>
-              <span className="text-[10px] font-mono text-white/40">Win</span>
-              <span className="text-xs font-black text-[#00ff88]">+{potentialProfit} {currency === "STRIKER" ? "STRK" : currency}</span>
-              <span className="text-[9px] font-mono text-white/25">({payoutPct}%{streakBoostPct > 0 ? ` +${streakBoostPct}%` : ""})</span>
+            <div className="rounded-xl border border-white/8 overflow-hidden bg-white/3">
+              <div className="grid grid-cols-3 divide-x divide-white/6">
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[8px] font-mono text-white/30 uppercase tracking-wider mb-0.5">Stake</p>
+                  <p className="text-xs font-black font-mono text-white/70">{stake} <span className="text-white/40 text-[9px]">{currency === "STRIKER" ? "STRK" : currency}</span></p>
+                </div>
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[8px] font-mono text-white/30 uppercase tracking-wider mb-0.5">Payout</p>
+                  <p className="text-xs font-black font-mono text-white/50">{payoutPct}%{streakBoostPct > 0 ? <span className="text-orange-400 ml-1">+{streakBoostPct}%</span> : ""}</p>
+                </div>
+                <div className="px-3 py-2 text-center bg-[#00ff88]/5">
+                  <p className="text-[8px] font-mono text-[#00ff88]/50 uppercase tracking-wider mb-0.5">Win</p>
+                  <p className="text-xs font-black font-mono text-[#00ff88]">+{potentialProfit} <span className="text-[#00ff88]/60 text-[9px]">{currency === "STRIKER" ? "STRK" : currency}</span></p>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -1337,8 +1364,10 @@ export function Trading() {
                               {livePrice ? formatPrice(p.assetSymbol, livePrice) : "…"}
                             </span>
                             {liveProfit !== null && (
-                              <span className={`ml-auto text-xs font-black tabular-nums ${liveProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
-                                {liveProfit >= 0 ? `+${liveProfit}` : liveProfit} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
+                              <span className={`ml-auto text-xs font-black tabular-nums px-1.5 py-0.5 rounded ${
+                                liveProfit >= 0 ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"
+                              }`}>
+                                {liveProfit >= 0 ? "+" : ""}{parseFloat(String(liveProfit)).toFixed(pCurrency === "STRIKER" ? 0 : 4)} {pCurrency === "STRIKER" ? "STRK" : pCurrency}
                               </span>
                             )}
                           </div>

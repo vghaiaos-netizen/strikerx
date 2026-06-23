@@ -74,6 +74,12 @@ export function Markets() {
   const prices  = (pricesData?.prices ?? {}) as Record<string, number>;
   const changes = ((pricesData as unknown as Record<string, unknown>)?.changes24h ?? {}) as Record<string, number>;
 
+  // Top movers (only when showing All category and no search)
+  const sortedByChange = [...assets].sort((a, b) => (changes[b.symbol] ?? 0) - (changes[a.symbol] ?? 0));
+  const topGainers = sortedByChange.slice(0, 3).filter((a) => (changes[a.symbol] ?? 0) > 0);
+  const topLosers  = [...sortedByChange].reverse().slice(0, 3).filter((a) => (changes[a.symbol] ?? 0) < 0);
+  const showMovers = category === "All" && !search && assets.length > 0;
+
   const filtered = assets.filter((a) => {
     const inCategory = category === "All" || ASSET_CATEGORIES[category]?.includes(a.symbol);
     const inSearch = !search || a.symbol.toLowerCase().includes(search.toLowerCase()) || a.displayName.toLowerCase().includes(search.toLowerCase());
@@ -144,6 +150,78 @@ export function Markets() {
                 </span>
               );
             })}
+          </div>
+        )}
+
+        {/* Top Movers */}
+        {showMovers && (topGainers.length > 0 || topLosers.length > 0) && (
+          <div className="px-4 mt-3 mb-1">
+            <div className="grid grid-cols-2 gap-2">
+              {/* Gainers */}
+              {topGainers.length > 0 && (
+                <div className="bg-green-950/40 border border-green-700/30 rounded-xl p-2.5">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <TrendingUp size={10} className="text-green-400" />
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-green-400/70">Gainers</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {topGainers.map((a) => {
+                      const chg = changes[a.symbol] ?? 0;
+                      const meta = ASSET_META[a.symbol];
+                      const px = prices[a.symbol];
+                      return (
+                        <button key={a.symbol} onClick={() => goToTrade(a.symbol)}
+                          className="flex items-center justify-between gap-1 w-full text-left">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-black shrink-0"
+                              style={{ background: `${meta?.color ?? "#fff"}20`, color: meta?.color ?? "#fff" }}>
+                              {meta?.icon ?? a.symbol[0]}
+                            </span>
+                            <div>
+                              <p className="text-[10px] font-bold leading-none">{a.symbol}</p>
+                              {px && <p className="text-[8px] font-mono text-muted-foreground tabular-nums">{formatPrice(a.symbol, px)}</p>}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-black text-green-400 tabular-nums">+{chg.toFixed(2)}%</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Losers */}
+              {topLosers.length > 0 && (
+                <div className="bg-red-950/40 border border-red-700/30 rounded-xl p-2.5">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <TrendingDown size={10} className="text-red-400" />
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-red-400/70">Losers</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {topLosers.map((a) => {
+                      const chg = changes[a.symbol] ?? 0;
+                      const meta = ASSET_META[a.symbol];
+                      const px = prices[a.symbol];
+                      return (
+                        <button key={a.symbol} onClick={() => goToTrade(a.symbol)}
+                          className="flex items-center justify-between gap-1 w-full text-left">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-black shrink-0"
+                              style={{ background: `${meta?.color ?? "#fff"}20`, color: meta?.color ?? "#fff" }}>
+                              {meta?.icon ?? a.symbol[0]}
+                            </span>
+                            <div>
+                              <p className="text-[10px] font-bold leading-none">{a.symbol}</p>
+                              {px && <p className="text-[8px] font-mono text-muted-foreground tabular-nums">{formatPrice(a.symbol, px)}</p>}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-black text-red-400 tabular-nums">{chg.toFixed(2)}%</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -228,10 +306,17 @@ export function Markets() {
                 </div>
 
                 {/* Price */}
-                <div className="font-mono font-black text-lg tabular-nums leading-tight">
-                  {price
-                    ? formatPrice(asset.symbol, price)
-                    : <span className="text-muted-foreground text-xs animate-pulse">Loading…</span>}
+                <div className="flex items-baseline gap-2">
+                  <div className="font-mono font-black text-lg tabular-nums leading-tight">
+                    {price
+                      ? formatPrice(asset.symbol, price)
+                      : <span className="text-muted-foreground text-xs animate-pulse">Loading…</span>}
+                  </div>
+                  {price && change !== 0 && (
+                    <span className={`text-[9px] font-mono tabular-nums ${isUp ? "text-green-400/70" : "text-red-400/70"}`}>
+                      {isUp ? "+" : ""}{(price * change / 100).toFixed(ASSET_META[asset.symbol]?.digits ?? 2)}
+                    </span>
+                  )}
                 </div>
 
                 {/* Footer row */}

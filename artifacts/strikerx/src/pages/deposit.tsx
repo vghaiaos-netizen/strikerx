@@ -279,10 +279,13 @@ export function Deposit() {
                   <div className="grid grid-cols-4 gap-2">
                     {CURRENCIES.map(c => (
                       <button key={c.id} onClick={() => setCurrency(c.id)}
-                        className={`py-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${currency === c.id ? "border-current" : "border-white/8 text-white/30 hover:border-white/20"}`}
-                        style={{ color: currency === c.id ? c.color : undefined, borderColor: currency === c.id ? c.color : undefined, background: currency === c.id ? `${c.color}12` : undefined }}>
-                        <span className="text-lg leading-none">{c.symbol}</span>
-                        <span className="font-display font-bold text-xs">{c.label}</span>
+                        className={`py-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all relative overflow-hidden ${currency === c.id ? "" : "border-white/8 text-white/30 hover:border-white/20"}`}
+                        style={{ color: currency === c.id ? c.color : undefined, borderColor: currency === c.id ? `${c.color}60` : undefined, background: currency === c.id ? `${c.color}10` : undefined }}>
+                        {currency === c.id && (
+                          <span className="absolute top-0 left-0 right-0 h-0.5" style={{ background: c.color, opacity: 0.7 }} />
+                        )}
+                        <span className="text-base leading-none font-black">{c.symbol}</span>
+                        <span className="font-display font-bold text-[10px]">{c.label}</span>
                       </button>
                     ))}
                   </div>

@@ -47,6 +47,9 @@ export function Withdraw() {
   const mpesaKesPreview = (mpesaStrikerNum * KES_PER_STRIKER * 0.9).toFixed(0); // 10% fee
   const mpesaStrikerDeducted = mpesaStrikerNum;
 
+  const PRESETS = [0.25, 0.5, 0.75, 1] as const;
+  const PRESET_LABELS = ["25%", "50%", "75%", "Max"] as const;
+
   const handleSubmit = async () => {
     const amount = parseFloat(strikerAmount);
     if (!amount || amount <= 0) { toast({ title: t('withdraw.enterAmount'), variant: "destructive" }); return; }
@@ -105,7 +108,23 @@ export function Withdraw() {
         <div className="flex items-center gap-2">
           <ArrowUpRight className="w-4 h-4 text-white/60" />
           <span className="font-display font-bold text-sm tracking-widest text-white">{t('withdraw.title')}</span>
-          <span className="ml-auto text-xs font-mono text-white/30">{balance.toLocaleString(undefined, { maximumFractionDigits: 0 })} SKR</span>
+        </div>
+
+        {/* Balance display */}
+        <div className="bg-white/3 border border-white/6 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <div className="text-[9px] font-mono text-white/30 uppercase tracking-wider mb-0.5">Available Balance</div>
+            <div className="font-mono font-black text-xl text-white tabular-nums">
+              {balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              <span className="text-sm font-bold text-white/40 ml-1.5">SKR</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[9px] font-mono text-white/30 uppercase tracking-wider mb-0.5">≈ TON</div>
+            <div className="font-mono font-bold text-lg text-[#0098ea] tabular-nums">
+              {(balance / WITHDRAW_RATE).toFixed(3)}
+            </div>
+          </div>
         </div>
 
         {/* Wager gate (shared) */}
@@ -178,14 +197,38 @@ export function Withdraw() {
                     </div>
                     <div>
                       <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">{t('withdraw.amount')}</label>
+                      {/* Quick presets */}
+                      <div className="grid grid-cols-4 gap-1.5 mb-2">
+                        {PRESETS.map((pct, i) => {
+                          const preset = Math.floor(balance * pct);
+                          const isActive = strikerAmount === String(preset) && preset > 0;
+                          return (
+                            <button key={pct} onClick={() => setStrikerAmount(String(preset))}
+                              className={`py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                isActive
+                                  ? "bg-primary/20 border-primary/50 text-primary"
+                                  : "border-white/10 text-white/40 hover:border-white/25 hover:text-white/70"
+                              }`}>
+                              {PRESET_LABELS[i]}
+                            </button>
+                          );
+                        })}
+                      </div>
                       <div className="relative">
                         <Input type="number" value={strikerAmount} onChange={e => setStrikerAmount(e.target.value)}
-                          className="bg-white/5 border-white/10 text-white font-mono font-bold h-11 text-base pr-16" placeholder="Min 100" />
-                        <button onClick={() => setStrikerAmount(String(Math.floor(balance)))}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#00ff88] hover:text-white px-1.5 py-0.5 rounded border border-[#00ff88]/30 transition-all">
-                          MAX
-                        </button>
+                          className={`bg-white/5 border-white/10 text-white font-mono font-bold h-11 text-base ${
+                            parsedAmount > balance ? "border-red-500/50" : parsedAmount > 0 && parsedAmount < 100 ? "border-yellow-500/50" : ""
+                          }`}
+                          placeholder="Min 100 SKR" />
                       </div>
+                      {parsedAmount > balance && (
+                        <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                          <AlertTriangle size={9} /> Exceeds available balance
+                        </p>
+                      )}
+                      {parsedAmount > 0 && parsedAmount < 100 && (
+                        <p className="text-[10px] text-yellow-400/70 mt-1">Minimum withdrawal is 100 SKR</p>
+                      )}
                     </div>
                     {strikerAmount && (
                       <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
