@@ -295,7 +295,7 @@ export function Trading() {
   const { data: demoActiveData }  = useGetDemoPositionsActive({
     query: { queryKey: getGetDemoPositionsActiveQueryKey(), refetchInterval: isAuthed && isDemoMode ? 3000 : false, enabled: isAuthed && isDemoMode },
   });
-  const { data: demoHistoryData } = useGetDemoPositions({
+  const { data: demoHistoryData } = useGetDemoPositions(undefined, {
     query: { queryKey: getGetDemoPositionsQueryKey(), refetchInterval: isAuthed && isDemoMode ? 10_000 : false, enabled: isAuthed && isDemoMode },
   });
 
@@ -1264,7 +1264,8 @@ export function Trading() {
                     {activePositions.map((p) => {
                       const livePrice  = currentPrices[p.assetSymbol];
                       const pCType     = (p.contractType ?? "UP_DOWN") as ContractType;
-                      const pCurrency  = (p.currency ?? "TON");
+                      const pRaw       = p as unknown as Record<string, unknown>;
+                      const pCurrency  = ((pRaw.currency as string | undefined) ?? "TON");
                       const priceDiff  = livePrice && p.entryPrice ? livePrice - p.entryPrice : null;
 
                       // Live "winning?" logic — matches server determineOutcome exactly
@@ -1287,7 +1288,8 @@ export function Trading() {
                       }
 
                       const assetPayout = asNum(apiAssets.find((a) => a.symbol === p.assetSymbol)?.payoutRatio, 1.82);
-                      const stake       = asNum(p.stakeStriker);
+                      const pRaw2       = p as unknown as Record<string, unknown>;
+                      const stake       = asNum((pRaw2.stakeStriker ?? pRaw2.stake) as number | string | undefined);
                       const liveProfit  = isWinning === true
                         ? parseFloat((stake * (assetPayout - 1)).toFixed(pCurrency === "STRIKER" ? 0 : 4))
                         : isWinning === false
@@ -1362,8 +1364,9 @@ export function Trading() {
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     {history.slice(0, 20).map((p) => {
-                      const pCurrency = p.currency ?? "TON";
-                      const hStake    = asNum(p.stakeStriker);
+                      const pAny      = p as unknown as Record<string, unknown>;
+                      const pCurrency = (pAny.currency as string | undefined) ?? "TON";
+                      const hStake    = asNum((pAny.stakeStriker ?? pAny.stake) as number | string | undefined);
                       const hWinAmt   = asNum(p.winAmount);
                       const netPnl    = p.outcome === "win"
                         ? parseFloat((hWinAmt - hStake).toFixed(pCurrency === "STRIKER" ? 0 : 4))
@@ -1400,7 +1403,7 @@ export function Trading() {
                             <p className={`text-sm font-black tabular-nums ${
                               netPnl > 0 ? "text-green-400" : netPnl < 0 ? "text-red-400" : "text-yellow-400"
                             }`}>
-                              {netPnl > 0 ? `+${netPnl}` : netPnl === 0 ? "±0" : netPnl}
+                              {netPnl > 0 ? `+${parseFloat(String(netPnl)).toFixed(2)}` : netPnl === 0 ? "±0" : parseFloat(String(netPnl)).toFixed(2)}
                             </p>
                             <p className="text-[9px] text-muted-foreground">{ccyLabel}</p>
                           </div>

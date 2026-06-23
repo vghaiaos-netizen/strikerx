@@ -149,7 +149,10 @@ export function Leaderboard() {
                   }`}
                 >
                   <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-mono font-bold text-sm flex-shrink-0 ${rankStyle}`}>
-                    {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
+                    {entry.rank === 1 ? <Trophy size={16} className="text-yellow-400" />
+                     : entry.rank === 2 ? <Medal size={16} className="text-gray-300" />
+                     : entry.rank === 3 ? <Medal size={16} className="text-orange-400" />
+                     : `#${entry.rank}`}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">

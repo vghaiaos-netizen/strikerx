@@ -8,7 +8,7 @@ import {
   getGetTradingPricesQueryKey,
 } from "@workspace/api-client-react";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, BarChart2, Zap } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart2, Zap, Search, X } from "lucide-react";
 
 const ASSET_CATEGORIES: Record<string, string[]> = {
   All:         [],
@@ -60,6 +60,7 @@ function formatPrice(symbol: string, price: number): string {
 export function Markets() {
   const [, navigate] = useLocation();
   const [category, setCategory] = useState<string>("All");
+  const [search, setSearch] = useState("");
   const tickerRef = useRef<HTMLDivElement>(null);
 
   const { data: assetsData } = useGetTradingAssets({
@@ -73,9 +74,11 @@ export function Markets() {
   const prices  = (pricesData?.prices ?? {}) as Record<string, number>;
   const changes = ((pricesData as unknown as Record<string, unknown>)?.changes24h ?? {}) as Record<string, number>;
 
-  const filtered = category === "All"
-    ? assets
-    : assets.filter((a) => ASSET_CATEGORIES[category]?.includes(a.symbol));
+  const filtered = assets.filter((a) => {
+    const inCategory = category === "All" || ASSET_CATEGORIES[category]?.includes(a.symbol);
+    const inSearch = !search || a.symbol.toLowerCase().includes(search.toLowerCase()) || a.displayName.toLowerCase().includes(search.toLowerCase());
+    return inCategory && inSearch;
+  });
 
   // Auto-scroll ticker
   useEffect(() => {
@@ -144,12 +147,31 @@ export function Markets() {
           </div>
         )}
 
+        {/* Search bar */}
+        <div className="px-4 mt-4 mb-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search assets…"
+              className="w-full bg-card border border-border rounded-xl pl-9 pr-9 py-2.5 text-sm font-mono text-white placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 transition-colors"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Category filter */}
-        <div className="flex gap-1.5 px-4 mt-4 mb-3 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1.5 px-4 mt-2 mb-3 overflow-x-auto no-scrollbar">
           {Object.keys(ASSET_CATEGORIES).map((cat) => (
             <button
               key={cat}
-              onClick={() => setCategory(cat)}
+              onClick={() => { setCategory(cat); setSearch(""); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
                 category === cat
                   ? "bg-primary text-black"
@@ -234,7 +256,9 @@ export function Markets() {
         </div>
 
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">No assets in this category</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            {search ? `No results for "${search}"` : "No assets in this category"}
+          </div>
         )}
       </div>
     </Layout>

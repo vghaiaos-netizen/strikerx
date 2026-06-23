@@ -120,7 +120,7 @@ function WinLossDonut({ wins, losses }: { wins: number; losses: number }) {
 
 function OverviewTab() {
   const { data: portfolio } = useGetMyPortfolio();
-  const { data: chart }     = useGetMyPortfolioChart({ query: { staleTime: 60_000 } });
+  const { data: chart }     = useGetMyPortfolioChart(undefined, { query: { queryKey: ["my-portfolio-chart"], staleTime: 60_000 } });
 
   const at = portfolio?.allTime;
   const td = portfolio?.today;
@@ -292,7 +292,7 @@ function TradesTab() {
 
 function LeaderboardTab() {
   const [period, setPeriod] = useState<"week" | "month" | "alltime">("week");
-  const { data } = useGetTradingLeaderboard({ period }, { query: { refetchInterval: 60_000 } });
+  const { data } = useGetTradingLeaderboard({ period }, { query: { queryKey: ["trading-leaderboard", period], refetchInterval: 60_000 } });
   const entries = data?.entries ?? [];
   const { player } = useAuth();
   const myId = (player as Record<string, unknown>)?.id as number | undefined;
@@ -380,22 +380,22 @@ function AchievementsTab() {
 
       {/* Achievements */}
       <div className="flex flex-col gap-1.5">
-        {(data?.achievements ?? []).map((a) => (
+        {(data ?? []).map((a) => (
           <div key={a.key} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
-            a.unlocked ? "border-border bg-card" : "border-border/40 bg-card/40 opacity-60"
+            a.unlockedAt ? "border-border bg-card" : "border-border/40 bg-card/40 opacity-60"
           }`}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black"
               style={{ background: `${RARITY_COLORS[a.rarity] ?? "#6b7280"}20`, color: RARITY_COLORS[a.rarity] ?? "#6b7280" }}>
-              {a.unlocked ? <Trophy size={14} /> : "?"}
+              {a.unlockedAt ? <Trophy size={14} /> : "?"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold">{a.title}</p>
               <p className="text-[9px] text-muted-foreground truncate">{a.description}</p>
             </div>
-            {a.unlocked && <CheckCircle size={12} className="text-green-400 shrink-0" />}
+            {a.unlockedAt && <CheckCircle size={12} className="text-green-400 shrink-0" />}
           </div>
         ))}
-        {(data?.achievements ?? []).length === 0 && (
+        {(data ?? []).length === 0 && (
           <div className="text-center py-8 text-muted-foreground text-sm">No achievements yet — start trading!</div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,13 @@ import { soundManager } from "@/lib/sound";
 import { useTranslation } from "react-i18next";
 
 type Zone = "left" | "center" | "right";
+
+// Pre-computed crowd positions — avoids Math.random() in render (causes flicker on re-renders)
+const CROWD_POSITIONS = Array.from({ length: 24 }, (_, i) => ({
+  cx: (320 / 24) * i + (320 / 48),
+  cy: 5 + ((i * 13 + 7) % 5),
+  ry: 6 + ((i * 7 + 3) % 4),
+}));
 
 interface Result {
   win: boolean;
@@ -248,17 +255,10 @@ export function Penalty() {
                 </pattern>
               </defs>
 
-              {/* Stadium Atmosphere */}
+              {/* Stadium Atmosphere — static positions to avoid re-render flicker */}
               <g opacity="0.06">
-                {Array.from({ length: 24 }).map((_, i) => (
-                  <ellipse 
-                    key={i} 
-                    cx={(SW / 24) * i + (SW / 48)} 
-                    cy={5 + Math.random() * 5} 
-                    rx="5" 
-                    ry={6 + Math.random() * 4} 
-                    fill="white" 
-                  />
+                {CROWD_POSITIONS.map(({ cx, cy, ry }, i) => (
+                  <ellipse key={i} cx={cx} cy={cy} rx="5" ry={ry} fill="white" />
                 ))}
               </g>
 

@@ -248,13 +248,17 @@ export function Home() {
             <Link key={href} href={href}>
               <motion.div
                 whileTap={{ scale: 0.95 }}
-                className={`relative rounded-xl border border-white/8 bg-gradient-to-br ${bg} to-transparent p-4 flex flex-col gap-3 overflow-hidden cursor-pointer`}
-                whileHover={{ boxShadow: `0 0 16px ${color}22`, borderColor: `${color}40` }}
+                className={`relative rounded-xl border border-white/8 bg-gradient-to-br ${bg} to-transparent p-4 flex flex-col gap-3 overflow-hidden cursor-pointer group`}
+                whileHover={{ boxShadow: `0 0 20px ${color}28`, borderColor: `${color}50` }}
+                transition={{ duration: 0.15 }}
               >
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-black/30 border border-white/5">
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  style={{ background: `radial-gradient(ellipse at top left, ${color}08, transparent 60%)` }} />
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-black/30 border border-white/5 relative z-10"
+                  style={{ boxShadow: `0 0 12px ${color}22` }}>
                   <Icon className="w-4 h-4" style={{ color }} />
                 </div>
-                <div>
+                <div className="relative z-10">
                   <div className="font-bold text-sm text-white tracking-tight">{name}</div>
                   <div className="text-[10px] font-mono text-white/30 mt-0.5">{sub}</div>
                 </div>
@@ -336,21 +340,32 @@ export function Home() {
         <div>
           <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-white/30 mb-2.5">{t("home.recentWinners")}</div>
           <div className="flex flex-col gap-1.5">
-            {wins.map((w) => (
-              <div key={w.id} className="flex items-center gap-2.5 bg-white/3 border border-white/5 rounded-xl px-3 py-2">
-                <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
-                  <TrendingUp className="w-3 h-3 text-white/30" />
+            {wins.map((w) => {
+              const gameColor = w.game.includes("shot") || w.game.includes("crash") ? "#00ff88"
+                : w.game.includes("penalty") ? "#3b82f6"
+                : w.game.includes("mine") ? "#ef4444"
+                : "#f59e0b";
+              const GameIcon = w.game.includes("shot") || w.game.includes("crash") ? TrendingUp
+                : w.game.includes("penalty") ? Target
+                : w.game.includes("mine") ? Bomb
+                : Zap;
+              return (
+                <div key={w.id} className="flex items-center gap-2.5 bg-white/3 border border-white/5 rounded-xl px-3 py-2">
+                  <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 border border-white/5"
+                    style={{ borderColor: `${gameColor}20`, background: `${gameColor}10` }}>
+                    <GameIcon className="w-3 h-3" style={{ color: gameColor }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-[11px] font-bold text-white/70 truncate">{w.username}</div>
+                    <div className="text-[9px] font-mono text-white/25">{GAME_LABELS[w.game] ?? w.game}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-mono text-[11px] font-bold text-[#00ff88]">+{w.win.toLocaleString()}</div>
+                    <div className="text-[9px] font-mono text-white/25">{w.mult.toFixed(2)}× · {timeAgo(w.playedAt)}</div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-mono text-[11px] font-bold text-white/70 truncate">{w.username}</div>
-                  <div className="text-[9px] font-mono text-white/25">{GAME_LABELS[w.game] ?? w.game}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-mono text-[11px] font-bold text-[#00ff88]">+{w.win.toLocaleString()}</div>
-                  <div className="text-[9px] font-mono text-white/25">{w.mult.toFixed(2)}× · {timeAgo(w.playedAt)}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

@@ -16,6 +16,14 @@ const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
   base: basePath,
+  define: {
+    // Expose MINI_APP_LINK to frontend as VITE_MINI_APP_LINK
+    "import.meta.env.VITE_MINI_APP_LINK": JSON.stringify(
+      process.env.MINI_APP_LINK
+        ? `https://${process.env.MINI_APP_LINK.replace(/^https?:\/\//, "")}`
+        : undefined,
+    ),
+  },
   plugins: [
     react(),
     tailwindcss(),
