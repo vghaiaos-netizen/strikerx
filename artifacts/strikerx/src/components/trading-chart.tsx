@@ -162,10 +162,18 @@ export function TradingChart({ symbol, interval, currentPrice, entryPrice, chart
   }, []);
 
   // ── Toggle candle / line mode ────────────────────────────────────────────
+  // After toggling, request an animation frame so the chart can re-measure
+  // its price axis before re-fitting — prevents the "skewed" scale jump.
   useEffect(() => {
-    if (!candleRef.current || !lineRef.current) return;
+    if (!candleRef.current || !lineRef.current || !chartRef.current) return;
     candleRef.current.applyOptions({ visible: chartMode === "candle" });
     lineRef.current.applyOptions({ visible: chartMode === "line" });
+    // Re-fit price scale after the DOM has settled so wicks vs close-only
+    // don't leave a mismatched Y-axis between the two series.
+    requestAnimationFrame(() => {
+      chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+      chartRef.current?.timeScale().fitContent();
+    });
   }, [chartMode]);
 
   // ── Fetch klines when symbol or interval changes ─────────────────────────
@@ -182,6 +190,12 @@ export function TradingChart({ symbol, interval, currentPrice, entryPrice, chart
 
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    // Immediately wipe stale data so we never show the previous asset's
+    // candles while the new asset loads (avoids visual skew / ghost chart).
+    if (candleRef.current) { try { candleRef.current.setData([]); } catch { /* ignore */ } }
+    if (lineRef.current)   { try { lineRef.current.setData([]);   } catch { /* ignore */ } }
+    if (volRef.current)    { try { volRef.current.setData([]);    } catch { /* ignore */ } }
 
     let cancelled = false;
     setIsLoading(true);
