@@ -1,6 +1,6 @@
 # StrikerX — Agent Handoff
 
-> Last updated: June 14, 2026
+> Last updated: June 23, 2026
 > Read this FIRST, every session, before touching any file.
 > Full dev guide: `docs/for-replit-agents.md`
 
@@ -120,7 +120,81 @@ node scripts/github-push.mjs   # push to GitHub → Railway auto-deploys (~3 min
 
 ---
 
-## Database (23 Tables)
+## AI Layer — Groq Key Pool
+
+`artifacts/api-server/src/lib/groqPool.ts` — **use this for all Groq calls, never call Groq directly**.
+
+### How the pool works
+- Reads `GROQ_API_KEY_1` … `GROQ_API_KEY_5` on first call (lazy init)
+- Fallback: `GROQ_API_KEY` (legacy single-key, used if no numbered keys found)
+- Round-robins across available keys
+- On 429: marks that key as cooling for 60 s, immediately tries next key
+- If all keys cooling: throws — callers must fall back gracefully
+
+### Adding more keys (Railway)
+1. Go to Railway dashboard → StrikerX service → Variables
+2. Add `GROQ_API_KEY_2 = gsk_...`, `GROQ_API_KEY_3 = gsk_...`, etc.
+3. Deploy — pool picks them up automatically on restart (no code change needed)
+
+### Current keys
+- `GROQ_API_KEY_1` — set in both Replit and Railway (first key, June 2026)
+
+### Where AI is used
+| File | What it does | Fallback |
+|---|---|---|
+| `routes/trading.ts` | `/api/trading/ai-signal` — Llama 3.3 market signal | 503 error (consumer handles) |
+| `lib/groupBot.ts` | Varied text for big win, jackpot, morning message, recap broadcasts | Static template |
+| `lib/groupBot.ts` | AI market commentary scheduled 2x/day (9am + 3pm UTC) | Skip post |
+
+### Exports from groqPool.ts
+- `chatCompletion(messages, options)` — raw completion, throws on failure
+- `generateText(systemPrompt, userPrompt, maxTokens)` — returns string or null (never throws)
+- `getGroqPoolStatus()` — admin-safe status object (no key values exposed)
+
+---
+
+## GroupBot — Broadcast Events
+
+`artifacts/api-server/src/lib/groupBot.ts`
+
+### Scheduled jobs (all UTC)
+| Time | Job |
+|---|---|
+| 9am daily | Morning message (AI-enhanced) |
+| 9am + 3pm daily | AI market commentary |
+| 12pm daily | Daily leaderboard top-3 shoutout |
+| 9pm daily | Evening recap (trade count, payout, win rate) |
+| Sunday 8pm | Weekly wrap (7-day stats) |
+| Every 4h | Jackpot update |
+
+### Event-driven broadcasts (fire-and-forget from calling code)
+| Trigger | Function | Wired in |
+|---|---|---|
+| Casino big win | `broadcastBigWin` | `routes/games.ts` |
+| Trading big win (≥ threshold) | `broadcastTradingBigWin` | `lib/tradingEngine.ts` |
+| Trading win streak (3/5/10) | `broadcastTradingStreak` | `lib/tradingEngine.ts` |
+| Jackpot won | `broadcastJackpot` | `routes/games.ts` |
+| Withdrawal confirmed | `broadcastWithdrawal` | `routes/payments.ts` |
+| New player registered | `broadcastWelcome` | `routes/auth.ts` |
+| Tournament created | `broadcastTournamentStart` | `routes/admin.ts` |
+| Tournament ended | `broadcastTournamentEnd` | `lib/scheduler.ts` |
+| Rate event activated | `broadcastRateEvent` | `routes/admin.ts` |
+| Match event activated | `broadcastMatchEvent` | `routes/admin.ts` |
+
+### GroupBot commands (available in group)
+- `/stats` — total player count
+- `/jackpot` — force jackpot update broadcast
+- `/broadcast <text>` — admin manual broadcast
+- `/trade` — live prices + Open StrikerX button
+- `/top5` — today's top 5 traders by winnings
+- `/promo` — current rate event / match event status
+
+### VIP promotion broadcast
+Not yet auto-wired — call `broadcastVIPPromotion(username, newTier)` manually or wire into the VIP update path when needed. The function exists and is ready.
+
+---
+
+## Database (24 Tables)
 
 | Table | Purpose |
 |---|---|
@@ -164,23 +238,47 @@ node scripts/github-push.mjs   # push to GitHub → Railway auto-deploys (~3 min
 
 ## Schema Change Pattern (CRITICAL)
 
-Any new column needs **TWO** things — both are required:
+The server runs **idempotent startup migrations** on every start (`artifacts/api-server/src/index.ts`). This means ANY new environment (Railway, fork, staging) self-heals automatically — no manual DDL ever.
 
-1. Add to `lib/db/src/schema/*.ts` → run `pnpm --filter @workspace/db run push` (dev DB)
-2. Add an `IF NOT EXISTS` entry to the `migrations` array in `artifacts/api-server/src/index.ts` (runs on every Railway startup, safe to repeat)
+### Adding a new column
+1. Add to `lib/db/src/schema/*.ts`
+2. Run `pnpm --filter @workspace/db run push` (dev DB only)
+3. Add entry to the `migrations` array in `artifacts/api-server/src/index.ts`:
+   ```ts
+   { name: "table.column_name", sql: `ALTER TABLE t ADD COLUMN IF NOT EXISTS col TYPE` }
+   ```
+
+### Adding a new table
+1. Add to `lib/db/src/schema/*.ts`
+2. Run `pnpm --filter @workspace/db run push` (dev DB only)
+3. Add `CREATE TABLE IF NOT EXISTS` entry to migrations array in `index.ts`
+4. Add any indexes as a separate migration entry (idempotent `CREATE INDEX IF NOT EXISTS`)
 
 **Never run `drizzle-kit push` against Railway.** The startup migration array is the only safe path for production schema changes.
+
+### Outreach tables history
+`outreach_groups`, `outreach_templates`, `outreach_posts` were manually created on Railway on 2026-06-23 to fix a gap. They are now also in the migrations array — fully idempotent going forward.
 
 ---
 
 ## What Is Pending (Next Priority)
 
-From `docs/refactor-plan.md` Phase 3:
-1. Real-time `trade_settled` WS toast on frontend (WS event exists in tradingEngine, frontend only polls)
-2. `trading_available_durations` from DB config (currently hardcoded as `[30, 60, 300, 900]` in trading.tsx)
-3. Activate bots on Railway — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` in Railway dashboard (no code change needed)
-4. Klines/candlestick chart improvements
-5. World Cup tournament series via admin dashboard
+Completed in June 2026 session:
+- Groq key pool (`groqPool.ts`) — AI never fails under load
+- GroupBot overhaul — 12 new event broadcasts, 5 scheduled jobs, 3 new commands
+- AI-enhanced GroupBot messages (with static fallback)
+- outreach tables fixed on Railway + added to startup migrations
+- GroupBot wired to trading engine (big win, streak milestones), scheduler (tournament end), admin routes (rate event, match event, tournament start)
+
+Still pending:
+1. **VIP promotion broadcast** — `broadcastVIPPromotion` exists in groupBot.ts, not yet auto-wired to VIP tier upgrade logic
+2. **Rare achievement broadcast** — `broadcastRareAchievement` exists, not yet wired into `achievementsService.ts`
+3. **Advanced contract types UI** — EVEN_ODD, OVER_UNDER, IN_OUT selectable in trading terminal (backend ready)
+4. **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` as Railway env vars (no code change needed — webhooks auto-register on startup)
+5. **Add more Groq keys** — add `GROQ_API_KEY_2` through `GROQ_API_KEY_5` in Railway env vars when available
+6. **Demo balance UI polish** — clear demo/real toggle with DEMO badge
+7. **World Cup tournament series** — create via admin `/admin/tournaments`
+8. **Outreach service deployment** — deploy outreach-service branch to Railway (separate service), then set `outreach_enabled=true` in admin config
 
 ---
 
