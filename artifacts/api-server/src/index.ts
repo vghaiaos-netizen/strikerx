@@ -399,6 +399,51 @@ server.listen(port, async () => {
             CREATE INDEX IF NOT EXISTS outreach_posts_group_id_idx ON outreach_posts(group_id);
             CREATE INDEX IF NOT EXISTS outreach_posts_sent_at_idx  ON outreach_posts(sent_at)`,
     },
+    // ── Autonomous AI trading tables ─────────────────────────────────────────
+    {
+      name: "auto_trade_configs.create",
+      sql: `CREATE TABLE IF NOT EXISTS auto_trade_configs (
+        id                  SERIAL PRIMARY KEY,
+        player_id           INTEGER NOT NULL UNIQUE,
+        enabled             BOOLEAN NOT NULL DEFAULT false,
+        asset_symbol        TEXT NOT NULL DEFAULT 'BTC',
+        interval            TEXT NOT NULL DEFAULT '1m',
+        max_stake_pct       REAL NOT NULL DEFAULT 0.05,
+        max_trades_per_day  INTEGER NOT NULL DEFAULT 10,
+        currency            TEXT NOT NULL DEFAULT 'TON',
+        risk_level          TEXT NOT NULL DEFAULT 'balanced',
+        min_confidence      INTEGER NOT NULL DEFAULT 70,
+        trades_today        INTEGER NOT NULL DEFAULT 0,
+        last_trade_at       TIMESTAMPTZ,
+        total_auto_trades   INTEGER NOT NULL DEFAULT 0,
+        total_auto_wins     INTEGER NOT NULL DEFAULT 0,
+        reset_date          TEXT,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "auto_trade_log.create",
+      sql: `CREATE TABLE IF NOT EXISTS auto_trade_log (
+        id           SERIAL PRIMARY KEY,
+        config_id    INTEGER REFERENCES auto_trade_configs(id),
+        player_id    INTEGER NOT NULL,
+        asset_symbol TEXT NOT NULL,
+        direction    TEXT NOT NULL,
+        stake        REAL NOT NULL DEFAULT 0,
+        currency     TEXT NOT NULL DEFAULT 'TON',
+        confidence   INTEGER NOT NULL DEFAULT 0,
+        position_id  INTEGER,
+        status       TEXT NOT NULL DEFAULT 'skipped',
+        note         TEXT NOT NULL DEFAULT '',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "auto_trade_log.indexes",
+      sql: `CREATE INDEX IF NOT EXISTS auto_trade_log_player_idx ON auto_trade_log(player_id);
+            CREATE INDEX IF NOT EXISTS auto_trade_log_created_idx ON auto_trade_log(created_at DESC)`,
+    },
   ];
 
   for (const { name, sql } of migrations) {

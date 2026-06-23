@@ -124,6 +124,10 @@ export function startTradingSettlementScheduler() {
     await settleDemoExpiredPositions();
   }, 1_000);
   logger.info("Trading settlement scheduler started (real + demo)");
+  // Kick off autonomous AI trading scheduler (lazy import avoids circular dep)
+  import("./autoTrader.js").then(({ startAutoTraderScheduler }) => {
+    startAutoTraderScheduler();
+  }).catch((err) => logger.warn({ err }, "autoTrader: failed to start"));
 }
 
 export function stopTradingSettlementScheduler() {
