@@ -59,7 +59,7 @@ export async function initGameBot(): Promise<void> {
           .select({ strikerBalance: playersTable.strikerBalance, tonBalance: playersTable.tonBalance, vipTier: playersTable.vipTier })
           .from(playersTable)
           .where(eq(playersTable.telegramId, telegramId));
-        if (row) existingPlayer = row as typeof existingPlayer;
+        if (row) existingPlayer = row as { strikerBalance: number; tonBalance: number; vipTier: string };
       } catch { /* non-fatal — treat as new */ }
     }
 

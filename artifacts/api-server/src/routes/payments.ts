@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHash, createHmac } from "crypto";
 import { db, playersTable, transactionsTable, withdrawalsTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { strikerToTon, tonToStriker } from "../lib/gameEngine";
 import { logger } from "../lib/logger";

@@ -860,7 +860,7 @@ router.get("/admin/manual-deposits", requireAdmin, async (req, res): Promise<voi
 });
 
 router.post("/admin/manual-deposits/:id/confirm", requireAdmin, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const { amountStriker, note } = req.body as { amountStriker: number; note?: string };
 
   if (!amountStriker || amountStriker <= 0) {
@@ -911,7 +911,7 @@ router.post("/admin/manual-deposits/:id/confirm", requireAdmin, async (req, res)
 });
 
 router.post("/admin/manual-deposits/:id/reject", requireAdmin, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(String(req.params.id));
   const { reason } = req.body as { reason?: string };
   const { manualDepositsTable } = await import("@workspace/db");
 
