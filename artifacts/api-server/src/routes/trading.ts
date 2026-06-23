@@ -218,7 +218,9 @@ router.get("/trading/config", async (_req, res): Promise<void> => {
 // Returns: { signal, confidence, reasoning, bias, keyLevel, momentum }
 // Key pool: reads GROQ_API_KEY_1…GROQ_API_KEY_5 (env vars). Add keys in Railway dashboard.
 router.post("/trading/ai-signal", async (req, res): Promise<void> => {
-  const { symbol, currentPrice, change24h, recentPrices } = req.body ?? {};
+  const { symbol, currentPrice, change24h, recentPrices, interval } = req.body ?? {};
+  const tf = typeof interval === "string" && ["1m","5m","15m","30m","1h"].includes(interval) ? interval : "1m";
+  const tfLabels: Record<string,string> = { "1m":"1-minute","5m":"5-minute","15m":"15-minute","30m":"30-minute","1h":"1-hour" };
 
   if (typeof symbol !== "string" || !symbol) {
     res.status(400).json({ error: "symbol required" }); return;
@@ -246,20 +248,25 @@ Analyze the provided market data and give a precise, actionable trading signal i
 Be concise and professional. Base your analysis on price action, momentum, and market context.
 Always respond with valid JSON only — no markdown, no explanation outside the JSON.`;
 
-  const userPrompt = `Analyze ${symbol.toUpperCase()} for a binary UP/DOWN trade signal.
+  const userPrompt = `Analyze ${symbol.toUpperCase()} for a binary UP/DOWN trade signal on the ${tfLabels[tf]} timeframe.
 
 Asset: ${symbol.toUpperCase()}
+Chart Interval: ${tf}
 ${priceContext}
 24h Change: ${chg24h >= 0 ? "+" : ""}${chg24h.toFixed(2)}%
+
+This is a ${tfLabels[tf]} binary options signal — predict direction for the next ${tf} candle close.
+Shorter timeframes (1m, 5m) should have lower max confidence (cap at 80).
+Longer timeframes (30m, 1h) may warrant higher confidence.
 
 Provide a JSON response with exactly these fields:
 {
   "signal": "UP" or "DOWN",
-  "confidence": number 50-95 (integer),
+  "confidence": number 50-90 (integer, lower for shorter timeframes),
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "reasoning": "2-3 sentence concise market analysis",
+  "reasoning": "2-3 sentences referencing the ${tf} timeframe and price action",
   "momentum": "STRONG" | "MODERATE" | "WEAK",
-  "timeframe": "short-term signal for next 30-300 seconds",
+  "timeframe": "${tf}",
   "keyLevel": number (nearest significant support/resistance price level)
 }`;
 
@@ -296,11 +303,11 @@ Provide a JSON response with exactly these fields:
       momentum,
       reasoning:  String(parsed.reasoning ?? "Market analysis in progress."),
       keyLevel:   typeof parsed.keyLevel === "number" ? parsed.keyLevel : null,
-      timeframe:  String(parsed.timeframe ?? "short-term"),
+      timeframe:  tf,
       generatedAt: Date.now(),
     });
 
-    logger.info({ symbol, signal, confidence }, "AI signal generated (Groq)");
+    logger.info({ symbol, signal, confidence, timeframe: tf }, "AI signal generated (Groq)");
   } catch (err) {
     logger.error({ err }, "Groq AI signal request failed");
     res.status(502).json({ error: "AI signal service unavailable" });
