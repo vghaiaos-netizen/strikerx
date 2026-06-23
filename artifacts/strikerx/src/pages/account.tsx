@@ -21,6 +21,9 @@ const VIP_TIERS  = ["Sunday League", "Championship", "Premier League", "Champion
 const VIP_COLORS = ["#6b7280", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7"];
 const VIP_THRESHOLDS = [0, 10, 50, 200, 1000];
 
+// Use VITE_MINI_APP_LINK env var or fall back to the known production link
+const MINI_APP_LINK = (import.meta.env.VITE_MINI_APP_LINK as string | undefined) ?? "https://t.me/StrykkerXBot/StrikerX";
+
 export function Account() {
   const { player, token, setToken } = useAuth();
   const { toast } = useToast();
@@ -55,7 +58,8 @@ export function Account() {
   function copyRef() {
     const code = referral?.code ?? "";
     if (!code) return;
-    navigator.clipboard.writeText(`https://t.me/StrykkerXBot/StrikerX?startapp=${code}`);
+    const link = `${MINI_APP_LINK}?startapp=${code}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -180,21 +184,21 @@ export function Account() {
 
         {/* Referral */}
         <div className="bg-card border border-border rounded-xl p-3">
-          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-2">Referral Code</p>
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-2">Referral Link</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 font-mono text-sm font-bold bg-muted px-2.5 py-1.5 rounded-lg text-primary truncate">
-              {referral?.code ?? "—"}
+            <code className="flex-1 font-mono text-xs font-bold bg-muted px-2.5 py-1.5 rounded-lg text-primary truncate">
+              {referral?.code ? `${MINI_APP_LINK}?startapp=${referral.code}` : "—"}
             </code>
             <button
               onClick={copyRef}
-              className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+              className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors shrink-0"
             >
               {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-muted-foreground" />}
             </button>
           </div>
           {referral && (
             <p className="text-[9px] text-muted-foreground mt-1.5">
-              {referral.totalReferrals} referrals · Earn 5% of their winnings
+              {referral.totalReferred} referral{referral.totalReferred !== 1 ? "s" : ""} · Earn 5% of their winnings for life
             </p>
           )}
         </div>
@@ -232,7 +236,7 @@ export function Account() {
               <span className="text-xs font-bold">Language</span>
             </div>
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              {SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language)?.nativeName ?? "English"}
+              {SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language)?.label ?? "English"}
               <ChevronRight size={11} className={`transition-transform ${showLang ? "rotate-90" : ""}`} />
             </div>
           </button>
@@ -256,7 +260,7 @@ export function Account() {
                           : "hover:bg-muted text-muted-foreground"
                       }`}
                     >
-                      {lang.nativeName}
+                      {lang.label}
                     </button>
                   ))}
                 </div>
