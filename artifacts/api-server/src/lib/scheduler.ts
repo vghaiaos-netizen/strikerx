@@ -95,6 +95,23 @@ async function processTournamentEnds() {
         at: Date.now(),
       });
 
+      // GroupBot tournament end announcement (fire-and-forget)
+      if (entries[0]) {
+        const topEntry    = entries[0];
+        const topPrizeTon = tournament.prizePoolTon * (PRIZE_DISTRIBUTION[0] ?? 0);
+        const topPrize    = Math.floor(topPrizeTon * depositRate);
+        db.select({ username: playersTable.username })
+          .from(playersTable)
+          .where(eq(playersTable.id, topEntry.playerId))
+          .then(([p]) => {
+            if (p) {
+              import("./groupBot.js").then(({ broadcastTournamentEnd }) => {
+                broadcastTournamentEnd(p.username, topPrize).catch(() => {});
+              }).catch(() => {});
+            }
+          }).catch(() => {});
+      }
+
       logger.info({ tournamentId: tournament.id, entrants: entries.length }, "Tournament auto-ended and prizes paid");
     } catch (err) {
       logger.error({ err, tournamentId: tournament.id }, "Failed to auto-end tournament");

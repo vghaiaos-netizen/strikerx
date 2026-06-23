@@ -214,8 +214,9 @@ router.get("/trading/config", async (_req, res): Promise<void> => {
 });
 
 // ── POST /api/trading/ai-signal ──────────────────────────────────────────────
-// Calls Groq (Llama 3.3 70B) to generate a structured AI market signal.
-// Returns: { signal, confidence, reasoning, bias, keyLevels }
+// Calls Groq (Llama 3.3 70B) via the key pool to generate a structured AI market signal.
+// Returns: { signal, confidence, reasoning, bias, keyLevel, momentum }
+// Key pool: reads GROQ_API_KEY_1…GROQ_API_KEY_5 (env vars). Add keys in Railway dashboard.
 router.post("/trading/ai-signal", async (req, res): Promise<void> => {
   const { symbol, currentPrice, change24h, recentPrices } = req.body ?? {};
 
@@ -223,14 +224,18 @@ router.post("/trading/ai-signal", async (req, res): Promise<void> => {
     res.status(400).json({ error: "symbol required" }); return;
   }
 
-  const GROQ_API_KEY = process.env.GROQ_API_KEY;
-  if (!GROQ_API_KEY) {
-    res.status(503).json({ error: "AI signal service not configured" }); return;
+  const { chatCompletion, getGroqPoolStatus } = await import("../lib/groqPool.js");
+  const poolStatus = getGroqPoolStatus();
+  if (poolStatus.keyCount === 0) {
+    res.status(503).json({ error: "AI signal service not configured — set GROQ_API_KEY_1 in env vars" }); return;
+  }
+  if (poolStatus.available === 0) {
+    res.status(503).json({ error: "AI signal service temporarily rate-limited — try again in 60s" }); return;
   }
 
-  const price     = typeof currentPrice === "number" ? currentPrice : getPrice(symbol.toUpperCase());
-  const chg24h    = typeof change24h    === "number" ? change24h    : 0;
-  const prices    = Array.isArray(recentPrices) ? recentPrices.slice(-20) : [];
+  const price  = typeof currentPrice === "number" ? currentPrice : getPrice(symbol.toUpperCase());
+  const chg24h = typeof change24h    === "number" ? change24h    : 0;
+  const prices = Array.isArray(recentPrices) ? recentPrices.slice(-20) : [];
 
   const priceContext = prices.length > 0
     ? `Recent price series (newest last): [${prices.map((p: number) => p.toFixed ? p.toFixed(4) : p).join(", ")}]`
@@ -259,35 +264,14 @@ Provide a JSON response with exactly these fields:
 }`;
 
   try {
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type":  "application/json",
-      },
-      body: JSON.stringify({
-        model:       "llama-3.3-70b-versatile",
-        messages:    [
-          { role: "system", content: systemPrompt },
-          { role: "user",   content: userPrompt },
-        ],
-        temperature:  0.3,
-        max_tokens:   300,
-        response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(12_000),
-    });
-
-    if (!groqRes.ok) {
-      const errText = await groqRes.text();
-      logger.warn({ status: groqRes.status, errText }, "Groq API error");
-      res.status(502).json({ error: "AI signal service error" }); return;
-    }
-
-    const groqJson = await groqRes.json() as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const content = groqJson.choices?.[0]?.message?.content ?? "{}";
+    const { content, keySlot } = await chatCompletion(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt   },
+      ],
+      { temperature: 0.3, max_tokens: 300, response_format: { type: "json_object" } },
+    );
+    logger.info({ symbol, keySlot }, "Groq AI signal fetched via key pool");
 
     let parsed: Record<string, unknown>;
     try {

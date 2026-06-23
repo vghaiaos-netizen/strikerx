@@ -346,6 +346,59 @@ server.listen(port, async () => {
       name: "withdrawals.provider",
       sql: `ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'crypto'`,
     },
+    // ── Outreach service tables ───────────────────────────────────────────────
+    // These three tables support the admin outreach panel and the standalone
+    // outreach-service (Railway `outreach` branch).
+    // They were created manually on Railway on 2026-06-23; the migrations here
+    // ensure any new environment (dev, staging, fork) gets them automatically.
+    {
+      name: "outreach_groups.create",
+      sql: `CREATE TABLE IF NOT EXISTS outreach_groups (
+        id             SERIAL PRIMARY KEY,
+        telegram_id    TEXT NOT NULL UNIQUE,
+        username       TEXT,
+        title          TEXT NOT NULL,
+        member_count   INTEGER NOT NULL DEFAULT 0,
+        status         TEXT NOT NULL DEFAULT 'discovered',
+        is_active      BOOLEAN NOT NULL DEFAULT true,
+        last_posted_at TIMESTAMPTZ,
+        notes          TEXT,
+        joined_at      TIMESTAMPTZ,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "outreach_templates.create",
+      sql: `CREATE TABLE IF NOT EXISTS outreach_templates (
+        id         SERIAL PRIMARY KEY,
+        name       TEXT NOT NULL,
+        body       TEXT NOT NULL,
+        is_active  BOOLEAN NOT NULL DEFAULT true,
+        use_count  INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "outreach_posts.create",
+      sql: `CREATE TABLE IF NOT EXISTS outreach_posts (
+        id            SERIAL PRIMARY KEY,
+        group_id      INTEGER REFERENCES outreach_groups(id),
+        template_id   INTEGER REFERENCES outreach_templates(id),
+        rendered_body TEXT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        sent_at       TIMESTAMPTZ,
+        error         TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    },
+    {
+      name: "outreach.indexes",
+      sql: `CREATE INDEX IF NOT EXISTS outreach_groups_status_idx  ON outreach_groups(status);
+            CREATE INDEX IF NOT EXISTS outreach_posts_group_id_idx ON outreach_posts(group_id);
+            CREATE INDEX IF NOT EXISTS outreach_posts_sent_at_idx  ON outreach_posts(sent_at)`,
+    },
   ];
 
   for (const { name, sql } of migrations) {

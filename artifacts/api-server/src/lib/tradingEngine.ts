@@ -302,6 +302,31 @@ async function settlePosition(position: typeof tradingPositionsTable.$inferSelec
   const threshold = await getConfigFloat("trading_big_win_threshold", 1000);
   if (outcome === "win" && winAmount >= threshold) {
     broadcastToAll("big_win", { game: `${position.assetSymbol} trade`, winAmount, currency, at: Date.now() });
+    // GroupBot trading big win announcement (fire-and-forget)
+    db.select({ username: playersTable.username })
+      .from(playersTable)
+      .where(eq(playersTable.id, position.playerId))
+      .then(([p]) => {
+        if (p) {
+          import("./groupBot.js").then(({ broadcastTradingBigWin }) => {
+            broadcastTradingBigWin(p.username, position.assetSymbol, winAmount, currency).catch(() => {});
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+  }
+
+  // GroupBot streak milestone broadcast (fire-and-forget) — 3, 5, 10 wins
+  if (outcome === "win" && [3, 5, 10].includes(newStreak)) {
+    db.select({ username: playersTable.username })
+      .from(playersTable)
+      .where(eq(playersTable.id, position.playerId))
+      .then(([p]) => {
+        if (p) {
+          import("./groupBot.js").then(({ broadcastTradingStreak }) => {
+            broadcastTradingStreak(p.username, newStreak, position.assetSymbol).catch(() => {});
+          }).catch(() => {});
+        }
+      }).catch(() => {});
   }
 
   logger.info({ positionId: position.id, outcome, winAmount, currency, asset: position.assetSymbol }, "Trading position settled");

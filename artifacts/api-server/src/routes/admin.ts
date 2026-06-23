@@ -478,6 +478,10 @@ router.post("/admin/tournaments", requireAdmin, async (req, res): Promise<void> 
   const endTime = new Date(startTime.getTime() + durationHours * 3600000);
   const [t] = await db.insert(tournamentsTable).values({ type, prizePoolTon, entryFeeBoots: entryFeeBoots ?? null, status: "active", startTime, endTime }).returning();
   await db.insert(auditLogTable).values({ adminAction: "create_tournament", targetPlayerId: null, newValue: JSON.stringify({ type, prizePoolTon, durationHours }), performedBy: "admin" });
+  import("../lib/groupBot.js").then(({ broadcastTournamentStart }) => {
+    const label = String(type).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    broadcastTournamentStart(label, prizePoolTon, t.endTime.toISOString()).catch(() => {});
+  }).catch(() => {});
   res.status(201).json({ id: t.id, type: t.type, prizePoolTon: t.prizePoolTon, status: t.status, startTime: t.startTime.toISOString(), endTime: t.endTime.toISOString() });
 });
 
@@ -514,6 +518,9 @@ router.post("/admin/rate-events/start", requireAdmin, async (req, res): Promise<
   await setConfig("rate_event_deposit_rate", String(depositRate));
   await setConfig("rate_event_ends_at", endsAt);
   await db.insert(auditLogTable).values({ adminAction: "rate_event_start", targetPlayerId: null, newValue: JSON.stringify({ depositRate, durationMinutes }), performedBy: "admin" });
+  import("../lib/groupBot.js").then(({ broadcastRateEvent }) => {
+    broadcastRateEvent(depositRate, durationMinutes).catch(() => {});
+  }).catch(() => {});
   res.json({ active: true, depositRate, endsAt });
 });
 
@@ -596,6 +603,9 @@ router.post("/admin/match-events/start", requireAdmin, async (req, res): Promise
     performedBy: "admin",
   });
   logger.info({ teamA, teamB, endsAt }, "Match event started");
+  import("../lib/groupBot.js").then(({ broadcastMatchEvent }) => {
+    broadcastMatchEvent(teamA, teamB, bonusMultiplier).catch(() => {});
+  }).catch(() => {});
   res.json({ active: true, teamA, teamB, bonusMultiplier, endsAt });
 });
 
