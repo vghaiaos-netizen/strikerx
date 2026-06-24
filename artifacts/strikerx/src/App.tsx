@@ -16,6 +16,8 @@ import { Home } from "./pages/home";
 import { Profile } from "./pages/profile";
 import { Deposit } from "./pages/deposit";
 import { Withdraw } from "./pages/withdraw";
+import { Transactions } from "./pages/transactions";
+import { OnboardingFlow } from "./pages/onboarding";
 import { Leaderboard } from "./pages/leaderboard";
 import { Loyalty } from "./pages/loyalty";
 
@@ -116,6 +118,7 @@ function Router() {
       <Route path="/loyalty"         component={Loyalty} />
       <Route path="/markets"         component={Markets} />
       <Route path="/portfolio"       component={Portfolio} />
+      <Route path="/transactions"    component={Transactions} />
       <Route path="/account"         component={Account} />
       <Route path="/guide"           component={HowToPlay} />
 
@@ -166,6 +169,9 @@ function LangSyncer() {
 
 function AppShell() {
   const { i18n } = useTranslation();
+  const [onboarded, setOnboarded] = useState(() => {
+    try { return !!localStorage.getItem("strikerx_onboarded"); } catch { return false; }
+  });
 
   // Apply RTL / LTR direction whenever language changes
   useEffect(() => {
@@ -174,6 +180,14 @@ function AppShell() {
     document.documentElement.lang = i18n.language;
     document.documentElement.classList.add("dark");
   }, [i18n.language]);
+
+  if (!onboarded) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <OnboardingFlow onComplete={() => setOnboarded(true)} />
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
