@@ -1390,6 +1390,8 @@ components:
         status:
           type: string
           enum: [pending, completed, failed, cancelled]
+        externalId:
+          type: ["string", "null"]
         createdAt:
           type: string
 

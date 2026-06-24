@@ -15,7 +15,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PieChart, TrendingUp, TrendingDown, Trophy, Flame,
-  CheckCircle, XCircle, MinusCircle, ChevronUp, ChevronDown, Clock,
+  CheckCircle, XCircle, MinusCircle, ChevronUp, ChevronDown, Clock, ReceiptText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -421,6 +421,17 @@ export function Portfolio() {
           {!player && (
             <p className="text-xs text-muted-foreground">Open in Telegram to see your portfolio</p>
           )}
+        </div>
+
+        {/* Transaction history link */}
+        <div className="px-4 mb-3">
+          <Link href="/transactions">
+            <button className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-white transition-colors border border-border rounded-lg px-3 py-2 w-full bg-card hover:bg-muted">
+              <ReceiptText size={13} className="text-muted-foreground" />
+              <span>Transaction History</span>
+              <span className="ml-auto text-muted-foreground/40">›</span>
+            </button>
+          </Link>
         </div>
 
         {/* Sub-tabs */}

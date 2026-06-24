@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpRight, Clock, AlertTriangle, Smartphone, Wallet } from "lucide-react";
+import { ArrowUpRight, Clock, AlertTriangle, Smartphone, Wallet, ReceiptText } from "lucide-react";
+import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 
@@ -188,6 +189,12 @@ export function Withdraw() {
                       variant="outline" className="border-white/10 text-white/60 hover:text-white hover:border-white/25">
                       {t('withdraw.newWithdrawal')}
                     </Button>
+                    <Link href="/transactions">
+                      <button className="flex items-center justify-center gap-1.5 text-xs font-mono text-white/30 hover:text-white/60 transition-colors mt-1">
+                        <ReceiptText className="w-3 h-3" />
+                        View Transaction History
+                      </button>
+                    </Link>
                   </motion.div>
                 ) : (
                   <motion.div key="form" className="flex flex-col gap-4">
@@ -280,6 +287,12 @@ export function Withdraw() {
                       variant="outline" className="border-white/10 text-white/60 hover:text-white hover:border-white/25">
                       New Withdrawal
                     </Button>
+                    <Link href="/transactions">
+                      <button className="flex items-center justify-center gap-1.5 text-xs font-mono text-white/30 hover:text-white/60 transition-colors mt-1">
+                        <ReceiptText className="w-3 h-3" />
+                        View Transaction History
+                      </button>
+                    </Link>
                   </motion.div>
                 ) : (
                   <motion.div key="form" className="flex flex-col gap-4">
