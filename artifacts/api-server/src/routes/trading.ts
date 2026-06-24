@@ -477,4 +477,57 @@ router.get("/trading/klines", async (req, res): Promise<void> => {
   res.json({ candles: fallback, synthetic: true });
 });
 
+// ── Auto-Trade Config ────────────────────────────────────────────────────────
+
+router.get("/trading/auto-trade/config", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  try {
+    const { getAutoTradeConfig } = await import("../lib/autoTrader.js");
+    const cfg = await getAutoTradeConfig(playerId);
+    if (!cfg) {
+      res.json({ enabled: false, riskPreset: "balanced", assetSymbol: "BTCUSDT", interval: "5m", currency: "STRIKER" });
+      return;
+    }
+    res.json({
+      enabled:     cfg.enabled,
+      riskPreset:  cfg.risk_level ?? "balanced",
+      assetSymbol: cfg.asset_symbol,
+      interval:    cfg.interval,
+      currency:    cfg.currency,
+    });
+  } catch (err) {
+    req.log.error({ err }, "auto-trade config GET failed");
+    res.status(500).json({ error: "Failed to load config" });
+  }
+});
+
+router.put("/trading/auto-trade/config", requireAuth, async (req, res): Promise<void> => {
+  const { playerId } = req.player!;
+  const { enabled, riskPreset = "balanced", assetSymbol = "BTCUSDT", interval = "5m", currency = "STRIKER" } = req.body as {
+    enabled: boolean;
+    riskPreset?: "conservative" | "balanced" | "aggressive";
+    assetSymbol?: string;
+    interval?: string;
+    currency?: string;
+  };
+  try {
+    const { upsertAutoTradeConfig, RISK_PRESETS } = await import("../lib/autoTrader.js");
+    const preset = RISK_PRESETS[riskPreset] ?? RISK_PRESETS.balanced;
+    await upsertAutoTradeConfig(playerId, {
+      enabled,
+      asset_symbol:       assetSymbol,
+      interval,
+      max_stake_pct:      preset.maxStakePct,
+      max_trades_per_day: preset.maxTradesPerDay,
+      currency,
+      risk_level:         riskPreset,
+      min_confidence:     preset.minConfidence,
+    });
+    res.json({ ok: true, enabled, riskPreset });
+  } catch (err) {
+    req.log.error({ err }, "auto-trade config PUT failed");
+    res.status(500).json({ error: "Failed to save config" });
+  }
+});
+
 export default router;
