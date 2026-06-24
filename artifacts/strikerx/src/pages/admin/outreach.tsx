@@ -242,6 +242,37 @@ function DiscoveryTab({
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
 
+  // Add by link / username
+  const [directInput, setDirectInput] = useState("");
+  const [directTitle, setDirectTitle] = useState("");
+  const [directAdding, setDirectAdding] = useState(false);
+
+  async function handleAddDirect() {
+    const raw = directInput.trim();
+    if (!raw || !directTitle.trim()) return;
+    const username = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?]/)[0];
+    if (!username) { toast({ title: "Invalid link or username", variant: "destructive" }); return; }
+    setDirectAdding(true);
+    try {
+      await API("/admin/outreach/groups", token, {
+        method: "POST",
+        body: JSON.stringify({ telegramId: username, username, title: directTitle.trim(), memberCount: 0 }),
+      });
+      toast({ title: "Group added", description: `@${username}` });
+      setDirectInput(""); setDirectTitle("");
+      onAdded();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("already in list")) {
+        toast({ title: "Already in list", description: `@${username}` });
+      } else {
+        toast({ title: "Failed to add", description: msg, variant: "destructive" });
+      }
+    } finally {
+      setDirectAdding(false);
+    }
+  }
+
   const existingIds = new Set(existingGroups.map(g => g.telegramId));
 
   async function handleSearch() {
@@ -283,22 +314,60 @@ function DiscoveryTab({
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-3">
-        <Input
-          value={keyword}
-          onChange={e => setKeyword(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSearch()}
-          placeholder='e.g. "crypto gaming", "web3 mini apps", "telegram games"'
-          className="font-mono flex-1"
-        />
-        <Button onClick={handleSearch} disabled={searching || !keyword.trim()} className="gap-2 font-mono">
-          <Search className="w-4 h-4" />
-          {searching ? "Searching..." : "Search"}
-        </Button>
+      {/* Add by link / username */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+        <p className="text-xs font-mono font-semibold text-primary flex items-center gap-1.5">
+          <Plus size={12} /> Add Group by Link or Username
+        </p>
+        <div className="grid grid-cols-1 gap-2">
+          <Input
+            value={directInput}
+            onChange={e => setDirectInput(e.target.value)}
+            placeholder="t.me/groupname or @groupname"
+            className="font-mono text-sm"
+          />
+          <div className="flex gap-2">
+            <Input
+              value={directTitle}
+              onChange={e => setDirectTitle(e.target.value)}
+              placeholder="Group display name"
+              className="font-mono text-sm flex-1"
+            />
+            <Button
+              onClick={handleAddDirect}
+              disabled={directAdding || !directInput.trim() || !directTitle.trim()}
+              className="gap-2 font-mono shrink-0"
+              size="sm"
+            >
+              <Plus size={12} /> {directAdding ? "Adding..." : "Add"}
+            </Button>
+          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground font-mono">
+          Paste a Telegram group link (t.me/...) or @username. The group will be added with status <span className="text-primary">discovered</span> and queued for joining.
+        </p>
+      </div>
+
+      {/* Keyword Search */}
+      <div>
+        <p className="text-xs font-mono text-muted-foreground mb-2">Or search by keyword:</p>
+        <div className="flex gap-3">
+          <Input
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            placeholder='e.g. "crypto gaming", "web3 mini apps", "telegram games"'
+            className="font-mono flex-1"
+          />
+          <Button onClick={handleSearch} disabled={searching || !keyword.trim()} className="gap-2 font-mono">
+            <Search className="w-4 h-4" />
+            {searching ? "Searching..." : "Search"}
+          </Button>
+        </div>
       </div>
 
       {results.length === 0 && !searching && (
-        <div className="text-center py-12 text-muted-foreground text-sm font-mono">
+        <div className="text-center py-8 text-muted-foreground text-sm font-mono">
           Search for Telegram groups by keyword. Results appear here.
         </div>
       )}

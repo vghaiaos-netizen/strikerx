@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   User, Wallet, ArrowDownToLine, ArrowUpFromLine, Copy, Check,
-  Shield, Globe, LogOut, ChevronRight, Star, FlaskConical,
+  Shield, Globe, LogOut, ChevronRight, Star, FlaskConical, Bot,
+  ToggleLeft, ToggleRight, Zap,
 } from "lucide-react";
 import { SUPPORTED_LANGUAGES, saveLangLocally, getLangDir, type LangCode } from "@/i18n";
 import { useTranslation } from "react-i18next";
@@ -30,6 +31,52 @@ export function Account() {
   const { i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [showLang, setShowLang] = useState(false);
+
+  // Auto-trader state
+  const [autoEnabled, setAutoEnabled] = useState(false);
+  const [autoRisk, setAutoRisk] = useState<"conservative" | "balanced" | "aggressive">("balanced");
+  const [autoLoading, setAutoLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/trading/auto-trade/config", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { enabled?: boolean; riskPreset?: string }) => {
+        setAutoEnabled(d.enabled ?? false);
+        setAutoRisk((d.riskPreset as typeof autoRisk) ?? "balanced");
+      })
+      .catch(() => {});
+  }, [token]);
+
+  async function handleAutoToggle() {
+    if (!token) return;
+    setAutoLoading(true);
+    const next = !autoEnabled;
+    try {
+      await fetch("/api/trading/auto-trade/config", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next, riskPreset: autoRisk }),
+      });
+      setAutoEnabled(next);
+      toast({ title: next ? "Auto-Trader enabled" : "Auto-Trader paused" });
+    } catch {
+      toast({ title: "Failed to update Auto-Trader", variant: "destructive" });
+    } finally {
+      setAutoLoading(false);
+    }
+  }
+
+  async function handleRiskChange(preset: typeof autoRisk) {
+    if (!token) return;
+    setAutoRisk(preset);
+    if (!autoEnabled) return;
+    fetch("/api/trading/auto-trade/config", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: autoEnabled, riskPreset: preset }),
+    }).catch(() => {});
+  }
 
   const { data: referral } = useGetMyReferral();
   const { data: me }       = useGetMe({ query: { queryKey: getGetMeQueryKey(), enabled: !!token } });
@@ -180,6 +227,56 @@ export function Account() {
               </Button>
             </Link>
           </div>
+        </div>
+
+        {/* Auto-Trader */}
+        <div className={`border rounded-xl p-3 transition-colors ${autoEnabled ? "border-violet-500/30 bg-violet-500/5" : "border-border bg-card"}`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[9px] text-violet-400/80 uppercase tracking-widest font-bold flex items-center gap-1">
+              <Bot size={9} />
+              AI Auto-Trader
+            </p>
+            <button onClick={handleAutoToggle} disabled={autoLoading} className="opacity-90 hover:opacity-100 transition-opacity">
+              {autoEnabled
+                ? <ToggleRight size={22} className="text-violet-400" />
+                : <ToggleLeft size={22} className="text-muted-foreground" />}
+            </button>
+          </div>
+
+          <div className="flex gap-1 mb-2">
+            {(["conservative", "balanced", "aggressive"] as const).map(preset => (
+              <button
+                key={preset}
+                onClick={() => handleRiskChange(preset)}
+                className={`flex-1 py-1 rounded-md border text-[9px] font-bold uppercase tracking-wide transition-all ${
+                  autoRisk === preset
+                    ? preset === "conservative" ? "border-green-500/50 bg-green-500/15 text-green-400"
+                      : preset === "aggressive" ? "border-red-500/50 bg-red-500/15 text-red-400"
+                      : "border-violet-500/50 bg-violet-500/15 text-violet-400"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {preset === "conservative" ? "Safe" : preset === "balanced" ? "Balanced" : "Aggressive"}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[9px] text-muted-foreground leading-relaxed">
+            {autoEnabled
+              ? <span className="text-violet-300">Active — AI places trades automatically using your STRIKER balance when high-confidence signals appear.</span>
+              : "Enable to let AI trade on your behalf using live market signals."}
+          </p>
+
+          {autoEnabled && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <Zap size={9} className="text-yellow-400" />
+              <p className="text-[9px] text-yellow-300/70 font-mono">
+                {autoRisk === "conservative" ? "Min 75% confidence · small stakes"
+                  : autoRisk === "balanced" ? "Min 65% confidence · medium stakes"
+                  : "Min 55% confidence · larger stakes"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Referral */}

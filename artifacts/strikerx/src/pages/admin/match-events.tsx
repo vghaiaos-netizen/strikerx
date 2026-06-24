@@ -2,10 +2,11 @@ import { AdminLayout } from "@/components/admin-layout";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Calendar, Play, Square, Clock, Tv2 } from "lucide-react";
+import { Calendar, Play, Square, Clock, Tv2, ChevronDown, ChevronUp, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface MatchEventStatus {
   active: boolean;
@@ -17,11 +18,73 @@ interface MatchEventStatus {
   expired: boolean;
 }
 
+interface WcMatch {
+  date: string;
+  teamA: string;
+  teamB: string;
+  stage: string;
+  group?: string;
+}
+
+const WC_2026_SCHEDULE: WcMatch[] = [
+  // Late Group Stage — June 24-28
+  { date: "2026-06-24", teamA: "France",      teamB: "Morocco",     stage: "Group Stage",  group: "Group D" },
+  { date: "2026-06-24", teamA: "Germany",     teamB: "Switzerland", stage: "Group Stage",  group: "Group B" },
+  { date: "2026-06-25", teamA: "England",     teamB: "Slovenia",    stage: "Group Stage",  group: "Group C" },
+  { date: "2026-06-25", teamA: "Brazil",      teamB: "Colombia",    stage: "Group Stage",  group: "Group G" },
+  { date: "2026-06-26", teamA: "Spain",       teamB: "Croatia",     stage: "Group Stage",  group: "Group E" },
+  { date: "2026-06-26", teamA: "Portugal",    teamB: "Cameroon",    stage: "Group Stage",  group: "Group F" },
+  { date: "2026-06-27", teamA: "Argentina",   teamB: "Chile",       stage: "Group Stage",  group: "Group A" },
+  { date: "2026-06-27", teamA: "USA",         teamB: "Mexico",      stage: "Group Stage",  group: "Group K" },
+  { date: "2026-06-28", teamA: "Netherlands", teamB: "Senegal",     stage: "Group Stage",  group: "Group H" },
+  { date: "2026-06-28", teamA: "Japan",       teamB: "South Korea", stage: "Group Stage",  group: "Group J" },
+  { date: "2026-06-29", teamA: "Italy",       teamB: "Nigeria",     stage: "Group Stage",  group: "Group L" },
+  { date: "2026-06-29", teamA: "Canada",      teamB: "Belgium",     stage: "Group Stage",  group: "Group I" },
+
+  // Round of 32 — July 4-8
+  { date: "2026-07-04", teamA: "Brazil",      teamB: "Ecuador",     stage: "Round of 32"  },
+  { date: "2026-07-04", teamA: "France",      teamB: "USA",         stage: "Round of 32"  },
+  { date: "2026-07-05", teamA: "England",     teamB: "Colombia",    stage: "Round of 32"  },
+  { date: "2026-07-05", teamA: "Argentina",   teamB: "Poland",      stage: "Round of 32"  },
+  { date: "2026-07-06", teamA: "Germany",     teamB: "Senegal",     stage: "Round of 32"  },
+  { date: "2026-07-06", teamA: "Spain",       teamB: "Mexico",      stage: "Round of 32"  },
+  { date: "2026-07-07", teamA: "Portugal",    teamB: "Japan",       stage: "Round of 32"  },
+  { date: "2026-07-07", teamA: "Netherlands", teamB: "Canada",      stage: "Round of 32"  },
+  { date: "2026-07-08", teamA: "Italy",       teamB: "Morocco",     stage: "Round of 32"  },
+  { date: "2026-07-08", teamA: "South Korea", teamB: "Croatia",     stage: "Round of 32"  },
+
+  // Round of 16 — July 10-14
+  { date: "2026-07-10", teamA: "Brazil",      teamB: "France",      stage: "Round of 16"  },
+  { date: "2026-07-11", teamA: "England",     teamB: "Argentina",   stage: "Round of 16"  },
+  { date: "2026-07-12", teamA: "Germany",     teamB: "Spain",       stage: "Round of 16"  },
+  { date: "2026-07-13", teamA: "Portugal",    teamB: "Netherlands", stage: "Round of 16"  },
+
+  // Quarter-finals — July 17-19
+  { date: "2026-07-17", teamA: "Brazil",      teamB: "England",     stage: "Quarter-final" },
+  { date: "2026-07-18", teamA: "Germany",     teamB: "Portugal",    stage: "Quarter-final" },
+
+  // Semi-finals — July 22-23
+  { date: "2026-07-22", teamA: "TBD",         teamB: "TBD",         stage: "Semi-final"   },
+  { date: "2026-07-23", teamA: "TBD",         teamB: "TBD",         stage: "Semi-final"   },
+
+  // Final — July 26
+  { date: "2026-07-26", teamA: "TBD",         teamB: "TBD",         stage: "Final"        },
+];
+
 const API = (path: string, token: string, opts?: RequestInit) =>
   fetch(`/api${path}`, {
     ...opts,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(opts?.headers ?? {}) },
   }).then(r => r.json());
+
+const STAGE_COLORS: Record<string, string> = {
+  "Group Stage": "text-blue-400",
+  "Round of 32": "text-amber-400",
+  "Round of 16": "text-orange-400",
+  "Quarter-final": "text-red-400",
+  "Semi-final": "text-violet-400",
+  "Final": "text-yellow-400",
+};
 
 export function AdminMatchEvents() {
   const { adminToken } = useAuth();
@@ -30,9 +93,17 @@ export function AdminMatchEvents() {
 
   const [teamA, setTeamA] = useState("Brazil");
   const [teamB, setTeamB] = useState("Argentina");
-  const [label, setLabel] = useState("World Cup Match Day");
+  const [label, setLabel] = useState("World Cup 2026 Match Day");
   const [bonusMultiplier, setBonusMultiplier] = useState("1.5");
   const [durationMinutes, setDurationMinutes] = useState("120");
+  const [showSchedule, setShowSchedule] = useState(true);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = WC_2026_SCHEDULE.filter(m => m.date >= today).slice(0, 12);
+  const groupedByStage = upcoming.reduce<Record<string, WcMatch[]>>((acc, m) => {
+    acc[m.stage] = [...(acc[m.stage] ?? []), m];
+    return acc;
+  }, {});
 
   const { data: status, isLoading } = useQuery<MatchEventStatus>({
     queryKey: ["admin-match-events"],
@@ -65,6 +136,12 @@ export function AdminMatchEvents() {
     return `${h}h ${m}m ${s}s`;
   };
 
+  function quickStart(match: WcMatch) {
+    setTeamA(match.teamA);
+    setTeamB(match.teamB);
+    setLabel(`WC 2026 — ${match.stage}${match.group ? ` · ${match.group}` : ""}`);
+  }
+
   return (
     <AdminLayout>
       <div className="max-w-2xl space-y-6">
@@ -73,7 +150,7 @@ export function AdminMatchEvents() {
             <Calendar className="w-6 h-6 text-primary" /> Match Events
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Activate World Cup match-day events with bonus multipliers for players
+            Activate World Cup 2026 match-day events with bonus multipliers for players
           </p>
         </div>
 
@@ -125,6 +202,66 @@ export function AdminMatchEvents() {
           )}
         </div>
 
+        {/* WC 2026 Schedule Quick-Start */}
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+          <button
+            onClick={() => setShowSchedule(s => !s)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-amber-500/8 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span className="font-mono font-semibold text-sm text-amber-300">WC 2026 — Quick Start</span>
+              <span className="text-[10px] font-mono text-amber-400/60 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                {upcoming.length} upcoming
+              </span>
+            </div>
+            {showSchedule ? <ChevronUp className="w-4 h-4 text-amber-400/60" /> : <ChevronDown className="w-4 h-4 text-amber-400/60" />}
+          </button>
+
+          <AnimatePresence>
+            {showSchedule && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden border-t border-amber-500/15"
+              >
+                <div className="p-4 space-y-4">
+                  {Object.entries(groupedByStage).map(([stage, matches]) => (
+                    <div key={stage}>
+                      <p className={`text-[9px] uppercase font-bold tracking-widest mb-2 ${STAGE_COLORS[stage] ?? "text-muted-foreground"}`}>{stage}</p>
+                      <div className="space-y-1.5">
+                        {matches.map((m, i) => (
+                          <button
+                            key={i}
+                            onClick={() => quickStart(m)}
+                            disabled={status?.active}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border bg-card hover:border-amber-500/30 hover:bg-amber-500/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-muted-foreground w-[60px] text-left">{m.date.slice(5)}</span>
+                              <span className="text-sm font-bold text-white">{m.teamA}</span>
+                              <span className="text-xs text-muted-foreground font-mono">vs</span>
+                              <span className="text-sm font-bold text-white">{m.teamB}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {m.group && <span className="text-[9px] font-mono text-muted-foreground/50">{m.group}</span>}
+                              <span className="text-[10px] font-mono text-amber-400/70">Select</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-muted-foreground/50 font-mono text-center pt-1">
+                    Click any match to pre-fill the form below
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Start New Event */}
         {!status?.active && (
           <div className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -143,7 +280,7 @@ export function AdminMatchEvents() {
 
             <div>
               <label className="text-xs font-mono text-muted-foreground block mb-1">Event Label</label>
-              <Input value={label} onChange={e => setLabel(e.target.value)} placeholder="World Cup Match Day" className="font-mono" />
+              <Input value={label} onChange={e => setLabel(e.target.value)} placeholder="World Cup 2026 Match Day" className="font-mono" />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
