@@ -36,7 +36,7 @@ router.post("/payments/deposit", requireAuth, async (req, res): Promise<void> =>
     SOL: "SOL",
   };
   const asset = assetMap[currency] ?? "TON";
-  const minDepositTon = parseFloat(process.env.MIN_DEPOSIT_TON ?? "0.5");
+  const minDepositTon = parseFloat(process.env.MIN_DEPOSIT_TON ?? "5");
 
   try {
     const response = await fetch("https://pay.crypt.bot/api/createInvoice", {
