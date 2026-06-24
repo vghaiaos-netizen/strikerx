@@ -485,7 +485,7 @@ router.get("/trading/auto-trade/config", requireAuth, async (req, res): Promise<
     const { getAutoTradeConfig } = await import("../lib/autoTrader.js");
     const cfg = await getAutoTradeConfig(playerId);
     if (!cfg) {
-      res.json({ enabled: false, riskPreset: "balanced", assetSymbol: "BTCUSDT", interval: "5m", currency: "STRIKER" });
+      res.json({ enabled: false, riskPreset: "balanced", assetSymbol: "BTC", interval: "5m", currency: "TON" });
       return;
     }
     res.json({
@@ -503,7 +503,7 @@ router.get("/trading/auto-trade/config", requireAuth, async (req, res): Promise<
 
 router.put("/trading/auto-trade/config", requireAuth, async (req, res): Promise<void> => {
   const { playerId } = req.player!;
-  const { enabled, riskPreset = "balanced", assetSymbol = "BTCUSDT", interval = "5m", currency = "STRIKER" } = req.body as {
+  const { enabled, riskPreset = "balanced", assetSymbol = "BTC", interval = "5m", currency = "TON" } = req.body as {
     enabled: boolean;
     riskPreset?: "conservative" | "balanced" | "aggressive";
     assetSymbol?: string;
