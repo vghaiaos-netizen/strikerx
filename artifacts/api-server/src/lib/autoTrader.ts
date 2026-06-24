@@ -153,22 +153,46 @@ async function logEntry(entry: {
   );
 }
 
-// ── AI signal (compact prompt optimised for autonomous trading) ───────────────
+// ── AI signal (technical-context prompt for autonomous trading) ──────────────
 
 async function getAiSignal(
   assetSymbol: string,
   currentPrice: number | null,
   interval: string,
+  recentPrices: number[] = [],
 ): Promise<{ signal: "UP" | "DOWN"; confidence: number; reasoning: string } | null> {
-  const tf  = INTERVAL_LABEL[interval] ?? interval;
-  const priceCtx = currentPrice != null ? `Current price: ${currentPrice}` : "";
+  const tf = INTERVAL_LABEL[interval] ?? interval;
+
+  // Build technical context from recent prices
+  let techCtx = "";
+  if (recentPrices.length >= 5) {
+    const last  = recentPrices[recentPrices.length - 1]!;
+    const prev4 = recentPrices[recentPrices.length - 5]!;
+    const momentum = ((last - prev4) / prev4 * 100).toFixed(3);
+    const ema9     = recentPrices.slice(-9).reduce((a, b) => a + b, 0) / Math.min(9, recentPrices.length);
+    const aboveEma = last > ema9 ? "above" : "below";
+    const upTicks  = recentPrices.slice(-10).reduce(
+      (c, p, i, a) => i === 0 ? c : p > a[i - 1]! ? c + 1 : c, 0,
+    );
+    const maxP = Math.max(...recentPrices.slice(-20));
+    const minP = Math.min(...recentPrices.slice(-20));
+    const pctFromHigh = ((last - maxP) / maxP * 100).toFixed(2);
+    const pctFromLow  = ((last - minP) / minP * 100).toFixed(2);
+    techCtx = ` | 5-tick momentum: ${momentum}% | price ${aboveEma} EMA9 | up-ticks: ${upTicks}/9 | ${pctFromHigh}% from 20-tick high | ${pctFromLow}% from 20-tick low`;
+  } else if (currentPrice != null) {
+    techCtx = ` | current: ${currentPrice}`;
+  }
 
   const systemPrompt =
-    `You are an autonomous binary options AI for StrikerX. Respond ONLY with valid JSON. No markdown.`;
+    `You are an autonomous binary options signal engine for StrikerX. ` +
+    `Your signals drive real money trades. Be conservative — only signal when technically justified. ` +
+    `Respond ONLY with valid JSON. No markdown, no explanation outside JSON.`;
+
   const userPrompt =
-    `Asset: ${assetSymbol}  |  Timeframe: ${tf}  |  ${priceCtx}
-Predict UP or DOWN for the next ${interval} candle close (binary options).
-JSON: {"signal":"UP"|"DOWN","confidence":50-90,"reasoning":"≤15 words"}`;
+    `Asset: ${assetSymbol} | Timeframe: ${tf}${techCtx}
+Task: predict UP or DOWN for the next ${interval} candle close.
+Rules: confidence 50–85 only (never higher — overconfidence loses money). Reasoning ≤20 words.
+JSON: {"signal":"UP"|"DOWN","confidence":50-85,"reasoning":"≤20 words","momentum":"STRONG"|"MODERATE"|"WEAK"}`;
 
   try {
     const { content } = await chatCompletion(
@@ -176,15 +200,21 @@ JSON: {"signal":"UP"|"DOWN","confidence":50-90,"reasoning":"≤15 words"}`;
         { role: "system", content: systemPrompt },
         { role: "user",   content: userPrompt   },
       ],
-      { temperature: 0.15, max_tokens: 80, response_format: { type: "json_object" } },
+      { temperature: 0.12, max_tokens: 100, response_format: { type: "json_object" } },
     );
-    const parsed = JSON.parse(content) as { signal?: string; confidence?: unknown; reasoning?: string };
+    const parsed = JSON.parse(content) as {
+      signal?:    string;
+      confidence?: unknown;
+      reasoning?:  string;
+      momentum?:   string;
+    };
     const sig = String(parsed.signal ?? "").toUpperCase();
     if (sig !== "UP" && sig !== "DOWN") return null;
+    const conf = Math.min(85, Math.max(50, parseInt(String(parsed.confidence ?? 60), 10)));
     return {
-      signal:     sig as "UP" | "DOWN",
-      confidence: Math.min(90, Math.max(50, parseInt(String(parsed.confidence ?? 60), 10))),
-      reasoning:  String(parsed.reasoning ?? "").slice(0, 200),
+      signal:    sig as "UP" | "DOWN",
+      confidence: conf,
+      reasoning: String(parsed.reasoning ?? "").slice(0, 200),
     };
   } catch {
     return null;
