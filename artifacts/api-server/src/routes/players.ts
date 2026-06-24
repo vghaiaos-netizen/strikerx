@@ -318,6 +318,7 @@ router.get("/players/me/transactions", requireAuth, async (req, res): Promise<vo
       amountTon: t.amountTon ?? null,
       currency: t.currency ?? null,
       status: t.status,
+      externalId: t.externalId ?? null,
       createdAt: t.createdAt.toISOString(),
     }))
   );
