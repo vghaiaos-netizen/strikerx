@@ -30,13 +30,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, Clock, CheckCircle, XCircle,
   MinusCircle, Zap, Flame, CandlestickChart, LineChart, Coins, FlaskConical, Trophy,
+  Bot, ToggleRight, ToggleLeft,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
 import { soundManager } from "@/lib/sound";
 
 // ─── Local types ────────────────────────────────────────────────────────────
 type ContractType    = "UP_DOWN" | "EVEN_ODD" | "OVER_UNDER" | "IN_OUT";
-type TradingCurrency = "TON" | "USDT" | "STRIKER";
+type TradingCurrency = "TON" | "USDT";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -250,40 +251,41 @@ export function Trading() {
   const prevStreakRef     = useRef(0);
   const soundThrottleRef = useRef<Record<string, number>>({});
 
+  // AI Auto-Trader panel state
+  const [autoConfig, setAutoConfig] = useState<{
+    enabled: boolean; riskPreset: "conservative" | "balanced" | "aggressive";
+  } | null>(null);
+  const [autoLoading,    setAutoLoading]    = useState(false);
+  const [sessionTarget,  setSessionTarget]  = useState<number | null>(null);
+  const [sessionDone,    setSessionDone]    = useState(0);
+  const [sessionWins,    setSessionWins]    = useState(0);
+  const sessionDoneRef = useRef(0);
+
   const { data: configData } = useGetTradingConfig({ query: { queryKey: getGetTradingConfigQueryKey(), refetchInterval: 60_000 } });
   const { data: pricesData } = useGetTradingPrices({ query: { queryKey: getGetTradingPricesQueryKey(), refetchInterval: 3000 } });
   const { data: assetsData } = useGetTradingAssets({ query: { queryKey: getGetTradingAssetsQueryKey(), refetchInterval: 15_000 } });
 
   const availableDurations = configData?.availableDurations ?? DEFAULT_DURATIONS;
 
-  // Stake limits per currency
-  const minStake = isDemoMode ? 1 : currency === "STRIKER" ? (configData?.minStake ?? 10) : (configData?.minStakeTon ?? 0.1);
-  const maxStake = isDemoMode ? Math.min(1000, demoUsdtBalance > 0 ? demoUsdtBalance : 1000) : currency === "STRIKER" ? (configData?.maxStake ?? 10000) : (configData?.maxStakeTon ?? 500);
+  // Stake limits
+  const minStake = isDemoMode ? 1 : (configData?.minStakeTon ?? 0.1);
+  const maxStake = isDemoMode ? Math.min(1000, demoUsdtBalance > 0 ? demoUsdtBalance : 1000) : (configData?.maxStakeTon ?? 500);
 
   // 24h changes — now properly typed after codegen
   const changes24h = pricesData?.changes24h ?? {};
 
-  // Quick stake amounts adapt to currency
-  const quickStakes: number[] = currency === "STRIKER"
-    ? (() => {
-        const base    = [minStake, Math.round(maxStake * 0.01), Math.round(maxStake * 0.05), Math.round(maxStake * 0.1)];
-        const deduped = [...new Set(base)].filter((v) => v > 0 && v <= maxStake).sort((a, b) => a - b);
-        return deduped.length >= 2 ? deduped : [50, 100, 500, 1000];
-      })()
-    : [0.5, 1, 5, 10].filter((v) => v <= maxStake);
+  // Quick stake amounts
+  const quickStakes: number[] = [0.5, 1, 5, 10].filter((v) => v <= maxStake);
 
   // Balance for the active currency
   const balance = isDemoMode
     ? demoUsdtBalance
     : currency === "TON"
     ? parseFloat(String(player?.tonBalance ?? 0))
-    : currency === "USDT"
-    ? parseFloat(String(player?.usdtBalance ?? 0))
-    : Math.floor(parseFloat(String(player?.strikerBalance ?? 0)));
+    : parseFloat(String(player?.usdtBalance ?? 0));
 
   const formatBalance = (v: number) =>
-    isDemoMode ? `$${v.toFixed(2)}` :
-    currency === "STRIKER" ? v.toLocaleString() : v.toFixed(4);
+    isDemoMode ? `$${v.toFixed(2)}` : v.toFixed(4);
 
   const { data: activeData }  = useGetTradingPositionsActive({
     query: { queryKey: getGetTradingPositionsActiveQueryKey(), refetchInterval: isAuthed ? 3000 : false, enabled: isAuthed },
@@ -519,6 +521,20 @@ export function Trading() {
     setSentiment(null);
   }, [selectedAsset]);
 
+  // Fetch AI auto-trade config when authenticated
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/trading/auto-trade/config", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((cfg) => {
+        if (cfg) setAutoConfig({ enabled: !!cfg.enabled, riskPreset: cfg.riskPreset ?? "balanced" });
+        else      setAutoConfig({ enabled: false, riskPreset: "balanced" });
+      })
+      .catch(() => setAutoConfig({ enabled: false, riskPreset: "balanced" }));
+  }, [token]);
+
   const openPositionMutation = usePostTradingPositions({
     mutation: {
       onSuccess: () => {
@@ -583,8 +599,8 @@ export function Trading() {
   const effectivePayout   = streakBoostPct > 0 ? Math.min(1.95, basePayoutRatio + basePayoutRatio * streakBoostPct / 100) : basePayoutRatio;
   const payoutPct         = Math.round((effectivePayout - 1) * 100);
   const stakeNum          = parseFloat(stake) || 0;
-  const potentialWin      = parseFloat((stakeNum * effectivePayout).toFixed(currency === "STRIKER" ? 0 : 4));
-  const potentialProfit   = parseFloat((stakeNum * (effectivePayout - 1)).toFixed(currency === "STRIKER" ? 0 : 4));
+  const potentialWin      = parseFloat((stakeNum * effectivePayout).toFixed(4));
+  const potentialProfit   = parseFloat((stakeNum * (effectivePayout - 1)).toFixed(4));
 
   const categorySymbols = ASSET_CATEGORIES[category] ?? [];
   const displayAssets   = categorySymbols
@@ -640,6 +656,53 @@ export function Trading() {
 
   const stakeInvalid = stakeNum > 0 && (stakeNum < minStake || stakeNum > maxStake || stakeNum > balance);
 
+  // ── AI Auto-Trader handlers ──────────────────────────────────────────────
+
+  const handleAutoToggle = async () => {
+    if (!token || !autoConfig) return;
+    setAutoLoading(true);
+    try {
+      const next = !autoConfig.enabled;
+      await fetch("/api/trading/auto-trade/config", {
+        method:  "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({ enabled: next, riskPreset: autoConfig.riskPreset, assetSymbol: selectedAsset, interval: chartInterval, currency }),
+      });
+      setAutoConfig((prev) => prev ? { ...prev, enabled: next } : prev);
+      toast({ title: next ? "AI Trader enabled" : "AI Trader paused" });
+    } catch {
+      toast({ title: "Failed to update AI trader", variant: "destructive" });
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const handleAutoRisk = async (preset: "conservative" | "balanced" | "aggressive") => {
+    if (!token || !autoConfig) return;
+    setAutoConfig((prev) => prev ? { ...prev, riskPreset: preset } : prev);
+    try {
+      await fetch("/api/trading/auto-trade/config", {
+        method:  "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({ enabled: autoConfig.enabled, riskPreset: preset, assetSymbol: selectedAsset, interval: chartInterval, currency }),
+      });
+    } catch { /* silent */ }
+  };
+
+  const handleStartSession = (n: number) => {
+    if (sessionTarget === n) {
+      setSessionTarget(null);
+      setSessionDone(0);
+      setSessionWins(0);
+      sessionDoneRef.current = 0;
+    } else {
+      setSessionTarget(n);
+      setSessionDone(0);
+      setSessionWins(0);
+      sessionDoneRef.current = 0;
+    }
+  };
+
   function handleTrade(direction: string) {
     if (!player) { toast({ title: "Not logged in", variant: "destructive" }); return; }
     if (stakeNum <= 0)    { toast({ title: "Enter a stake amount", variant: "destructive" }); return; }
@@ -671,8 +734,7 @@ export function Trading() {
 
   const selectedChange = changes24h[selectedAsset];
 
-  const formatStakeDisplay = (v: number) =>
-    currency === "STRIKER" ? (v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : String(v)) : `${v}`;
+  const formatStakeDisplay = (v: number) => `${v}`;
 
   const activeMutation  = isDemoMode ? demoTradeMut : openPositionMutation;
   const isStakeDisabled = activeMutation.isPending || stakeNum <= 0 || stakeNum < minStake || stakeNum > maxStake || stakeNum > balance;
@@ -1042,10 +1104,10 @@ export function Trading() {
           {/* Currency selector + balance */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex gap-1">
-              {(["TON", "USDT", "STRIKER"] as TradingCurrency[]).map((ccy) => (
+              {(["TON", "USDT"] as TradingCurrency[]).map((ccy) => (
                 <button
                   key={ccy}
-                  onClick={() => { setCurrency(ccy); setStake(ccy === "STRIKER" ? "100" : "1"); }}
+                  onClick={() => { setCurrency(ccy); setStake("1"); }}
                   className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all ${
                     currency === ccy
                       ? "border-primary/50 bg-primary/10 text-primary"
@@ -1066,7 +1128,7 @@ export function Trading() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => {
-                        const half = currency === "STRIKER" ? String(Math.max(minStake, Math.floor(balance / 2))) : String(Math.max(minStake, parseFloat((balance / 2).toFixed(4))));
+                        const half = String(Math.max(minStake, parseFloat((balance / 2).toFixed(4))));
                         setStake(half);
                       }}
                       className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
@@ -1074,7 +1136,7 @@ export function Trading() {
                       ½
                     </button>
                     <button
-                      onClick={() => setStake(currency === "STRIKER" ? String(Math.min(maxStake, balance)) : String(Math.min(maxStake, balance).toFixed(4)))}
+                      onClick={() => setStake(String(Math.min(maxStake, balance).toFixed(4)))}
                       className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors"
                     >
                       Max
@@ -1119,7 +1181,7 @@ export function Trading() {
                 <p className="text-[10px] text-red-400">Insufficient {currency}</p>
               ) : (
                 <p className="text-[10px] text-muted-foreground">
-                  To win: <span className="text-green-400 font-bold text-xs">+{potentialProfit} {currency === "STRIKER" ? "STRK" : currency}</span>
+                  To win: <span className="text-green-400 font-bold text-xs">+{potentialProfit} {currency}</span>
                 </p>
               )}
               <p className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -1129,7 +1191,7 @@ export function Trading() {
             </div>
           )}
 
-          {currency !== "STRIKER" && balance === 0 && isAuthed && !isDemoMode && (
+          {balance === 0 && isAuthed && !isDemoMode && (
             <div className="mt-2 flex items-center gap-2 px-0.5">
               <span className="text-[10px] text-amber-400/70 flex-1">No {currency} balance</span>
               <Link href="/deposit">
@@ -1193,7 +1255,7 @@ export function Trading() {
             {contractType === "UP_DOWN" ? <TrendingUp size={20} /> : <span className="text-lg font-black">{cMeta.btnA[0]}</span>}
             <span className="text-sm font-black">{cMeta.btnA}</span>
             <span className="text-[10px] font-bold opacity-80">
-              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
+              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency}` : `${payoutPct}%`}
             </span>
           </motion.button>
 
@@ -1221,7 +1283,7 @@ export function Trading() {
             {contractType === "UP_DOWN" ? <TrendingDown size={20} /> : <span className="text-lg font-black">{cMeta.btnB[0]}</span>}
             <span className="text-sm font-black">{cMeta.btnB}</span>
             <span className="text-[10px] font-bold opacity-80">
-              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency === "STRIKER" ? "STRK" : currency}` : `${payoutPct}%`}
+              {stakeNum > 0 && !stakeInvalid ? `+${potentialProfit} ${currency}` : `${payoutPct}%`}
             </span>
           </motion.button>
         </div>
@@ -1237,7 +1299,7 @@ export function Trading() {
               <div className="grid grid-cols-3 divide-x divide-white/6">
                 <div className="px-3 py-2 text-center">
                   <p className="text-[8px] font-mono text-white/30 uppercase tracking-wider mb-0.5">Stake</p>
-                  <p className="text-xs font-black font-mono text-white/70">{stake} <span className="text-white/40 text-[9px]">{currency === "STRIKER" ? "STRK" : currency}</span></p>
+                  <p className="text-xs font-black font-mono text-white/70">{stake} <span className="text-white/40 text-[9px]">{currency}</span></p>
                 </div>
                 <div className="px-3 py-2 text-center">
                   <p className="text-[8px] font-mono text-white/30 uppercase tracking-wider mb-0.5">Payout</p>
@@ -1245,7 +1307,7 @@ export function Trading() {
                 </div>
                 <div className="px-3 py-2 text-center bg-[#00ff88]/5">
                   <p className="text-[8px] font-mono text-[#00ff88]/50 uppercase tracking-wider mb-0.5">Win</p>
-                  <p className="text-xs font-black font-mono text-[#00ff88]">+{potentialProfit} <span className="text-[#00ff88]/60 text-[9px]">{currency === "STRIKER" ? "STRK" : currency}</span></p>
+                  <p className="text-xs font-black font-mono text-[#00ff88]">+{potentialProfit} <span className="text-[#00ff88]/60 text-[9px]">{currency}</span></p>
                 </div>
               </div>
             </div>
