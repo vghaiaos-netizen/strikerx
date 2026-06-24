@@ -43,7 +43,7 @@ export function Deposit() {
 
   const [tab, setTab] = useState<DepositTab>("crypto");
   const [currency, setCurrency] = useState<Currency>("TON");
-  const [amount, setAmount] = useState("1");
+  const [amount, setAmount] = useState("5");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -90,9 +90,11 @@ export function Deposit() {
     return () => { if (rateTimerRef.current) clearInterval(rateTimerRef.current); };
   }, [rateEvent]);
 
+  const MIN_DEPOSIT = 5;
+
   const handleGenerate = async () => {
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    if (!amt || amt < MIN_DEPOSIT) { toast({ title: `Minimum deposit is ${MIN_DEPOSIT} TON`, variant: "destructive" }); return; }
     try {
       const res = await createDeposit.mutateAsync({ data: { currency: currency as "TON" | "USDT_TON" | "USDT_TRC20" | "BNB" | "SOL" } });
       setInvoice({ payUrl: res.payLink ?? "#", amount, currency, expiresAt: res.expiresAt });
@@ -293,9 +295,9 @@ export function Deposit() {
                   <div>
                     <label className="text-[10px] font-mono uppercase tracking-wider text-white/30 block mb-1.5">Amount ({currency})</label>
                     <div className="flex gap-2">
-                      <Input type="number" step="0.1" min="0.1" value={amount} onChange={e => setAmount(e.target.value)}
+                      <Input type="number" step="1" min="5" value={amount} onChange={e => setAmount(e.target.value)}
                         className="bg-white/5 border-white/10 text-white font-mono font-bold h-11 text-base flex-1" />
-                      {["0.5", "1", "5", "10"].map(v => (
+                      {["5", "10", "25", "50"].map(v => (
                         <button key={v} onClick={() => setAmount(v)}
                           className="text-[10px] font-mono text-white/40 hover:text-[#00ff88] border border-white/8 hover:border-[#00ff88]/40 rounded-lg px-2 transition-all">
                           {v}
