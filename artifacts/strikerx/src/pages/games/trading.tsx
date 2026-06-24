@@ -1151,7 +1151,7 @@ export function Trading() {
             {quickStakes.map((q) => (
               <button
                 key={q}
-                onClick={() => setStake(currency === "STRIKER" ? String(q) : String(q))}
+                onClick={() => setStake(String(q))}
                 className={`flex-1 py-1.5 rounded-md border text-xs font-bold transition-all ${
                   parseFloat(stake) === q
                     ? "border-white/30 text-white bg-white/5"
@@ -1312,6 +1312,106 @@ export function Trading() {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {/* ── AI Auto-Trader panel ──────────────────────────── */}
+        {isAuthed && autoConfig && (
+          <div className="px-3 mt-3">
+            <div className="rounded-xl border border-white/8 bg-white/3 overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Bot size={13} className={autoConfig.enabled ? "text-primary" : "text-muted-foreground/60"} />
+                  <span className={`text-xs font-bold ${autoConfig.enabled ? "text-primary" : "text-muted-foreground"}`}>
+                    AI Auto-Trader
+                  </span>
+                  {autoConfig.enabled && (
+                    <span className="text-[9px] font-mono bg-primary/15 text-primary px-1.5 py-0.5 rounded-full animate-pulse">
+                      ACTIVE
+                    </span>
+                  )}
+                  {sessionTarget !== null && autoConfig.enabled && (
+                    <span className="text-[9px] font-mono text-muted-foreground/60">
+                      {sessionDone}/{sessionTarget}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleAutoToggle}
+                  disabled={autoLoading}
+                  className="flex items-center transition-opacity disabled:opacity-40"
+                >
+                  {autoConfig.enabled
+                    ? <ToggleRight size={22} className="text-primary" />
+                    : <ToggleLeft size={22} className="text-muted-foreground/50" />}
+                </button>
+              </div>
+
+              {/* Controls */}
+              <div className="px-3 pb-3 border-t border-white/6 pt-2.5 flex flex-col gap-2.5">
+                {/* Risk presets */}
+                <div>
+                  <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-bold mb-1.5">Risk Level</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(["conservative", "balanced", "aggressive"] as const).map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => handleAutoRisk(preset)}
+                        className={`py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                          autoConfig.riskPreset === preset
+                            ? "border-primary/60 bg-primary/15 text-primary"
+                            : "border-border text-muted-foreground hover:border-white/20 hover:text-white"
+                        }`}
+                      >
+                        {preset === "conservative" ? "Safe" : preset === "balanced" ? "Balanced" : "Aggressive"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Session presets */}
+                <div>
+                  <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-bold mb-1.5">Session Target</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {([5, 10, 20, 50] as const).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => handleStartSession(n)}
+                        className={`py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                          sessionTarget === n
+                            ? "border-primary/60 bg-primary/15 text-primary"
+                            : "border-border text-muted-foreground hover:border-white/20 hover:text-white"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Progress bar */}
+                  {sessionTarget !== null && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="flex-1 h-1 bg-white/8 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, (sessionDone / sessionTarget) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-mono text-muted-foreground/60 tabular-nums">
+                        {sessionDone}/{sessionTarget} · {sessionWins}W
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[9px] text-muted-foreground/40 leading-relaxed">
+                  {autoConfig.enabled
+                    ? `Trading ${selectedAsset} on ${chartInterval} · runs every 60s · needs ≥5 completed trades to unlock`
+                    : "Enable to let AI trade automatically based on live technical signals."}
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── Positions ─────────────────────────────────────── */}

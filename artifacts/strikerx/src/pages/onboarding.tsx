@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, CheckCircle, XCircle,
-  ArrowRight, Zap, SkipForward, Trophy, Target, Wallet,
+  ArrowRight, Zap, SkipForward, Trophy, Target,
 } from "lucide-react";
 import LanguagePicker from "./language-picker";
 import { saveLangLocally, getLangDir, type LangCode } from "@/i18n";
@@ -11,12 +11,12 @@ import { useTranslation } from "react-i18next";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const TOTAL_TRADES   = 7;
-const STAKE_USD      = 500;
+const TOTAL_TRADES   = 3;
+const STAKE_USD      = 100;
 const WIN_PCT        = 0.82;
-const WIN_PAYOUT     = Math.round(STAKE_USD * WIN_PCT); // $410
+const WIN_PAYOUT     = Math.round(STAKE_USD * WIN_PCT); // $82
 const TON_RATE       = 7;                               // 1 TON = $7 (fixed for demo)
-const START_BALANCE  = 10_000;
+const START_BALANCE  = 1_000;
 const SETTLE_MS      = 2500;
 const RESULT_MS      = 1600;
 
@@ -32,18 +32,9 @@ const DEMO_ASSETS = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-/** Trade 0 always wins; trades 1-6: 4 wins + 2 losses, randomised. */
+/** All outcomes random — no scripted results. Markets are honest. */
 function makeOutcomes(): boolean[] {
-  return [true, ...shuffle([true, true, true, true, false, false])];
+  return Array.from({ length: TOTAL_TRADES }, () => Math.random() < 0.5);
 }
 
 function fmt(usd: number) {
@@ -427,12 +418,12 @@ function SummaryScreen({
         </div>
       )}
 
-      {/* Upsell */}
+      {/* Reality check */}
       <div className="bg-gradient-to-br from-[#00ff88]/8 to-transparent border border-[#00ff88]/20 rounded-2xl p-4 text-center">
         <Target className="w-5 h-5 text-[#00ff88] mx-auto mb-2" />
-        <div className="text-sm font-bold text-white">Ready to earn real payouts?</div>
-        <div className="text-[11px] font-mono text-white/40 mt-1">
-          Same contracts · real STRIKER tokens · withdraw to TON anytime.
+        <div className="text-sm font-bold text-white">You understand the basics</div>
+        <div className="text-[11px] font-mono text-white/40 mt-1 leading-relaxed">
+          Real trading uses TON or USDT. Outcomes depend entirely on live market price — no scripts.
         </div>
       </div>
 
@@ -442,17 +433,9 @@ function SummaryScreen({
         className="w-full h-12 rounded-2xl bg-[#00ff88] text-[#060a14] font-black tracking-widest flex items-center justify-center gap-2 hover:bg-[#00ff88]/90 transition-colors"
         style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.15em" }}
       >
-        <Wallet className="w-4 h-4" />
-        MAKE A DEPOSIT
+        START TRADING
         <ArrowRight className="w-4 h-4" />
       </motion.button>
-
-      <button
-        onClick={onContinue}
-        className="text-white/25 text-xs font-mono hover:text-white/50 transition-colors text-center"
-      >
-        Skip for now
-      </button>
     </motion.div>
   );
 }
@@ -491,7 +474,7 @@ export function OnboardingFlow({ onComplete }: { onComplete: () => void }) {
   const handleComplete = () => {
     try { localStorage.setItem("strikerx_onboarded", "1"); } catch { /* ignore */ }
     onComplete();
-    navigate("/deposit");
+    navigate("/");
   };
 
   return (
