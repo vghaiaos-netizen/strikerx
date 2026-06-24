@@ -276,11 +276,10 @@ export async function runAutoTraderTick(): Promise<void> {
 
       const rawBalance =
         cfg.currency === "TON"    ? parseFloat(String(playerRow.tonBalance))
-        : cfg.currency === "USDT" ? parseFloat(String(playerRow.usdtBalance))
-                                  : parseFloat(String(playerRow.strikerBalance));
+                                  : parseFloat(String(playerRow.usdtBalance));
 
-      const minStake = cfg.currency === "STRIKER" ? 10 : 0.1;
-      const stake    = parseFloat((rawBalance * cfg.max_stake_pct).toFixed(cfg.currency === "STRIKER" ? 0 : 4));
+      const minStake = 0.1;
+      const stake    = parseFloat((rawBalance * cfg.max_stake_pct).toFixed(4));
 
       if (stake < minStake) {
         await logEntry({ configId: cfg.id, playerId: cfg.player_id, assetSymbol: cfg.asset_symbol,
@@ -295,7 +294,7 @@ export async function runAutoTraderTick(): Promise<void> {
         assetSymbol:          cfg.asset_symbol,
         direction:            signal.signal,
         contractType:         "UP_DOWN",
-        currency:             cfg.currency as "TON" | "USDT" | "STRIKER",
+        currency:             cfg.currency as "TON" | "USDT",
         stake,
         contractDurationSecs: INTERVAL_DURATION[cfg.interval] ?? 60,
       });
