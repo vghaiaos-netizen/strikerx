@@ -4,6 +4,41 @@
 
 ---
 
+## FAST START — run this first, every session (~30s total)
+
+This is a pnpm monorepo. Generated API client files are **not committed** and must be regenerated each session. The Replit dev DB starts empty — tables must be created. Do all four steps in order before touching any code:
+
+```bash
+# Step 1 — install deps (uses pnpm lockfile, fast on warm cache)
+pnpm install
+
+# Step 2 — regenerate the API client + Zod schemas (REQUIRED — files not committed)
+pnpm --filter @workspace/api-spec run codegen
+
+# Step 3 — restart both workflows so they pick up the generated files
+# Use the restart_workflow tool for "API Server" and "Start application"
+
+# Step 4 — create DB tables if the dev DB is empty
+# Use the database skill's executeSql() to run the schema SQL, OR
+# use the executeSql callback in code_execution after checking:
+#   const status = await checkDatabase();
+# The drizzle-kit push command requires a TTY and will fail in bash — use executeSql() instead.
+# Full schema SQL is in lib/db/src/schema/ — read those files and apply CREATE TABLE IF NOT EXISTS.
+```
+
+**Signs the setup worked:**
+- `API Server` workflow log shows `Server listening` + `Config service initialized`
+- `Start application` shows `VITE ready` with no export errors
+- No `relation "X" does not exist` errors in API Server logs
+
+**If you see `No matching export in "...api-client-react/src/index.ts"` errors in the frontend log** → you forgot Step 2. Run `pnpm --filter @workspace/api-spec run codegen` and restart `Start application`.
+
+**If you see `relation "demo_positions" does not exist`** → DB tables are missing. Apply the schema via `executeSql()` (see database skill). The schema is in `lib/db/src/schema/*.ts` — read all files there and apply `CREATE TABLE IF NOT EXISTS` for each table.
+
+**`drizzle-kit push` requires a TTY and will fail when run from bash in Replit** — always use `executeSql()` from the code_execution sandbox instead.
+
+---
+
 ## What StrikerX is — primary product mission
 
 **StrikerX is a binary prediction trading platform** inside Telegram, styled around football/World Cup. The primary product is the **trading terminal** (binary UP/DOWN contracts on crypto/forex/commodities, fixed payout, 30s–15m durations). Think Pocket Option or Quotex, but as a Telegram Mini App with TON/crypto payments.
