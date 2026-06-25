@@ -121,51 +121,92 @@ function WinLossDonut({ wins, losses }: { wins: number; losses: number }) {
 }
 
 function OverviewTab() {
+  const [mode, setMode] = useState<"real" | "demo">("real");
   const { data: portfolio } = useGetMyPortfolio();
-  const { data: chart }     = useGetMyPortfolioChart(undefined, { query: { queryKey: ["my-portfolio-chart"], staleTime: 60_000 } });
+  const { data: chart } = useGetMyPortfolioChart(
+    { mode },
+    { query: { queryKey: ["my-portfolio-chart", mode], staleTime: 60_000 } }
+  );
 
   const at = portfolio?.allTime;
   const td = portfolio?.today;
   const tw = portfolio?.thisWeek;
+  const dm = portfolio?.demo;
 
-  const periodData = [
-    { label: "Today",     netPnl: td?.netPnl ?? 0,  trades: td?.totalTrades ?? 0, wins: td?.wins ?? 0, losses: (td?.totalTrades ?? 0) - (td?.wins ?? 0) },
-    { label: "This Week", netPnl: tw?.netPnl ?? 0,  trades: tw?.totalTrades ?? 0, wins: tw?.wins ?? 0, losses: (tw?.totalTrades ?? 0) - (tw?.wins ?? 0) },
-    { label: "All Time",  netPnl: at?.netPnl ?? 0,  trades: at?.totalTrades ?? 0, wins: at?.wins ?? 0, losses: at?.losses ?? 0 },
-  ];
+  const isDemo = mode === "demo";
+
+  const periodData = isDemo
+    ? [
+        { label: "Demo All Time", netPnl: dm?.netPnl ?? 0, trades: dm?.totalTrades ?? 0, wins: dm?.wins ?? 0, losses: dm?.losses ?? 0 },
+      ]
+    : [
+        { label: "Today",     netPnl: td?.netPnl ?? 0, trades: td?.totalTrades ?? 0, wins: td?.wins ?? 0, losses: (td?.totalTrades ?? 0) - (td?.wins ?? 0) },
+        { label: "This Week", netPnl: tw?.netPnl ?? 0, trades: tw?.totalTrades ?? 0, wins: tw?.wins ?? 0, losses: (tw?.totalTrades ?? 0) - (tw?.wins ?? 0) },
+        { label: "All Time",  netPnl: at?.netPnl ?? 0, trades: at?.totalTrades ?? 0, wins: at?.wins ?? 0, losses: at?.losses ?? 0 },
+      ];
+
+  const heroWins   = isDemo ? (dm?.wins ?? 0)   : (at?.wins ?? 0);
+  const heroLosses = isDemo ? (dm?.losses ?? 0) : (at?.losses ?? 0);
+  const heroLabel  = isDemo ? "Demo Performance" : "All-Time Performance";
+  const heroTrades = isDemo ? (dm?.totalTrades ?? 0) : (at?.totalTrades ?? 0);
+  const heroPnl    = isDemo ? (dm?.netPnl ?? 0)      : (at?.netPnl ?? 0);
+  const heroBest   = isDemo ? (dm?.biggestWin ?? 0)  : (at?.biggestWin ?? 0);
+  const heroWr     = isDemo ? (dm?.winRate ?? 0)      : (at?.winRate ?? 0);
+  const heroStreak = isDemo ? null                     : (at?.currentStreak ?? 0);
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Real / Demo toggle */}
+      <div className="flex gap-1 bg-muted rounded-lg p-1">
+        <button
+          onClick={() => setMode("real")}
+          className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${mode === "real" ? "bg-card text-white shadow" : "text-muted-foreground"}`}
+        >
+          Real
+        </button>
+        <button
+          onClick={() => setMode("demo")}
+          className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${mode === "demo" ? "bg-amber-500/20 text-amber-400 shadow" : "text-muted-foreground"}`}
+        >
+          Demo
+        </button>
+      </div>
+
       {/* Win/loss donut + key stats hero row */}
       <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
-        <WinLossDonut wins={at?.wins ?? 0} losses={at?.losses ?? 0} />
+        <WinLossDonut wins={heroWins} losses={heroLosses} />
         <div className="flex-1 min-w-0">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-2">All-Time Performance</div>
+          <div className={`text-[9px] uppercase tracking-widest font-bold mb-2 ${isDemo ? "text-amber-400/60" : "text-muted-foreground"}`}>
+            {heroLabel}
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             <div>
               <div className="text-[8px] text-muted-foreground">Total Trades</div>
-              <div className="font-black text-sm">{at?.totalTrades ?? 0}</div>
+              <div className="font-black text-sm">{heroTrades}</div>
             </div>
             <div>
               <div className="text-[8px] text-muted-foreground">Net P&L</div>
-              <div className={`font-black text-sm tabular-nums ${(at?.netPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                {(at?.netPnl ?? 0) >= 0 ? "+" : ""}{(at?.netPnl ?? 0).toFixed(2)}
+              <div className={`font-black text-sm tabular-nums ${heroPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {heroPnl >= 0 ? "+" : ""}{heroPnl.toFixed(2)}
+                {isDemo && <span className="text-[9px] font-normal text-amber-400/60 ml-1">USDT</span>}
               </div>
             </div>
             <div>
               <div className="text-[8px] text-muted-foreground">Best Win</div>
-              <div className="font-black text-sm text-green-400">+{(at?.biggestWin ?? 0).toFixed(2)}</div>
+              <div className="font-black text-sm text-green-400">+{heroBest.toFixed(2)}</div>
             </div>
             <div>
-              <div className="text-[8px] text-muted-foreground">Win Streak</div>
-              <div className="font-black text-sm text-orange-400">{at?.currentStreak ?? 0}×</div>
+              <div className="text-[8px] text-muted-foreground">{isDemo ? "Win Rate" : "Win Streak"}</div>
+              <div className={`font-black text-sm ${isDemo ? "text-green-400" : "text-orange-400"}`}>
+                {isDemo ? `${heroWr}%` : `${heroStreak}×`}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Period P&L cards */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid gap-2 ${isDemo ? "grid-cols-1" : "grid-cols-3"}`}>
         {periodData.map(({ label, netPnl, trades, wins, losses }) => {
           const isPos = netPnl >= 0;
           const total = wins + losses;
@@ -186,7 +227,7 @@ function OverviewTab() {
                 {isPos && netPnl > 0 ? "+" : ""}{netPnl.toFixed(2)}
               </div>
               <div className="relative z-10 mt-0.5 space-y-0.5">
-                <p className="text-[8px] text-muted-foreground">{trades} trades</p>
+                <p className="text-[8px] text-muted-foreground">{trades} trades · {wins}W / {losses}L</p>
                 {wr !== null && <p className="text-[8px] font-bold text-green-400/70">{wr}% WR</p>}
               </div>
             </motion.div>
@@ -197,7 +238,9 @@ function OverviewTab() {
       {/* P&L chart */}
       <div className="bg-card border border-border rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Cumulative P&L</p>
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">
+            Cumulative P&L {isDemo && <span className="text-amber-400/60 normal-case">(demo)</span>}
+          </p>
           <p className="text-[8px] text-muted-foreground/50 font-mono">30 days</p>
         </div>
         <PnlSparkline points={chart?.points ?? []} />
@@ -205,17 +248,17 @@ function OverviewTab() {
 
       {/* Volume stat */}
       <div className="flex gap-2">
-        <StatCard label="Volume" value={(at?.volume ?? 0).toFixed(2)} sub="total staked" />
-        <StatCard label="Wins"   value={at?.wins ?? 0}   sub={`${at?.winRate ?? 0}% rate`} />
-        <StatCard label="Losses" value={at?.losses ?? 0} sub="positions" />
+        <StatCard label={isDemo ? "Demo Volume" : "Volume"} value={isDemo ? (dm?.volume ?? 0).toFixed(2) : (at?.volume ?? 0).toFixed(2)} sub={isDemo ? "USDT staked" : "total staked"} />
+        <StatCard label="Wins"   value={heroWins}   sub={`${heroWr}% rate`} />
+        <StatCard label="Losses" value={heroLosses} sub="positions" />
       </div>
 
-      {at?.totalTrades === 0 && (
+      {heroTrades === 0 && (
         <div className="text-center py-6">
           <TrendingUp size={32} className="mx-auto text-muted-foreground/30 mb-2" />
-          <p className="text-sm text-muted-foreground">No trades yet</p>
+          <p className="text-sm text-muted-foreground">{isDemo ? "No demo trades yet" : "No trades yet"}</p>
           <Link href="/">
-            <Button size="sm" className="mt-3">Start Trading</Button>
+            <Button size="sm" className="mt-3">{isDemo ? "Try Demo Trading" : "Start Trading"}</Button>
           </Link>
         </div>
       )}

@@ -1196,6 +1196,11 @@ paths:
           name: days
           schema:
             type: integer
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: [real, demo]
       responses:
         "200":
           description: Chart data points
@@ -2395,6 +2400,24 @@ components:
           $ref: "#/components/schemas/PeriodStats"
         thisWeek:
           $ref: "#/components/schemas/PeriodStats"
+        demo:
+          type: object
+          required: [totalTrades, wins, losses, winRate, netPnl, volume, biggestWin]
+          properties:
+            totalTrades:
+              type: integer
+            wins:
+              type: integer
+            losses:
+              type: integer
+            winRate:
+              type: number
+            netPnl:
+              type: number
+            volume:
+              type: number
+            biggestWin:
+              type: number
 
     DailyPnlPoint:
       type: object
