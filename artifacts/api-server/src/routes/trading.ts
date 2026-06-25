@@ -53,7 +53,7 @@ router.post("/trading/positions", requireAuth, async (req, res): Promise<void> =
   const stakeAmount = typeof stake === "number" ? stake : (typeof stakeStriker === "number" ? stakeStriker : NaN);
 
   const VALID_CONTRACT_TYPES: ContractType[] = ["UP_DOWN", "EVEN_ODD", "OVER_UNDER", "IN_OUT"];
-  const VALID_CURRENCIES:     TradingCurrency[] = ["TON", "USDT", "STRIKER"];
+  const VALID_CURRENCIES:     TradingCurrency[] = ["TON", "USDT"];
   const VALID_DIRECTIONS:     Direction[] = ["UP", "DOWN", "EVEN", "ODD", "OVER", "UNDER", "IN", "OUT"];
 
   if (typeof assetSymbol !== "string" || assetSymbol.length < 2 || assetSymbol.length > 10) {
