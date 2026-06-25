@@ -25,6 +25,8 @@ import {
   usePostDemoPositions,
   getGetDemoPositionsActiveQueryKey,
   getGetDemoPositionsQueryKey,
+  useGetMyPortfolio,
+  getGetMyPortfolioQueryKey,
 } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -241,6 +243,14 @@ export function Trading() {
     typeof localStorage !== "undefined" && localStorage.getItem("strikerx_demo_mode") === "true",
   );
   const demoUsdtBalance = parseFloat(String((player as Record<string, unknown>)?.demoUsdtBalance ?? 10000));
+
+  const { data: portfolioData } = useGetMyPortfolio({
+    query: { queryKey: getGetMyPortfolioQueryKey(), enabled: isAuthed && isDemoMode, staleTime: 60_000 },
+  });
+  const demoWinRate   = portfolioData?.demo?.winRate   ?? 0;
+  const demoTrades    = portfolioData?.demo?.totalTrades ?? 0;
+  const readyForLive  = isDemoMode && demoTrades >= 10 && demoWinRate >= 55;
+
   const toggleDemo = (v: boolean) => {
     localStorage.setItem("strikerx_demo_mode", String(v));
     setIsDemoMode(v);
@@ -836,6 +846,29 @@ export function Trading() {
             })}
           </div>
         </div>
+
+        {/* ── Paper-to-live readiness banner ────────────────── */}
+        {readyForLive && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-3 mb-2 flex items-center gap-2.5 bg-green-950/50 border border-green-500/30 rounded-xl px-3 py-2.5"
+          >
+            <Trophy size={14} className="text-green-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-green-300 leading-tight">Ready for real trading?</p>
+              <p className="text-[9px] font-mono text-green-400/60 leading-tight">
+                {demoWinRate.toFixed(0)}% win rate · {demoTrades} demo trades — solid edge detected
+              </p>
+            </div>
+            <button
+              onClick={() => toggleDemo(false)}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-green-500/20 border border-green-500/40 text-[9px] font-black text-green-300 hover:bg-green-500/30 transition-colors"
+            >
+              Go Live
+            </button>
+          </motion.div>
+        )}
 
         {/* ── Chart panel ───────────────────────────────────── */}
         <div className="px-3 mb-2">

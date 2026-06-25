@@ -51,7 +51,7 @@ export function Loyalty() {
 
   const p        = player as Record<string, unknown> | null;
   const vipTier  = p?.vipTier as string ?? "amateur";
-  const vipIdx   = ["amateur","division_one","premier_league","champions_league","world_cup"].indexOf(vipTier);
+  const vipIdx   = ["sunday_league","division_one","premier_league","champions_league","world_cup"].indexOf(vipTier);
   const vipName  = VIP_TIERS[vipIdx]  ?? "Sunday League";
   const vipColor = VIP_COLORS[vipIdx] ?? "#6b7280";
   const vipIcon  = VIP_ICONS[vipIdx]  ?? "SL";

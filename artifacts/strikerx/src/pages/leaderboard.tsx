@@ -39,7 +39,8 @@ interface Tournament {
 
 export function Leaderboard() {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { token, player } = useAuth();
+  const myId = (player as Record<string, unknown> | null)?.id as number | undefined;
   const [activeTab, setActiveTab] = useState<Tab>("wagered");
 
   const TABS: Array<{ key: Tab; label: string }> = [
@@ -140,12 +141,15 @@ export function Leaderboard() {
           ) : (
             data.entries.map((entry) => {
               const isTop3 = entry.rank <= 3;
+              const isMe   = myId !== undefined && entry.playerId === myId;
               const rankStyle = RANK_STYLES[entry.rank - 1] ?? "text-muted-foreground bg-muted/20 border-border";
               return (
                 <div
                   key={entry.playerId}
                   className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all ${
-                    isTop3 ? "bg-card border-primary/20 shadow-sm" : "bg-card/50 border-border/50"
+                    isMe    ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20"
+                    : isTop3 ? "bg-card border-primary/20 shadow-sm"
+                    : "bg-card/50 border-border/50"
                   }`}
                 >
                   <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-mono font-bold text-sm flex-shrink-0 ${rankStyle}`}>
@@ -156,10 +160,15 @@ export function Leaderboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className={`font-mono font-bold text-sm truncate ${isTop3 ? "text-foreground" : "text-muted-foreground"}`}>
+                      <span className={`font-mono font-bold text-sm truncate ${isMe ? "text-primary" : isTop3 ? "text-foreground" : "text-muted-foreground"}`}>
                         {entry.username}
                       </span>
                       {VIP_ICONS[entry.vipTier]}
+                      {isMe && (
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-primary/20 text-primary uppercase tracking-widest shrink-0">
+                          You
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">{VIP_LABELS[entry.vipTier] ?? entry.vipTier}</div>
                   </div>

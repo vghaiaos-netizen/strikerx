@@ -156,6 +156,10 @@ export function Transactions() {
     { id: "withdrawals", label: "Withdrawals",  count: txs.filter((t) => t.type === "withdrawal").length },
   ];
 
+  const totalIn  = txs.filter(t => ["deposit","bonus","referral","cashback","win"].includes(t.type) && t.status === "completed").reduce((s, t) => s + Number(t.amountStriker), 0);
+  const totalOut = txs.filter(t => t.type === "withdrawal" && t.status === "completed").reduce((s, t) => s + Number(t.amountStriker), 0);
+  const pending  = txs.filter(t => t.status === "pending").length;
+
   return (
     <Layout>
       <div className="flex flex-col pb-6">
@@ -168,6 +172,27 @@ export function Transactions() {
         {!player && (
           <div className="px-4 pb-4">
             <p className="text-xs text-muted-foreground">Open in Telegram to see your transactions</p>
+          </div>
+        )}
+
+        {/* Summary bar */}
+        {txs.length > 0 && (
+          <div className="mx-4 mb-3 grid grid-cols-3 gap-2">
+            <div className="bg-green-950/40 border border-green-700/20 rounded-xl px-3 py-2 text-center">
+              <p className="text-[8px] font-mono text-green-400/60 uppercase tracking-widest mb-0.5">Total In</p>
+              <p className="font-mono font-black text-sm text-green-400 tabular-nums">+{totalIn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              <p className="text-[8px] font-mono text-green-400/40">SKR</p>
+            </div>
+            <div className="bg-orange-950/30 border border-orange-700/20 rounded-xl px-3 py-2 text-center">
+              <p className="text-[8px] font-mono text-orange-400/60 uppercase tracking-widest mb-0.5">Total Out</p>
+              <p className="font-mono font-black text-sm text-orange-400 tabular-nums">{totalOut.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              <p className="text-[8px] font-mono text-orange-400/40">SKR</p>
+            </div>
+            <div className={`rounded-xl px-3 py-2 text-center border ${pending > 0 ? "bg-yellow-950/30 border-yellow-700/20" : "bg-card border-border"}`}>
+              <p className={`text-[8px] font-mono uppercase tracking-widest mb-0.5 ${pending > 0 ? "text-yellow-400/60" : "text-muted-foreground"}`}>Pending</p>
+              <p className={`font-mono font-black text-sm tabular-nums ${pending > 0 ? "text-yellow-400" : "text-muted-foreground"}`}>{pending}</p>
+              <p className={`text-[8px] font-mono ${pending > 0 ? "text-yellow-400/40" : "text-muted-foreground/40"}`}>txns</p>
+            </div>
           </div>
         )}
 

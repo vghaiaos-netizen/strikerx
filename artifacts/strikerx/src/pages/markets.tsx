@@ -57,10 +57,13 @@ function formatPrice(symbol: string, price: number): string {
   return price.toFixed(digits);
 }
 
+type SortMode = "default" | "gainers" | "losers";
+
 export function Markets() {
   const [, navigate] = useLocation();
   const [category, setCategory] = useState<string>("All");
   const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("default");
   const tickerRef = useRef<HTMLDivElement>(null);
 
   const { data: assetsData } = useGetTradingAssets({
@@ -80,11 +83,17 @@ export function Markets() {
   const topLosers  = [...sortedByChange].reverse().slice(0, 3).filter((a) => (changes[a.symbol] ?? 0) < 0);
   const showMovers = category === "All" && !search && assets.length > 0;
 
-  const filtered = assets.filter((a) => {
+  const baseFiltered = assets.filter((a) => {
     const inCategory = category === "All" || ASSET_CATEGORIES[category]?.includes(a.symbol);
     const inSearch = !search || a.symbol.toLowerCase().includes(search.toLowerCase()) || a.displayName.toLowerCase().includes(search.toLowerCase());
     return inCategory && inSearch;
   });
+
+  const filtered = sortMode === "gainers"
+    ? [...baseFiltered].sort((a, b) => (changes[b.symbol] ?? 0) - (changes[a.symbol] ?? 0))
+    : sortMode === "losers"
+    ? [...baseFiltered].sort((a, b) => (changes[a.symbol] ?? 0) - (changes[b.symbol] ?? 0))
+    : baseFiltered;
 
   // Auto-scroll ticker
   useEffect(() => {
@@ -245,7 +254,7 @@ export function Markets() {
         </div>
 
         {/* Category filter */}
-        <div className="flex gap-1.5 px-4 mt-2 mb-3 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1.5 px-4 mt-2 mb-2 overflow-x-auto no-scrollbar">
           {Object.keys(ASSET_CATEGORIES).map((cat) => (
             <button
               key={cat}
@@ -257,6 +266,31 @@ export function Markets() {
               }`}
             >
               {CATEGORY_LABELS[cat] ?? cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort toggle */}
+        <div className="flex gap-1.5 px-4 mb-3">
+          {([
+            { key: "default",  label: "Default" },
+            { key: "gainers",  label: "Top Gainers" },
+            { key: "losers",   label: "Top Losers" },
+          ] as { key: SortMode; label: string }[]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setSortMode(key)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all border ${
+                sortMode === key
+                  ? key === "gainers" ? "bg-green-500/15 border-green-500/40 text-green-400"
+                    : key === "losers"  ? "bg-red-500/15 border-red-500/40 text-red-400"
+                    : "bg-white/10 border-white/20 text-white"
+                  : "bg-transparent border-border text-muted-foreground hover:text-white hover:border-white/20"
+              }`}
+            >
+              {key === "gainers" && <TrendingUp size={9} className="inline mr-1" />}
+              {key === "losers"  && <TrendingDown size={9} className="inline mr-1" />}
+              {label}
             </button>
           ))}
         </div>
