@@ -14,15 +14,18 @@ Binary prediction trading terminal inside Telegram (football/World Cup theme). F
 ## FOR AGENTS — SESSION START
 
 ```bash
-pnpm install                  # sync deps (takes ~30s first time)
+pnpm install                  # sync deps (~30s first time)
+node scripts/setup-db.mjs     # apply any pending DB migrations (non-interactive, safe to re-run)
 # Restart workflows: "API Server" (port 8000) and "Start application" (port 5000)
-# That's it — generated files ARE committed, DB tables already exist
+# That's it — generated files ARE committed
 ```
 
 **Only run codegen if you changed `lib/api-spec/openapi.yaml`:**
 ```bash
 pnpm --filter @workspace/api-spec run codegen
 ```
+
+> `drizzle-kit push` requires a TTY and will fail in Replit. Always use `node scripts/setup-db.mjs` instead.
 
 **Post-merge is automatic** — `scripts/post-merge.sh` runs `pnpm install` + codegen after every task agent merge.
 
