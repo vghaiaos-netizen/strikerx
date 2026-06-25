@@ -1,7 +1,9 @@
 import { useState, useEffect, Component, ReactNode } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { motion, AnimatePresence } from "framer-motion";
+import { Gift, X } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -167,6 +169,82 @@ function LangSyncer() {
   return null;
 }
 
+// ─── Return-visit deposit nudge ───────────────────────────────────────────────
+function ReturnVisitNudge() {
+  const [, navigate] = useLocation();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    try {
+      const today = new Date().toDateString();
+      const dismissed = localStorage.getItem("strikerx_nudge_day");
+      if (dismissed === today) return;
+
+      // Detect return session: last_session > 30 min ago means new session
+      const lastSession = parseInt(localStorage.getItem("strikerx_last_session") ?? "0", 10);
+      const isReturn = Date.now() - lastSession > 30 * 60 * 1000;
+      localStorage.setItem("strikerx_last_session", String(Date.now()));
+
+      if (!isReturn) return;
+
+      // Only show within first 7 days of onboarding
+      const onboardedAt = parseInt(localStorage.getItem("strikerx_onboarded_at") ?? "0", 10);
+      const daysElapsed = onboardedAt ? (Date.now() - onboardedAt) / (1000 * 60 * 60 * 24) : 999;
+      if (daysElapsed > 7) return;
+
+      const t = setTimeout(() => setVisible(true), 2500);
+      return () => clearTimeout(t);
+    } catch { /* ignore */ }
+  }, []);
+
+  const dismiss = () => {
+    try { localStorage.setItem("strikerx_nudge_day", new Date().toDateString()); } catch { /* ignore */ }
+    setVisible(false);
+  };
+
+  const goDeposit = () => {
+    dismiss();
+    navigate("/deposit");
+  };
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ y: 120, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 120, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 240, damping: 22 }}
+          className="fixed bottom-0 left-0 right-0 z-50 p-4"
+          style={{ fontFamily: "'Inter', sans-serif" }}
+        >
+          <div className="max-w-sm mx-auto bg-[#0d1420] border border-[#00ff88]/25 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00ff88]/12 flex items-center justify-center shrink-0 mt-0.5">
+              <Gift className="w-5 h-5 text-[#00ff88]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-black text-white leading-tight">500 STRIKER — still waiting for you</div>
+              <div className="text-[11px] font-mono text-white/40 mt-0.5 leading-snug">
+                Free tokens credited the moment you deposit. Ready to trade for real?
+              </div>
+              <button
+                onClick={goDeposit}
+                className="mt-2.5 px-4 py-1.5 rounded-xl bg-[#00ff88] text-[#060a14] text-xs font-black tracking-wider"
+                style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}
+              >
+                CLAIM BONUS
+              </button>
+            </div>
+            <button onClick={dismiss} className="text-white/25 hover:text-white/60 transition-colors mt-0.5 shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function AppShell() {
   const { i18n } = useTranslation();
   const [onboarded, setOnboarded] = useState(() => {
@@ -181,10 +259,15 @@ function AppShell() {
     document.documentElement.classList.add("dark");
   }, [i18n.language]);
 
+  const handleOnboardComplete = () => {
+    try { localStorage.setItem("strikerx_onboarded_at", String(Date.now())); } catch { /* ignore */ }
+    setOnboarded(true);
+  };
+
   if (!onboarded) {
     return (
       <QueryClientProvider client={queryClient}>
-        <OnboardingFlow onComplete={() => setOnboarded(true)} />
+        <OnboardingFlow onComplete={handleOnboardComplete} />
       </QueryClientProvider>
     );
   }
@@ -198,6 +281,7 @@ function AppShell() {
             <AppErrorBoundary>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <Router />
+                <ReturnVisitNudge />
               </WouterRouter>
             </AppErrorBoundary>
             <Toaster />
