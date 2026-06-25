@@ -7,6 +7,8 @@ import {
   useGetMyPortfolioChart,
   useGetTradingPositions,
   getGetTradingPositionsQueryKey,
+  useGetDemoPositions,
+  getGetDemoPositionsQueryKey,
   useGetTradingLeaderboard,
   useGetMyAchievements,
   useGetMyStreak,
