@@ -253,6 +253,104 @@ function OverviewTab() {
         <StatCard label="Losses" value={heroLosses} sub="positions" />
       </div>
 
+      {/* Demo vs Real comparison — always visible when both have data */}
+      {(at?.totalTrades ?? 0) > 0 && (dm?.totalTrades ?? 0) > 0 && (
+        <div className="bg-card border border-border rounded-xl p-3">
+          <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-3">Demo vs Real</p>
+          <div className="grid grid-cols-3 gap-0">
+            {/* Header row */}
+            <div />
+            <div className="text-center pb-2 border-b border-border">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Real</span>
+            </div>
+            <div className="text-center pb-2 border-b border-border">
+              <span className="text-[9px] font-bold text-amber-400/70 uppercase tracking-wider">Demo</span>
+            </div>
+
+            {/* Trades row */}
+            <div className="text-[9px] text-muted-foreground py-2 border-b border-border/50 flex items-center">Trades</div>
+            <div className="text-center py-2 border-b border-border/50">
+              <span className="text-xs font-black">{at?.totalTrades ?? 0}</span>
+            </div>
+            <div className="text-center py-2 border-b border-border/50">
+              <span className="text-xs font-black text-amber-300/80">{dm?.totalTrades ?? 0}</span>
+            </div>
+
+            {/* Win Rate row */}
+            {(() => {
+              const rWr = at?.winRate ?? 0;
+              const dWr = dm?.winRate ?? 0;
+              const rBetter = rWr >= dWr;
+              return (
+                <>
+                  <div className="text-[9px] text-muted-foreground py-2 border-b border-border/50 flex items-center">Win Rate</div>
+                  <div className="text-center py-2 border-b border-border/50 flex items-center justify-center gap-1">
+                    <span className={`text-xs font-black ${rBetter ? "text-green-400" : "text-white"}`}>{rWr}%</span>
+                    {rBetter && <ChevronUp size={10} className="text-green-400" />}
+                  </div>
+                  <div className="text-center py-2 border-b border-border/50 flex items-center justify-center gap-1">
+                    <span className={`text-xs font-black ${!rBetter ? "text-green-400" : "text-amber-300/80"}`}>{dWr}%</span>
+                    {!rBetter && <ChevronUp size={10} className="text-green-400" />}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Net P&L row */}
+            {(() => {
+              const rPnl = at?.netPnl ?? 0;
+              const dPnl = dm?.netPnl ?? 0;
+              return (
+                <>
+                  <div className="text-[9px] text-muted-foreground py-2 border-b border-border/50 flex items-center">Net P&L</div>
+                  <div className="text-center py-2 border-b border-border/50">
+                    <span className={`text-xs font-black tabular-nums ${rPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {rPnl >= 0 ? "+" : ""}{rPnl.toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="text-center py-2 border-b border-border/50">
+                    <span className={`text-xs font-black tabular-nums ${dPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {dPnl >= 0 ? "+" : ""}{dPnl.toFixed(1)}
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Best Win row */}
+            <div className="text-[9px] text-muted-foreground pt-2 flex items-center">Best Win</div>
+            <div className="text-center pt-2">
+              <span className="text-xs font-black text-green-400">+{(at?.biggestWin ?? 0).toFixed(1)}</span>
+            </div>
+            <div className="text-center pt-2">
+              <span className="text-xs font-black text-green-400">+{(dm?.biggestWin ?? 0).toFixed(1)}</span>
+            </div>
+          </div>
+
+          {/* Insight line */}
+          {(() => {
+            const rWr = at?.winRate ?? 0;
+            const dWr = dm?.winRate ?? 0;
+            const diff = rWr - dWr;
+            if (Math.abs(diff) < 5) return (
+              <p className="text-[9px] text-muted-foreground/60 mt-3 pt-2 border-t border-border/40 font-mono">
+                Your real and demo win rates are closely matched
+              </p>
+            );
+            if (diff > 0) return (
+              <p className="text-[9px] text-green-400/70 mt-3 pt-2 border-t border-border/40 font-mono">
+                Real win rate is {diff}pp higher — your live edge is translating
+              </p>
+            );
+            return (
+              <p className="text-[9px] text-amber-400/70 mt-3 pt-2 border-t border-border/40 font-mono">
+                Demo win rate is {Math.abs(diff)}pp higher — more live reps needed
+              </p>
+            );
+          })()}
+        </div>
+      )}
+
       {heroTrades === 0 && (
         <div className="text-center py-6">
           <TrendingUp size={32} className="mx-auto text-muted-foreground/30 mb-2" />
