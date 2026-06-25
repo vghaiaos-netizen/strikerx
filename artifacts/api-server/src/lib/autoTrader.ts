@@ -31,7 +31,7 @@ export interface AutoTradeConfig {
   interval:            string;          // "1m" | "5m" | "15m" | "30m" | "1h"
   max_stake_pct:       number;          // fraction of balance (0.02 = 2%)
   max_trades_per_day:  number;
-  currency:            string;          // TON | USDT | STRIKER
+  currency:            string;          // TON | USDT
   risk_level:          string;          // conservative | balanced | aggressive
   min_confidence:      number;          // 50–95; trade only if signal >= this
   trades_today:        number;
