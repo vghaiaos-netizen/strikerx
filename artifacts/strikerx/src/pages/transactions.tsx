@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowDownLeft, ArrowUpRight, Zap, Gift, Trophy,
   Clock, CheckCircle, XCircle, Copy, ReceiptText,
+  TrendingUp, TrendingDown, Target,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -156,9 +157,23 @@ export function Transactions() {
     { id: "withdrawals", label: "Withdrawals",  count: txs.filter((t) => t.type === "withdrawal").length },
   ];
 
-  const totalIn  = txs.filter(t => ["deposit","bonus","referral","cashback","win"].includes(t.type) && t.status === "completed").reduce((s, t) => s + Number(t.amountStriker), 0);
+  const totalIn  = txs.filter(t => ["deposit","bonus","referral","cashback"].includes(t.type) && t.status === "completed").reduce((s, t) => s + Number(t.amountStriker), 0);
   const totalOut = txs.filter(t => t.type === "withdrawal" && t.status === "completed").reduce((s, t) => s + Number(t.amountStriker), 0);
   const pending  = txs.filter(t => t.status === "pending").length;
+
+  // Binary trade P&L — grouped by currency (TON / USDT)
+  const betTxs = txs.filter(t => t.type === "bet"  && t.status === "completed");
+  const winTxs = txs.filter(t => t.type === "win"  && t.status === "completed");
+  const tradeCurrencies = [...new Set([...betTxs, ...winTxs].map(t => t.currency ?? "TON"))];
+  const tradePnl = tradeCurrencies.map(cur => {
+    const curBets    = betTxs.filter(t => (t.currency ?? "TON") === cur);
+    const curWins    = winTxs.filter(t => (t.currency ?? "TON") === cur);
+    const staked     = curBets.reduce((s, t) => s + Number(t.amountTon ?? 0), 0);
+    const returned   = curWins.reduce((s, t) => s + Number(t.amountTon ?? 0), 0);
+    const netPnl     = returned - staked;
+    const winRate    = curBets.length > 0 ? (curWins.length / curBets.length) * 100 : 0;
+    return { cur, bets: curBets.length, wins: curWins.length, staked, returned, netPnl, winRate };
+  }).filter(x => x.bets > 0);
 
   return (
     <Layout>
@@ -192,6 +207,80 @@ export function Transactions() {
               <p className={`text-[8px] font-mono uppercase tracking-widest mb-0.5 ${pending > 0 ? "text-yellow-400/60" : "text-muted-foreground"}`}>Pending</p>
               <p className={`font-mono font-black text-sm tabular-nums ${pending > 0 ? "text-yellow-400" : "text-muted-foreground"}`}>{pending}</p>
               <p className={`text-[8px] font-mono ${pending > 0 ? "text-yellow-400/40" : "text-muted-foreground/40"}`}>txns</p>
+            </div>
+          </div>
+        )}
+
+        {/* Trade P&L card — only shown when binary trades exist */}
+        {tradePnl.length > 0 && (
+          <div className="mx-4 mb-3">
+            <div className="bg-card border border-border rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Target size={12} className="text-primary" />
+                <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                  Binary Trading P&amp;L
+                </span>
+                <span className="ml-auto text-[8px] font-mono text-muted-foreground/50">
+                  last {betTxs.length + winTxs.length} txns
+                </span>
+              </div>
+
+              {tradePnl.map(({ cur, bets, wins, staked, netPnl, winRate }) => {
+                const isProfit   = netPnl >= 0;
+                const digits     = cur === "TON" ? 4 : 2;
+                const losses     = bets - wins;
+                return (
+                  <div key={cur} className="mb-2 last:mb-0">
+                    {/* Currency label */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-mono font-bold text-white/40 uppercase">{cur}</span>
+                      <span className={`text-[10px] font-mono font-black tabular-nums ${isProfit ? "text-green-400" : "text-red-400"}`}>
+                        {isProfit ? "+" : ""}{netPnl.toFixed(digits)} {cur}
+                      </span>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="grid grid-cols-4 gap-1.5 mb-2">
+                      {[
+                        { label: "Trades",  val: bets,              color: "text-white" },
+                        { label: "Won",     val: wins,              color: "text-green-400" },
+                        { label: "Lost",    val: losses,            color: "text-red-400" },
+                        { label: "Win Rate",val: `${winRate.toFixed(0)}%`, color: winRate >= 55 ? "text-green-400" : winRate >= 45 ? "text-yellow-400" : "text-red-400" },
+                      ].map(({ label, val, color }) => (
+                        <div key={label} className="bg-muted/30 rounded-lg px-2 py-1.5 text-center">
+                          <p className="text-[7px] font-mono text-muted-foreground/60 uppercase mb-0.5">{label}</p>
+                          <p className={`text-[11px] font-black tabular-nums ${color}`}>{val}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* P&L bar */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ background: isProfit ? "#22c55e" : "#ef4444" }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, Math.abs(winRate - 50) * 2 + 50)}%` }}
+                          transition={{ duration: 0.6, ease: "easeOut" }}
+                        />
+                      </div>
+                      <span className="text-[8px] font-mono text-muted-foreground/50 tabular-nums shrink-0">
+                        {staked.toFixed(digits)} staked
+                      </span>
+                    </div>
+
+                    {/* Insight line */}
+                    <p className="text-[9px] font-mono text-muted-foreground/50 mt-1.5 text-center">
+                      {winRate >= 55
+                        ? `Solid edge — ${netPnl > 0 ? "up" : "down"} ${Math.abs(netPnl).toFixed(digits)} ${cur} net`
+                        : winRate >= 45
+                        ? "Near break-even — keep refining your entries"
+                        : "Win rate below 50% — consider reviewing strategy"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
