@@ -48,7 +48,12 @@ function TxCard({ tx }: { tx: TxRow }) {
   const StatusIcon = status.icon;
 
   const isPositive = ["deposit", "win", "bonus", "cashback", "referral"].includes(tx.type);
-  const amtStr = `${isPositive ? "+" : "-"}${Number(tx.amountStriker).toLocaleString(undefined, { maximumFractionDigits: 2 })} SKR`;
+  // Binary trades use amountTon (amountStriker is 0 for TON/USDT trades)
+  const hasTon    = (tx.amountTon ?? 0) > 0;
+  const amtNum    = hasTon ? Number(tx.amountTon) : Number(tx.amountStriker);
+  const amtUnit   = hasTon ? (tx.currency ?? "TON") : "SKR";
+  const amtDecimals = hasTon ? 4 : 0;
+  const amtStr    = `${isPositive ? "+" : "-"}${amtNum.toLocaleString(undefined, { minimumFractionDigits: amtDecimals, maximumFractionDigits: amtDecimals })} ${amtUnit}`;
 
   const handleCopyId = () => {
     if (!tx.externalId) return;
@@ -95,11 +100,6 @@ function TxCard({ tx }: { tx: TxRow }) {
           <div className={`font-mono font-black text-sm tabular-nums ${isPositive ? "text-green-400" : "text-white/70"}`}>
             {amtStr}
           </div>
-          {tx.amountTon != null && (
-            <div className="text-[9px] font-mono text-muted-foreground">
-              ≈ {Number(tx.amountTon).toFixed(4)} TON
-            </div>
-          )}
         </div>
       </div>
 
@@ -179,12 +179,12 @@ export function Transactions() {
         {txs.length > 0 && (
           <div className="mx-4 mb-3 grid grid-cols-3 gap-2">
             <div className="bg-green-950/40 border border-green-700/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-[8px] font-mono text-green-400/60 uppercase tracking-widest mb-0.5">Total In</p>
+              <p className="text-[8px] font-mono text-green-400/60 uppercase tracking-widest mb-0.5">Bonuses</p>
               <p className="font-mono font-black text-sm text-green-400 tabular-nums">+{totalIn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-              <p className="text-[8px] font-mono text-green-400/40">SKR</p>
+              <p className="text-[8px] font-mono text-green-400/40">SKR earned</p>
             </div>
             <div className="bg-orange-950/30 border border-orange-700/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-[8px] font-mono text-orange-400/60 uppercase tracking-widest mb-0.5">Total Out</p>
+              <p className="text-[8px] font-mono text-orange-400/60 uppercase tracking-widest mb-0.5">Withdrawn</p>
               <p className="font-mono font-black text-sm text-orange-400 tabular-nums">{totalOut.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
               <p className="text-[8px] font-mono text-orange-400/40">SKR</p>
             </div>
