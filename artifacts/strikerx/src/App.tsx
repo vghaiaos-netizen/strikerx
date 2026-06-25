@@ -195,6 +195,7 @@ function ReturnVisitNudge() {
       const t = setTimeout(() => setVisible(true), 2500);
       return () => clearTimeout(t);
     } catch { /* ignore */ }
+    return undefined;
   }, []);
 
   const dismiss = () => {
