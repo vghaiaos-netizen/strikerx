@@ -219,7 +219,17 @@ export function Account() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-mono font-black text-base text-amber-300">${demoBalance.toFixed(2)}</p>
-              <p className="text-[9px] text-muted-foreground">Virtual USDT — practice mode</p>
+              <p className="text-[9px] text-muted-foreground">
+                Virtual USDT · practice mode
+                {(() => {
+                  const used = Number(p?.demoResetCount ?? 0);
+                  const max  = 3;
+                  const left = Math.max(0, max - used);
+                  return left > 0
+                    ? ` · ${left} reset${left !== 1 ? "s" : ""} available`
+                    : " · No resets remaining";
+                })()}
+              </p>
             </div>
             <Link href="/">
               <Button size="sm" variant="outline" className="text-[10px] border-amber-500/30 text-amber-300 hover:bg-amber-500/10">
