@@ -224,16 +224,66 @@ function OverviewTab() {
 }
 
 function TradesTab() {
+  const [mode, setMode]     = useState<"real" | "demo">("real");
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
+
   const { data: tradeData } = useGetTradingPositions({
-    query: { queryKey: getGetTradingPositionsQueryKey(), refetchInterval: 15_000 },
+    query: { queryKey: getGetTradingPositionsQueryKey(), refetchInterval: 15_000, enabled: mode === "real" },
   });
-  const positions = tradeData?.positions ?? [];
-  const filtered = filter === "all" ? positions : positions.filter((p) => p.outcome === filter);
+  const { data: demoData } = useGetDemoPositions(undefined, {
+    query: { queryKey: getGetDemoPositionsQueryKey(), refetchInterval: 15_000, enabled: mode === "demo" },
+  });
+
+  const realPositions = tradeData?.positions ?? [];
+  const demoPositions = demoData?.positions ?? [];
+
+  const allPositions = mode === "real"
+    ? realPositions.map((p) => ({
+        id: p.id,
+        assetSymbol: p.assetSymbol,
+        direction: p.direction,
+        contractType: p.contractType ?? "UP_DOWN",
+        outcome: p.outcome,
+        stake: parseFloat(String(p.stakeStriker)),
+        winAmount: parseFloat(String(p.winAmount)),
+        currency: p.currency ?? "TON",
+        isDemo: false,
+        createdAt: p.createdAt,
+      }))
+    : demoPositions.map((p) => ({
+        id: p.id,
+        assetSymbol: p.assetSymbol,
+        direction: p.direction,
+        contractType: p.contractType ?? "UP_DOWN",
+        outcome: p.outcome,
+        stake: parseFloat(String(p.stake)),
+        winAmount: parseFloat(String(p.winAmount)),
+        currency: "USDT",
+        isDemo: true,
+        createdAt: p.createdAt,
+      }));
+
+  const filtered = filter === "all" ? allPositions : allPositions.filter((p) => p.outcome === filter);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Filter bar */}
+      {/* Real / Demo mode toggle */}
+      <div className="flex gap-1 bg-muted rounded-lg p-1">
+        <button
+          onClick={() => setMode("real")}
+          className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${mode === "real" ? "bg-card text-white shadow" : "text-muted-foreground"}`}
+        >
+          Real
+        </button>
+        <button
+          onClick={() => setMode("demo")}
+          className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${mode === "demo" ? "bg-amber-500/20 text-amber-400 shadow" : "text-muted-foreground"}`}
+        >
+          Demo
+        </button>
+      </div>
+
+      {/* Win / Loss filter */}
       <div className="flex gap-1 bg-muted rounded-lg p-1">
         {(["all", "win", "loss"] as const).map((f) => (
           <button
@@ -249,15 +299,16 @@ function TradesTab() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground text-sm">No {filter === "all" ? "" : filter} trades yet</div>
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          No {filter === "all" ? "" : filter + " "}trades yet{mode === "demo" ? " in demo mode" : ""}
+        </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           {filtered.slice(0, 50).map((p) => {
-            const ccy     = p.currency ?? "TON";
-            const pnl     = p.outcome === "win"
-              ? parseFloat(String(p.winAmount)) - parseFloat(String(p.stakeStriker))
-              : p.outcome === "cancelled" ? 0 : -parseFloat(String(p.stakeStriker));
-            const ccyLabel = ccy === "STRIKER" ? "STRK" : ccy;
+            const pnl = p.outcome === "win"
+              ? p.winAmount - p.stake
+              : p.outcome === "cancelled" ? 0 : -p.stake;
+            const ccyLabel = p.currency === "STRIKER" ? "STRK" : p.currency;
             return (
               <div key={p.id} className="bg-card border border-border rounded-xl px-3 py-2 flex items-center gap-2">
                 <div className="shrink-0">
@@ -271,7 +322,9 @@ function TradesTab() {
                     <span className={["UP","EVEN","OVER","IN"].includes(p.direction) ? "text-green-400" : "text-red-400"}>
                       {p.direction}
                     </span>
-                    {" "}<span className="text-muted-foreground font-normal text-[10px]">{(p.contractType ?? "UP_DOWN").replace("_","/")} · {p.currency ?? "TON"}</span>
+                    {" "}<span className="text-muted-foreground font-normal text-[10px]">
+                      {p.contractType.replace("_","/")} · {p.isDemo ? <span className="text-amber-400/80">DEMO</span> : ccyLabel}
+                    </span>
                   </p>
                   <p className="text-[9px] text-muted-foreground font-mono">
                     {new Date(p.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -281,7 +334,7 @@ function TradesTab() {
                   <p className={`text-sm font-black tabular-nums ${pnl > 0 ? "text-green-400" : pnl < 0 ? "text-red-400" : "text-yellow-400"}`}>
                     {pnl > 0 ? `+${pnl.toFixed(2)}` : pnl === 0 ? "±0" : pnl.toFixed(2)}
                   </p>
-                  <p className="text-[9px] text-muted-foreground">{ccyLabel}</p>
+                  <p className="text-[9px] text-muted-foreground">{p.isDemo ? "USDT" : ccyLabel}</p>
                 </div>
               </div>
             );
