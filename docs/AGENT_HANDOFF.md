@@ -1,8 +1,36 @@
 # StrikerX — Agent Handoff
 
-> Last updated: June 23, 2026
+> Last updated: June 25, 2026
 > Read this FIRST, every session, before touching any file.
 > Full dev guide: `docs/for-replit-agents.md`
+
+---
+
+## FAST START — do this before anything else (~60s)
+
+Generated API client files are **not committed**. The Replit dev DB may be empty. Do these steps in order before touching any code:
+
+```bash
+# 1. Install deps
+pnpm install
+
+# 2. Regenerate API client + Zod schemas (REQUIRED every session)
+pnpm --filter @workspace/api-spec run codegen
+
+# 3. Restart both workflows using the restart_workflow tool:
+#    "API Server" and "Start application"
+
+# 4. If API Server logs show "relation X does not exist" → DB tables missing.
+#    Apply schema via executeSql() in code_execution (NOT drizzle-kit push — that needs a TTY).
+#    Schema files: lib/db/src/schema/*.ts
+```
+
+**Signs setup is good:**
+- API Server logs: `Server listening` + `Config service initialized`
+- Frontend log: `VITE ready` with no export errors
+- `curl http://localhost:8000/api/healthz` → `{"status":"ok"}`
+
+**If you see `No matching export in "...api-client-react/src/index.ts"`** → forgot step 2, re-run codegen and restart Start application.
 
 ---
 
@@ -263,22 +291,30 @@ The server runs **idempotent startup migrations** on every start (`artifacts/api
 
 ## What Is Pending (Next Priority)
 
-Completed in June 2026 session:
-- Groq key pool (`groqPool.ts`) — AI never fails under load
-- GroupBot overhaul — 12 new event broadcasts, 5 scheduled jobs, 3 new commands
-- AI-enhanced GroupBot messages (with static fallback)
-- outreach tables fixed on Railway + added to startup migrations
-- GroupBot wired to trading engine (big win, streak milestones), scheduler (tournament end), admin routes (rate event, match event, tournament start)
+### Completed through June 25, 2026
+- Groq key pool (`groqPool.ts`) — AI never fails under load, round-robins up to 5 keys
+- GroupBot overhaul — 12 new event broadcasts, 5 scheduled jobs, 3 new commands, AI-enhanced text
+- GroupBot wired to trading engine (big win, streak milestones), scheduler (tournament end), admin routes
+- Outreach tables fixed on Railway + added to startup migrations
+- AI Auto-Trader — full backend (`autoTrader.ts`, `/api/trading/auto-trade/*`) + polished panel UI
+  - START/STOP button, 60s countdown, "Running" badge, explanation banner, session targets, risk presets
+  - Active positions show in the "Active" tab below the panel
+- STRIKER removed from valid trading currencies (only TON/USDT accepted by server)
+- Advanced contract types UI — EVEN_ODD, OVER_UNDER, IN_OUT selectable in terminal
+- Demo trading mode — toggle, `demo_usdt_balance`, reset, separate position history
+- Win streak mechanic with payout boost up to 1.95×
+- Market sentiment bar — live UP/DOWN ratio per asset
+- Position progress bars — live countdown + winning/losing color state
 
-Still pending:
-1. **VIP promotion broadcast** — `broadcastVIPPromotion` exists in groupBot.ts, not yet auto-wired to VIP tier upgrade logic
-2. **Rare achievement broadcast** — `broadcastRareAchievement` exists, not yet wired into `achievementsService.ts`
-3. **Advanced contract types UI** — EVEN_ODD, OVER_UNDER, IN_OUT selectable in trading terminal (backend ready)
-4. **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` as Railway env vars (no code change needed — webhooks auto-register on startup)
-5. **Add more Groq keys** — add `GROQ_API_KEY_2` through `GROQ_API_KEY_5` in Railway env vars when available
-6. **Demo balance UI polish** — clear demo/real toggle with DEMO badge
-7. **World Cup tournament series** — create via admin `/admin/tournaments`
-8. **Outreach service deployment** — deploy outreach-service branch to Railway (separate service), then set `outreach_enabled=true` in admin config
+### Still Pending (priority order)
+1. **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` as Railway env vars → no code change, webhooks self-register on startup
+2. **VIP promotion broadcast** — `broadcastVIPPromotion` in groupBot.ts exists, not yet auto-wired to VIP tier upgrade logic in players/auth
+3. **Rare achievement broadcast** — `broadcastRareAchievement` in groupBot.ts exists, not yet wired into `achievementsService.ts`
+4. **Add more Groq keys** — add `GROQ_API_KEY_2`…`GROQ_API_KEY_5` in Railway env vars when available (no code change)
+5. **Trading leaderboard tab in /portfolio** — filter by week/month, rank by P&L % not absolute
+6. **World Cup tournament series** — create via admin `/admin/tournaments` (no code change, pure admin action)
+7. **Outreach service deployment** — deploy outreach-service branch to Railway as a separate service, then set `outreach_enabled=true` in admin config
+8. **KYC gate for withdrawals** — currently optional; consider requiring for amounts > X TON
 
 ---
 

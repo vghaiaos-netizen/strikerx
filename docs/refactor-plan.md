@@ -12,7 +12,7 @@ StrikerX is a **binary prediction trading terminal** inside Telegram. The app co
 
 ---
 
-## Current state (as of 2026-06-14) — Phase 2 COMPLETE
+## Current state (as of 2026-06-25) — Phase 8 COMPLETE
 
 All backend and frontend work for binary prediction trading is shipped to Railway production.
 
@@ -168,34 +168,27 @@ pnpm --filter @workspace/api-spec run codegen
 
 ---
 
-## Phase 3 — Trading terminal improvements (next up)
+## Phase 3 — Trading terminal improvements ✅ COMPLETE (June 2026)
 
-Priority order for next agent session:
+All items below were completed:
 
-### High priority
-1. **Klines/candlestick endpoint** — `GET /api/trading/klines?symbol&interval&limit`
-   - Crypto: proxy Binance REST `/api/v3/klines` (no API key needed)
-   - Forex/commodities: Yahoo Finance chart API (no API key needed)
-   - Feed into `TradingChart` so users see real historical candles, not a flat line
+1. **Klines/candlestick chart** ✅ — `GET /api/trading/klines` proxies Binance REST for crypto + Yahoo Finance for forex/commodities; `TradingChart` renders live candles
+2. **Forex + commodities live feed** ✅ — `forexFeed.ts` polls every 2s via Yahoo Finance, exposed via `price_update` WS
+3. **Real-time `trade_settled` toast + overlay** ✅ — frontend subscribes to WS event, shows animated win/loss overlay
+4. **`trading_available_durations` from config** ✅ — exposed via `/api/trading/config`, consumed in trading.tsx
+5. **AI Auto-Trader** ✅ — `autoTrader.ts` singleton + full panel UI with START/STOP, 60s countdown, risk presets, session targets
+6. **Contract types UI** ✅ — EVEN_ODD, OVER_UNDER, IN_OUT selectable in terminal (was UI-only gap)
+7. **Demo trading mode** ✅ — separate balance, positions, history, reset flow
+8. **Market sentiment bar** ✅ — live UP/DOWN ratio, powered by `/api/trading/sentiment/:symbol`
+9. **Win streak mechanic** ✅ — payout boost up to 1.95×, streak badge in terminal
 
-2. **Forex + commodities live feed** — EURUSD, GBPUSD, USDJPY, GOLD, OIL
-   - Server-side polling every 1s via Yahoo Finance or similar free source
-   - Expose via `price_update` WS event (same as crypto)
-   - Add to `trading_assets` table with `forexCommoditySeed: true` flag
+## What's next (Phase 9 / Growth)
 
-3. **Real-time `trade_settled` toast** — currently trading.tsx only refreshes via poll interval
-   - WS event `trade_settled` is already broadcast by `tradingEngine.ts`
-   - Frontend needs to subscribe and show win/loss toast immediately
-
-### Medium priority
-4. **`trading_available_durations` from config** — currently hardcoded as `[30, 60, 300, 900]` in `trading.tsx`
-   - Read from `configService` key `trading_available_durations` (comma-separated string)
-   - Expose via a public config endpoint or include in assets response
-
-5. **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` secrets in Railway dashboard
-   - No code change needed — bots auto-register webhooks on Railway startup
-
-6. **World Cup tournament series** — use existing admin tournaments UI
+See `docs/ROADMAP.md` for full prioritised list. Quick summary:
+- Activate bots on Railway (Railway env vars only — no code)
+- VIP promotion broadcast (wire `broadcastVIPPromotion` into VIP tier upgrade path)
+- Trading leaderboard tab in /portfolio
+- Outreach service deployment (separate Railway service)
 
 ## After any change — mandatory steps
 

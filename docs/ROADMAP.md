@@ -75,26 +75,37 @@
 - [x] OpenAPI codegen for all trading + demo hooks
 - [x] Admin trading dashboard + asset management UI
 
-## Phase 8 — Trading Terminal Polish (Next)
+## Phase 8 — Trading Terminal Polish ✅ (Mostly complete as of June 2026)
 
-### High Priority
-- [ ] **Real-time `trade_settled` WS toast** — WS event exists in tradingEngine, frontend currently only polls; add subscribe + win/loss toast in trading.tsx
-- [ ] **`trading_available_durations` from config** — currently hardcoded as `[30, 60, 300, 900]` in trading.tsx; read from `configService` key `trading_available_durations`
-- [ ] **Klines chart** — `GET /api/trading/klines` exists but chart display improvements needed; add candlestick overlay for active contracts
+### Completed
+- [x] **Real-time `trade_settled` WS toast** — subscribe + animated win/loss overlay in trading.tsx
+- [x] **`trading_available_durations` from config** — read from configService, exposed via `/api/trading/config`
+- [x] **Klines chart** — candlestick/line chart with live price overlay, asset-specific decimal formatting
+- [x] **Demo trading mode** — persistent demo/real toggle, `demo_usdt_balance`, reset capability
+- [x] **Win streak mechanic** — `trading_win_streak` on players, payout boost up to 1.95×
+- [x] **AI Auto-Trader** — `/api/trading/auto-trade/*` routes, `autoTrader.ts` singleton, panel UI with START/STOP button, risk presets (Safe/Balanced/High), session targets (5/10/20/50 trades), 60s countdown, "Active" tab connection
+- [x] **Groq key pool** — `groqPool.ts` round-robins across up to 5 API keys, 429 auto-retry
+- [x] **GroupBot overhaul** — 12 event broadcasts, 5 scheduled jobs, AI-enhanced messages
+- [x] **Sentiment bar** — live UP/DOWN ratio for current asset shown in trading terminal
+- [x] **Market sentiment API** — `/api/trading/sentiment/:symbol`
+- [x] **Contract types UI** — UP_DOWN, EVEN_ODD, OVER_UNDER, IN_OUT selectable in terminal
+- [x] **Position progress bars** — live countdown + winning/losing color state per active position
 
-### Medium Priority
+### Still Pending
 - [ ] **Activate bots on Railway** — add `GAMEBOT_TOKEN`, `GROUPBOT_TOKEN`, `CRYPTOBOT_TOKEN` in Railway dashboard → no code change needed, webhooks auto-register on startup
 - [ ] **World Cup tournament series** — create via admin `/admin/tournaments`
 - [ ] **Trading leaderboard tab in /portfolio** — filter by week/month, rank by P&L % not absolute
-
-### Lower Priority
-- [ ] **Advanced contract types UI** — EVEN_ODD, OVER_UNDER, IN_OUT selectable in trading terminal (backend already implemented)
-- [ ] **Demo balance display** — persistent demo/real toggle button with clear balance labelling
 - [ ] **KYC gate for withdrawals** — currently optional; consider requiring for amounts > X TON
+- [ ] **VIP promotion broadcast** — `broadcastVIPPromotion` exists in groupBot.ts, not yet wired into VIP tier upgrade logic
+- [ ] **Rare achievement broadcast** — `broadcastRareAchievement` exists, not yet wired into achievementsService.ts
+- [ ] **Add more Groq keys** — add `GROQ_API_KEY_2`…`GROQ_API_KEY_5` in Railway env vars (no code change)
 
 ## Phase 9 — Growth
-- [ ] Outreach service full deployment (outreach-service branch → Railway)
+- [ ] Outreach service full deployment (outreach-service branch → Railway separate service, then set `outreach_enabled=true` in admin config)
 - [ ] Airdrop campaign (STRIKER for early adopters)
 - [ ] Social task system (share, invite, play)
 - [ ] Ambassador program (top referrers with outsized commission terms)
 - [ ] Push notifications for inactive players (7-day + 14-day reactivation DMs)
+- [ ] World Cup prediction mini-game (pick match winner → bonus payout)
+- [ ] Player vs Player challenge mode (two players bet same amount, winner takes 90%)
+- [ ] Leaderboard with live position changes via WebSocket
